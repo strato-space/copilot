@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { COLLECTIONS } from '../../src/constants.js';
 
 const getDbMock = jest.fn();
 const loggerInfoMock = jest.fn();
@@ -235,5 +236,125 @@ describe('CRM tickets temporal route runtime', () => {
     expect(updateSet.updated_at).toBeInstanceOf(Date);
     expect((updateSet.updated_at as Date).getTime()).toBe(legacyUpdatedAtMs);
     expect(findOneSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses atomic $max updated_at bump on /crm/tickets/add-comment for Date-canonical rows', async () => {
+    const ticketObjectId = new ObjectId('65f5f26f2c16f43c07e10021');
+    const tasksFindOneSpy = jest.fn(async () => ({
+      _id: ticketObjectId,
+      id: 'TASK-21',
+      updated_at: new Date('2026-03-24T12:00:00.000Z'),
+    }));
+    const tasksUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const commentsInsertOneSpy = jest.fn(async () => ({ insertedId: new ObjectId('65f5f26f2c16f43c07e12221') }));
+    const dbStub = {
+      collection: jest.fn((name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            aggregate: jest.fn(() => ({ toArray: async () => [] })),
+            find: jest.fn(() => ({ toArray: async () => [] })),
+            findOne: tasksFindOneSpy,
+            updateOne: tasksUpdateOneSpy,
+            insertOne: jest.fn(async () => ({ insertedId: ticketObjectId })),
+          };
+        }
+        if (name === COLLECTIONS.COMMENTS) {
+          return {
+            insertOne: commentsInsertOneSpy,
+          };
+        }
+        return {
+          aggregate: jest.fn(() => ({ toArray: async () => [] })),
+          find: jest.fn(() => ({ toArray: async () => [] })),
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          insertOne: jest.fn(async () => ({ insertedId: new ObjectId('65f5f26f2c16f43c07e11111') })),
+        };
+      }),
+    };
+    getDbMock.mockReturnValue(dbStub as never);
+
+    const app = buildApp();
+    const response = await request(app).post('/crm/tickets/add-comment').send({
+      ticket_id: ticketObjectId.toHexString(),
+      comment: 'Atomic bump check',
+    });
+
+    expect(response.status).toBe(200);
+    expect(commentsInsertOneSpy).toHaveBeenCalledTimes(1);
+    expect(tasksFindOneSpy).toHaveBeenCalledTimes(1);
+    expect(tasksUpdateOneSpy).toHaveBeenCalledTimes(1);
+    const atomicFilter = tasksUpdateOneSpy.mock.calls[0]?.[0] as Record<string, unknown>;
+    const atomicUpdate = tasksUpdateOneSpy.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(atomicFilter).toMatchObject({ _id: ticketObjectId });
+    expect(Array.isArray(atomicFilter.$or)).toBe(true);
+    expect(atomicUpdate.$max).toBeDefined();
+    const bumpedAt = (atomicUpdate.$max as { updated_at: unknown }).updated_at;
+    expect(bumpedAt).toBeInstanceOf(Date);
+    expect(atomicUpdate.$set).toBeUndefined();
+  });
+
+  it('falls back to read-then-set monotonic updated_at for legacy numeric rows on /crm/tickets/add-comment', async () => {
+    const ticketObjectId = new ObjectId('65f5f26f2c16f43c07e10022');
+    const legacyUpdatedAtMs = Date.parse('2026-03-25T14:00:00.000Z');
+    const tasksFindOneSpy = jest
+      .fn()
+      .mockResolvedValueOnce({
+        _id: ticketObjectId,
+        id: 'TASK-22',
+        updated_at: legacyUpdatedAtMs,
+      })
+      .mockResolvedValueOnce({
+        updated_at: legacyUpdatedAtMs,
+      });
+    const tasksUpdateOneSpy = jest
+      .fn()
+      .mockResolvedValueOnce({ matchedCount: 0, modifiedCount: 0 })
+      .mockResolvedValueOnce({ matchedCount: 1, modifiedCount: 1 });
+    const commentsInsertOneSpy = jest.fn(async () => ({ insertedId: new ObjectId('65f5f26f2c16f43c07e12222') }));
+    const dbStub = {
+      collection: jest.fn((name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            aggregate: jest.fn(() => ({ toArray: async () => [] })),
+            find: jest.fn(() => ({ toArray: async () => [] })),
+            findOne: tasksFindOneSpy,
+            updateOne: tasksUpdateOneSpy,
+            insertOne: jest.fn(async () => ({ insertedId: ticketObjectId })),
+          };
+        }
+        if (name === COLLECTIONS.COMMENTS) {
+          return {
+            insertOne: commentsInsertOneSpy,
+          };
+        }
+        return {
+          aggregate: jest.fn(() => ({ toArray: async () => [] })),
+          find: jest.fn(() => ({ toArray: async () => [] })),
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          insertOne: jest.fn(async () => ({ insertedId: new ObjectId('65f5f26f2c16f43c07e11111') })),
+        };
+      }),
+    };
+    getDbMock.mockReturnValue(dbStub as never);
+
+    const app = buildApp();
+    const response = await request(app).post('/crm/tickets/add-comment').send({
+      ticket_id: ticketObjectId.toHexString(),
+      comment: {
+        comment: 'Legacy fallback check',
+        created_at: '2026-03-01T00:00:00.000Z',
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(commentsInsertOneSpy).toHaveBeenCalledTimes(1);
+    expect(tasksUpdateOneSpy).toHaveBeenCalledTimes(2);
+    const fallbackUpdate = tasksUpdateOneSpy.mock.calls[1]?.[1] as Record<string, unknown>;
+    const fallbackSet = fallbackUpdate.$set as { updated_at?: unknown } | undefined;
+    expect(fallbackSet?.updated_at).toBeInstanceOf(Date);
+    expect((fallbackSet?.updated_at as Date).getTime()).toBe(legacyUpdatedAtMs);
+    expect(tasksFindOneSpy).toHaveBeenCalledTimes(2);
   });
 });

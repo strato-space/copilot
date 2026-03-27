@@ -616,7 +616,7 @@ function MeetingCardInner({ onCustomPromptResult, activeTab }: MeetingCardProps)
                                 aria-label="Проект сессии"
                                 placeholder="Проект"
                                 className="w-[220px]"
-                                popupClassName="voice-project-select-popup"
+                                classNames={{ popup: { root: 'voice-project-select-popup' } }}
                                 value={voiceBotSession?.project_id ?? null}
                                 onChange={(value) => voiceBotSession?._id && updateSessionProject(voiceBotSession._id, value ?? null)}
                                 allowClear

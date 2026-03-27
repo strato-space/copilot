@@ -727,7 +727,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                                     if (!isOpen) closeInlineEditor();
                                 }}
                                 className="w-full min-w-[220px]"
-                                popupClassName="w-[380px]"
+                                classNames={{ popup: { root: 'w-[380px]' } }}
                             />
                         </div>
                     );
@@ -927,7 +927,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                                     if (!isOpen) closeInlineEditor();
                                 }}
                                 className="w-[180px]"
-                                popupClassName="w-[240px]"
+                                classNames={{ popup: { root: 'w-[240px]' } }}
                                 popupMatchSelectWidth={false}
                             />
                         </div>
@@ -971,7 +971,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                                 onOpenChange={(isOpen) => {
                                     if (!isOpen) closeInlineEditor();
                                 }}
-                                popupClassName="w-[120px]"
+                                classNames={{ popup: { root: 'w-[120px]' } }}
                                 popupMatchSelectWidth={false}
                             />
                         </div>
@@ -1023,7 +1023,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                                     if (!isOpen) closeInlineEditor();
                                 }}
                                 className="w-[180px]"
-                                popupClassName="w-[220px]"
+                                classNames={{ popup: { root: 'w-[220px]' } }}
                                 popupMatchSelectWidth={false}
                             />
                         </div>
@@ -1077,7 +1077,7 @@ const CRMKanban = (props: CRMKanbanProps) => {
                                     if (!isOpen) closeInlineEditor();
                                 }}
                                 className="w-[140px]"
-                                popupClassName="w-[380px]"
+                                classNames={{ popup: { root: 'w-[380px]' } }}
                             />
                         </div>
                     );

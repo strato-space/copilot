@@ -15,6 +15,7 @@ const MAX_LIMIT = 1000;
 const BD_LIST_TIMEOUT_MS = 20_000;
 const BD_SHOW_TIMEOUT_MS = 20_000;
 const BD_SYNC_IMPORT_TIMEOUT_MS = 20_000;
+const BD_SYNC_IMPORT_TOKEN_TOO_LONG_COOLDOWN_MS = 5 * 60 * 1000;
 
 const codexIssuesViewSchema = z.enum(['open', 'closed', 'all']);
 type CodexIssuesView = z.infer<typeof codexIssuesViewSchema>;
@@ -43,6 +44,13 @@ type BdExecutionContext = {
   command: string;
   cwd: string;
 };
+
+type ImportOnlyCooldownState = {
+  untilEpochMs: number;
+  reason: 'token_too_long';
+};
+
+const importOnlySyncCooldownByContext = new Map<string, ImportOnlyCooldownState>();
 
 const filterCodexIssuesByView = (
   issues: Array<Record<string, unknown>>,
@@ -158,6 +166,16 @@ const runBdCommandWithSyncRetry = async ({
     return first;
   }
 
+  const cooldownKey = `${logPrefix}|${cwd}|${command}`;
+  const now = Date.now();
+  const activeCooldown = importOnlySyncCooldownByContext.get(cooldownKey);
+  if (activeCooldown && activeCooldown.untilEpochMs > now) {
+    return first;
+  }
+  if (activeCooldown && activeCooldown.untilEpochMs <= now) {
+    importOnlySyncCooldownByContext.delete(cooldownKey);
+  }
+
   logger.warn(`${logPrefix} bd out-of-sync detected, running import-only sync`, {
     cwd,
     code: first.code,
@@ -175,6 +193,19 @@ const runBdCommandWithSyncRetry = async ({
   });
 
   if (syncResult.timedOut || syncResult.code !== 0) {
+    if (isBdTokenTooLongError(syncResult)) {
+      const cooldownUntilEpochMs = now + BD_SYNC_IMPORT_TOKEN_TOO_LONG_COOLDOWN_MS;
+      importOnlySyncCooldownByContext.set(cooldownKey, {
+        untilEpochMs: cooldownUntilEpochMs,
+        reason: 'token_too_long',
+      });
+      logger.warn(`${logPrefix} import-only sync disabled during cooldown after token-too-long`, {
+        cwd,
+        cooldown_ms: BD_SYNC_IMPORT_TOKEN_TOO_LONG_COOLDOWN_MS,
+        cooldown_until: new Date(cooldownUntilEpochMs).toISOString(),
+        ...(metadata ?? {}),
+      });
+    }
     logger.error(`${logPrefix} bd sync --import-only failed`, {
       cwd,
       code: syncResult.code,
@@ -191,6 +222,7 @@ const runBdCommandWithSyncRetry = async ({
     cwd,
     ...(metadata ?? {}),
   });
+  importOnlySyncCooldownByContext.delete(cooldownKey);
 
   return await runCommand({
     command,

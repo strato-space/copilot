@@ -32,7 +32,7 @@ describe('Shared selector reuse contract', () => {
     expect(files.createTicket).toContain("resolveTaskTypeSelectValue");
     expect(files.kanban).toContain("buildGroupedTaskTypeOptions");
     expect(files.kanban).toContain("resolveTaskTypeSelectValue");
-    expect(files.createTicket).toContain('popupClassName="w-[380px]"');
+    expect(files.createTicket).toContain("classNames={{ popup: { root: 'w-[380px]' } }}");
   });
 
   it('standardizes selector search through the shared select wrappers', () => {
@@ -45,7 +45,9 @@ describe('Shared selector reuse contract', () => {
     expect(projectSelect).toContain('filterOption={searchLabelFilterOption}');
     expect(projectSelect).toContain('labelRender={labelRender ?? renderProjectLabel}');
     expect(projectSelect).toContain("'copilot-project-select-popup'");
-    expect(projectSelect).toContain("popupClassName={joinPopupClassName(popupClassName)}");
+    expect(projectSelect).toContain('classNames={{');
+    expect(projectSelect).toContain('root: joinPopupRootClassName(');
+    expect(projectSelect).toContain('classNames?.popup?.root');
 
     expect(taskTypeSelect).toContain("import { searchLabelFilterOption } from '../../utils/selectSearchFilter';");
     expect(taskTypeSelect).toContain('optionLabelProp="label"');
@@ -53,6 +55,8 @@ describe('Shared selector reuse contract', () => {
     expect(taskTypeSelect).toContain('filterOption={searchLabelFilterOption}');
     expect(taskTypeSelect).toContain('labelRender={labelRender ?? renderTaskTypeLabel}');
     expect(taskTypeSelect).toContain("'copilot-task-type-select-popup'");
-    expect(taskTypeSelect).toContain("popupClassName={joinPopupClassName(popupClassName)}");
+    expect(taskTypeSelect).toContain('classNames={{');
+    expect(taskTypeSelect).toContain('root: joinPopupRootClassName(');
+    expect(taskTypeSelect).toContain('classNames?.popup?.root');
   });
 });

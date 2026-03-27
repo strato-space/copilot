@@ -11,6 +11,6 @@ describe('MeetingCard project selector contract', () => {
     expect(source).toContain('const { groupedProjectOptions } = useHydratedProjectOptions(prepared_projects);');
     expect(source).toContain('<ProjectSelect');
     expect(source).toContain('options={groupedProjectOptions}');
-    expect(source).toContain('popupClassName="voice-project-select-popup"');
+    expect(source).toContain("classNames={{ popup: { root: 'voice-project-select-popup' } }}");
   });
 });

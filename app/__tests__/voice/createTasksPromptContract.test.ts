@@ -68,7 +68,7 @@ describe('create_tasks prompt contract', () => {
     expect(promptSource).toContain('voice.crm_tickets(project_id=project_id, include_archived=false, mode="table", from_date=..., to_date=...)');
     expect(promptSource).toContain('from_date=project_crm_window.from_date');
     expect(promptSource).toContain('to_date=project_crm_window.to_date');
-    expect(promptSource).toContain('fallback: `from_date=<latest session/discussion anchor - 14d>`, `to_date=<latest session/discussion anchor>`');
+    expect(promptSource).toContain('fallback: `from_date=<latest session/discussion anchor - LOOKBACK_DAYS>`, `to_date=<latest session/discussion anchor>`');
     expect(promptSource).toContain('unbounded `voice.crm_tickets(project_id=...)` запрещён');
     expect(promptSource).toContain('voice-operops-codex-taskflow-spec.md');
   });

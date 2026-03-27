@@ -38,7 +38,11 @@ import {
     parseDraftHorizonDays,
     parseProjectFilterValues,
 } from '../../../services/draftRecencyPolicy.js';
-import { resolveDateLikeEpochMs, resolveMonotonicUpdatedAtNext } from '../../../services/taskUpdatedAt.js';
+import {
+    buildMonotonicUpdatedAtBump,
+    resolveDateLikeEpochMs,
+    resolveMonotonicUpdatedAtNext,
+} from '../../../services/taskUpdatedAt.js';
 
 dayjs.extend(customParseFormat);
 dayjs.extend(isSameOrAfter);
@@ -2143,16 +2147,35 @@ router.post('/add-comment', async (req: Request, res: Response) => {
         };
 
         const dbRes = await db.collection(COLLECTIONS.COMMENTS).insertOne(newComment);
-        const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
-            previousUpdatedAt: ticket.updated_at,
-            mutationEffectiveAt: rawCommentPayload?.created_at ?? now,
-        });
-        await db.collection(COLLECTIONS.TASKS).updateOne(
-            { _id: ticketObjectId },
+        const tasksCollection = db.collection(COLLECTIONS.TASKS);
+        const mutationEffectiveAt = rawCommentPayload?.created_at ?? now;
+        const atomicBumpResult = await tasksCollection.updateOne(
             {
-                $set: { updated_at: nextUpdatedAt },
-            }
+                _id: ticketObjectId,
+                $or: [
+                    { updated_at: { $type: 'date' } },
+                    { updated_at: { $exists: false } },
+                    { updated_at: null },
+                ],
+            },
+            buildMonotonicUpdatedAtBump({ mutationEffectiveAt })
         );
+
+        // Legacy numeric updated_at rows need a read-then-set fallback to preserve epoch monotonic semantics.
+        if ((atomicBumpResult.matchedCount ?? 0) === 0) {
+            const existingTask = await tasksCollection.findOne(
+                { _id: ticketObjectId },
+                { projection: { updated_at: 1 } }
+            );
+            const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
+                previousUpdatedAt: existingTask?.updated_at,
+                mutationEffectiveAt,
+            });
+            await tasksCollection.updateOne(
+                { _id: ticketObjectId },
+                { $set: { updated_at: nextUpdatedAt } }
+            );
+        }
 
         res.status(200).json({ db_op_result: dbRes, comment: { ...newComment, _id: dbRes.insertedId } });
     } catch (error) {

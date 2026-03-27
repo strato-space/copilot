@@ -30,6 +30,15 @@ const getLogLevel = (): string => {
     return process.env.LOGS_LEVEL ?? 'info';
 };
 
+const isTestRuntime = (): boolean =>
+    process.env.NODE_ENV === 'test' || typeof process.env.JEST_WORKER_ID === 'string';
+
+const shouldEnableConsoleTransport = (): boolean => {
+    if (!isTestRuntime()) return true;
+    const raw = String(process.env.LOGS_TEST_CONSOLE ?? '').trim().toLowerCase();
+    return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+};
+
 // Singleton logger instance
 let loggerInstance: Logger | null = null;
 
@@ -50,6 +59,39 @@ export const initLogger = (
     const logLevel = getLogLevel();
     const logFileName = `${processInstance}-${serviceName.toLowerCase().replace(/\s+/g, '_')}.log`;
 
+    const configuredTransports: Array<InstanceType<typeof transports.Console> | InstanceType<typeof transports.File>> = [];
+
+    if (shouldEnableConsoleTransport()) {
+        configuredTransports.push(
+            new transports.Console({
+                format: combine(
+                    colorize(),
+                    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+                    logFormat
+                ),
+            })
+        );
+    }
+
+    configuredTransports.push(
+        new transports.File({
+            filename: path.join(logsDir, logFileName),
+            maxsize: 10 * 1024 * 1024, // 10MB
+            maxFiles: 3,
+            tailable: true,
+        })
+    );
+
+    configuredTransports.push(
+        new transports.File({
+            filename: path.join(logsDir, `${processInstance}-${serviceName.toLowerCase()}-error.log`),
+            level: 'error',
+            maxsize: 10 * 1024 * 1024,
+            maxFiles: 3,
+            tailable: true,
+        })
+    );
+
     loggerInstance = createLogger({
         level: logLevel,
         format: combine(
@@ -58,31 +100,7 @@ export const initLogger = (
             logFormat
         ),
         defaultMeta: { service: serviceName },
-        transports: [
-            // Console transport with colors
-            new transports.Console({
-                format: combine(
-                    colorize(),
-                    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-                    logFormat
-                ),
-            }),
-            // File transport
-            new transports.File({
-                filename: path.join(logsDir, logFileName),
-                maxsize: 10 * 1024 * 1024, // 10MB
-                maxFiles: 3,
-                tailable: true,
-            }),
-            // Error-only file transport
-            new transports.File({
-                filename: path.join(logsDir, `${processInstance}-${serviceName.toLowerCase()}-error.log`),
-                level: 'error',
-                maxsize: 10 * 1024 * 1024,
-                maxFiles: 3,
-                tailable: true,
-            }),
-        ],
+        transports: configuredTransports,
     });
 
     return loggerInstance;

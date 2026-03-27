@@ -756,6 +756,11 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-27 10:10):
+  - Hardened post-restart recovery paths in backend CRM/Voice routes: `backend/src/api/routes/crm/{tickets.ts,codex.ts}` and `backend/src/api/routes/voicebot/{sessions.ts,uploads.ts}` now keep deterministic temporal/forensic behavior under retry and transport drift.
+  - Added focused regression coverage for the same surfaces (`backend/__tests__/api/crm*`, `backend/__tests__/voicebot/session/sessionDoneRoute.test.ts`, `backend/__tests__/voicebot/runtime/uploadAudioRoute.test.ts`, `backend/__tests__/smoke/voicebotApiSmoke.test.ts`).
+  - Standardized backend test noise controls: logger console transport is disabled by default in tests (opt-in via `LOGS_TEST_CONSOLE=1`), and Node warning suppression for `ExperimentalWarning` and `DEP0040` is encoded in `backend/package.json`.
+  - Completed active UI contract cleanup for shared selector wrappers and OperOps `TaskPage` card API migration (`variant="borderless"`), with related app contract tests updated.
 - Close-session refresh (2026-03-26 22:47):
   - Hardened WebRTC lifecycle concurrency and inactive-session fail-fast behavior: transition-correlation IDs now trace `New/Rec/Done`, `finishSession` awaits backend errors instead of swallowing them, and stale `session_inactive` responses no longer trigger local activation fallback.
   - Canonicalized Voice task-refresh semantics around categorization availability: web ingress, Telegram ingress, worker transcribe reuse, and processing-loop recovery now persist explicit `no_task_decision` metadata when categorization is not queued, while possible-task persistence keeps `discussion_sessions[]` lineage and monotonic `updated_at`.

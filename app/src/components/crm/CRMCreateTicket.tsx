@@ -355,7 +355,7 @@ const CRMCreateTicket = () => {
                                             options={groupedProjectOptions}
                                             onChange={(value) => setEditTiketProject(value)}
                                             className="w-full"
-                                            popupClassName="w-[400px]"
+                                            classNames={{ popup: { root: 'w-[400px]' } }}
                                         />
                                     </Form.Item>
                                     <Form.Item label="Тип:" name="task_type" className="w-full">
@@ -363,7 +363,7 @@ const CRMCreateTicket = () => {
                                             placeholder="Выберите тип задачи"
                                             options={taskTypeOptions}
                                             className="w-full"
-                                            popupClassName="w-[380px]"
+                                            classNames={{ popup: { root: 'w-[380px]' } }}
                                         />
                                     </Form.Item>
                                 </div>
@@ -411,7 +411,7 @@ const CRMCreateTicket = () => {
                                             options={[{ label: '-очистить поле-', value: '' }, ...projectEpics.map((epic) => ({ value: epic._id, label: epic.name }))]}
                                             showSearch
                                             className="w-full"
-                                            popupClassName="w-[300px]"
+                                            classNames={{ popup: { root: 'w-[300px]' } }}
                                             popupMatchSelectWidth={false}
                                         />
                                     </Form.Item>

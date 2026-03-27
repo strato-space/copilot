@@ -465,7 +465,7 @@ const TaskPage = () => {
                 {/* Main Content */}
                 <div className="lg:col-span-2 space-y-6">
                     {/* Task Details */}
-                    <Card title="Task Details" bordered={false} size="small">
+                    <Card title="Task Details" variant="borderless" size="small">
                         <div className="space-y-4">
                             <div>
                                 <Descriptions column={3} size="small">
@@ -566,7 +566,7 @@ const TaskPage = () => {
                     </Card>
 
                     {/* Description */}
-                    <Card title="Description" bordered={false}>
+                    <Card title="Description" variant="borderless">
                         {task.description ? (
                             shouldRenderLegacyHtmlDescription ? (
                                 <div className="prose max-w-none">{safeTaskDescriptionNodes}</div>
@@ -578,7 +578,7 @@ const TaskPage = () => {
                         )}
                     </Card>
 
-                    <Card title="Attachments" bordered={false}>
+                    <Card title="Attachments" variant="borderless">
                         {attachments.length === 0 ? (
                             <Text type="secondary">No attachments</Text>
                         ) : (
@@ -627,13 +627,13 @@ const TaskPage = () => {
 
                     {/* Task Type Details */}
                     {taskTypeItems.length > 0 && (
-                        <Card title="Task Type Information" bordered={false}>
+                        <Card title="Task Type Information" variant="borderless">
                             <Collapse items={taskTypeItems} bordered={false} defaultActiveKey={taskTypeItems.map((it) => it.key)} />
                         </Card>
                     )}
 
                     {/* Quick Actions */}
-                    <Card title="Quick Actions" bordered={false} size="small">
+                    <Card title="Quick Actions" variant="borderless" size="small">
                         <Space direction="horizontal" className="w-full">
                             <Button icon={<CommentOutlined />}>Add Comment</Button>
                             <Button icon={<ClockCircleOutlined />}>Track Time</Button>
@@ -646,7 +646,7 @@ const TaskPage = () => {
                     </Card>
 
                     {/* Comments */}
-                    <Card title="Comments" bordered={false}>
+                    <Card title="Comments" variant="borderless">
                         {task.comments_list && task.comments_list.length > 0 ? (
                             <Timeline
                                 items={task.comments_list.map((comment) => ({
@@ -674,7 +674,7 @@ const TaskPage = () => {
                                 <Tag color="processing">{discussionSessions.length}</Tag>
                             </div>
                         }
-                        bordered={false}
+                        variant="borderless"
                     >
                         {discussionSessions.length > 0 ? (
                             <Timeline
@@ -713,7 +713,7 @@ const TaskPage = () => {
                                 <Tag color="blue">Total: {workHoursTotal}h</Tag>
                             </div>
                         }
-                        bordered={false}
+                        variant="borderless"
                         size="small"
                     >
                         {workHoursData.length > 0 ? (

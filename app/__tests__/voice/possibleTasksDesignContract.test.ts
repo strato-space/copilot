@@ -51,8 +51,8 @@ describe('PossibleTasks design contract', () => {
     expect(source).toContain('handleInlineActivatorMouseDown(event, row.row_id, \'project_id\')');
     expect(source).toContain('<ProjectSelect');
     expect(source).toContain('<OperationalTaskTypeSelect');
-    expect(source).toContain('popupClassName="voice-project-select-popup"');
-    expect(source).toContain('popupClassName="w-[380px]"');
+    expect(source).toContain("classNames={{ popup: { root: 'voice-project-select-popup' } }}");
+    expect(source).toContain("classNames={{ popup: { root: 'w-[380px]' } }}");
     expect(source).not.toContain("labelRender={renderOpaqueLabel('Проект')}");
     expect(source).not.toContain("labelRender={renderOpaqueLabel('Тип задачи')}");
     expect(source).toContain("labelRender={renderOpaqueLabel('Исполнитель')}");

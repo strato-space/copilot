@@ -894,7 +894,7 @@ function PossibleTasksSessionScope() {
                                 defaultOpen
                                 placeholder="Проект"
                                 value={resolvedProjectId || null}
-                                popupClassName="voice-project-select-popup"
+                                classNames={{ popup: { root: 'voice-project-select-popup' } }}
                                 onClick={(event) => event.stopPropagation()}
                                 onOpenChange={(open) => {
                                   if (!open) {
@@ -1154,7 +1154,7 @@ function PossibleTasksSessionScope() {
                         : ''
                     }
                     value={activeRow.__resolvedProjectId || null}
-                    popupClassName="voice-project-select-popup"
+                    classNames={{ popup: { root: 'voice-project-select-popup' } }}
                     onChange={(value) => setDraftValue(activeRow.row_id, 'project_id', toText(value))}
                     onFocus={() => focusDetailField('project_id')}
                     onBlur={() => blurDetailField('project_id')}
@@ -1168,7 +1168,7 @@ function PossibleTasksSessionScope() {
                   <OperationalTaskTypeSelect
                     placeholder="Выберите тип задачи"
                     value={activeRow.__resolvedTaskTypeId || null}
-                    popupClassName="w-[380px]"
+                    classNames={{ popup: { root: 'w-[380px]' } }}
                     onChange={(value) => setDraftValue(activeRow.row_id, 'task_type_id', toText(value))}
                     onFocus={() => focusDetailField('task_type_id')}
                     onBlur={() => blurDetailField('task_type_id')}

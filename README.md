@@ -544,6 +544,11 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-27 10:10):
+  - Hardened recovery-critical backend paths in `crm/tickets`, `crm/codex`, `voicebot/sessions`, and `voicebot/uploads` so restart/post-recovery behavior is deterministic and forensic correlation survives route boundaries.
+  - Added targeted regression coverage for CRM temporal contracts, session-done/upload trace continuity, and backend smoke stability (`backend/__tests__/api/*`, `backend/__tests__/voicebot/*`, `backend/__tests__/smoke/voicebotApiSmoke.test.ts`).
+  - Unified backend test-noise policy: logger console transport is disabled by default in tests unless explicitly enabled (`LOGS_TEST_CONSOLE=1`), and Node warning suppression for `ExperimentalWarning`/`DEP0040` is standardized via `backend/package.json`.
+  - Completed active UI cleanup around shared selectors and OperOps task details pane (`TaskPage` borderless card API migration + related contract tests).
 - Close-session refresh (2026-03-26 22:47):
   - Hardened WebRTC lifecycle concurrency and inactive-session fail-fast behavior: transition-correlation IDs now trace `New/Rec/Done`, `finishSession` awaits backend errors instead of swallowing them, and stale `session_inactive` responses no longer trigger local activation fallback.
   - Canonicalized Voice task-refresh semantics around categorization availability: web ingress, Telegram ingress, worker transcribe reuse, and processing-loop recovery now persist explicit `no_task_decision` metadata when categorization is not queued, while possible-task persistence keeps `discussion_sessions[]` lineage and monotonic `updated_at`.

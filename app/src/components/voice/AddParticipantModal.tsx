@@ -205,7 +205,7 @@ export default function AddParticipantModal() {
                             <ProjectSelect
                                 placeholder="Выберите проект"
                                 allowClear
-                                popupClassName="voice-project-select-popup"
+                                classNames={{ popup: { root: 'voice-project-select-popup' } }}
                                 options={groupedProjectOptions}
                             />
                         </Form.Item>

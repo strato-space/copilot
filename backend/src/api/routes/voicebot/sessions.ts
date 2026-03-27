@@ -135,6 +135,8 @@ const activeSessionInputSchema = z.object({
 });
 const sessionDoneInputSchema = z.object({
     session_id: z.string().trim().min(1),
+    transition_id: z.string().trim().min(1).optional(),
+    correlation_id: z.string().trim().min(1).optional(),
 });
 const listSessionsInputSchema = z.object({
     include_deleted: z.union([z.boolean(), z.number(), z.string()]).optional(),
@@ -144,6 +146,8 @@ const createSessionInputSchema = z.object({
     session_type: z.string().trim().optional().nullable(),
     project_id: z.string().trim().optional().nullable(),
     chat_id: z.union([z.string(), z.number()]).optional().nullable(),
+    transition_id: z.string().trim().min(1).optional(),
+    correlation_id: z.string().trim().min(1).optional(),
 });
 const generatePossibleTasksInputSchema = z.object({
     session_id: z.string().trim().min(1),
@@ -3034,6 +3038,8 @@ router.post(
 
             const payload: SessionDoneInput = parsedBody.data;
             const sessionId = payload.session_id;
+            const transitionId = getOptionalTrimmedString(payload.transition_id);
+            const correlationId = getOptionalTrimmedString(payload.correlation_id) || transitionId;
             if (!ObjectId.isValid(sessionId)) {
                 return res.status(400).json({ error: 'invalid_session_id' });
             }
@@ -3060,6 +3066,8 @@ router.post(
                     type: 'rest',
                     route: '/api/voicebot/session_done',
                     method: 'POST',
+                    transition_id: transitionId || null,
+                    correlation_id: correlationId || null,
                 },
                 emitSessionStatus: (statusPayload) => {
                     if (!namespace) return;
@@ -3126,7 +3134,11 @@ router.post('/create_session', async (req: Request, res: Response) => {
             session_type,
             project_id,
             chat_id,
+            transition_id,
+            correlation_id,
         } = parsedBody.data;
+        const transitionId = getOptionalTrimmedString(transition_id);
+        const correlationId = getOptionalTrimmedString(correlation_id) || transitionId;
 
         let normalizedProjectId: ObjectId | null = null;
         const projectIdString = String(project_id || '').trim();
@@ -3172,6 +3184,8 @@ router.post('/create_session', async (req: Request, res: Response) => {
             session_processors: [
                 VOICEBOT_JOBS.postprocessing.CREATE_TASKS,
             ],
+            ...(transitionId ? { transition_id: transitionId } : {}),
+            ...(correlationId ? { correlation_id: correlationId } : {}),
         };
         if (normalizedProjectId) {
             sessionDoc.project_id = normalizedProjectId;
@@ -3189,6 +3203,8 @@ router.post('/create_session', async (req: Request, res: Response) => {
             success: true,
             session_id: newSessionId,
             session_name: preparedName,
+            transition_id: transitionId || null,
+            correlation_id: correlationId || null,
             url: voiceSessionUrlUtils.active(newSessionId),
         });
     } catch (error) {

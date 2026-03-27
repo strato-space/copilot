@@ -9,9 +9,10 @@ import {
   type GroupedTaskTypeOption,
 } from '../../utils/taskTypeSelectOptions';
 
-type OperationalTaskTypeSelectProps = Omit<SelectProps<string, DefaultOptionType>, 'options' | 'value'> & {
+type OperationalTaskTypeSelectProps = Omit<SelectProps<string, DefaultOptionType>, 'options' | 'value' | 'popupClassName'> & {
   options: GroupedTaskTypeOption[];
   value?: string | null;
+  popupClassName?: never;
 };
 
 type OperationalTaskTypeOption = GroupedTaskTypeOption['options'][number];
@@ -22,8 +23,8 @@ const asOperationalTaskTypeOption = (value: unknown): OperationalTaskTypeOption 
   return typeof record.value === 'string' ? (value as OperationalTaskTypeOption) : null;
 };
 
-const joinPopupClassName = (popupClassName?: string): string =>
-  ['copilot-hierarchical-select-popup', 'copilot-task-type-select-popup', popupClassName].filter(Boolean).join(' ');
+const joinPopupRootClassName = (...classNames: Array<string | undefined>): string =>
+  classNames.filter(Boolean).join(' ');
 
 const renderTaskTypeLabel = ({ label, value }: { label: unknown; value: unknown }): string => {
   const resolved = taskTypeSelectLabel(label, value);
@@ -57,7 +58,7 @@ const withCurrentTaskTypeValueOption = (
 
 const OperationalTaskTypeSelect = forwardRef<RefSelectProps, OperationalTaskTypeSelectProps>(
   function OperationalTaskTypeSelect(
-    { options, popupClassName, placeholder = 'Тип задачи (операционный)', value = null, labelRender, ...rest },
+    { options, classNames, placeholder = 'Тип задачи (операционный)', value = null, labelRender, ...rest },
     ref
   ) {
     const resolvedOptions = withCurrentTaskTypeValueOption(options, value);
@@ -87,7 +88,17 @@ const OperationalTaskTypeSelect = forwardRef<RefSelectProps, OperationalTaskType
         }}
         listItemHeight={44}
         popupMatchSelectWidth={false}
-        popupClassName={joinPopupClassName(popupClassName)}
+        classNames={{
+          ...classNames,
+          popup: {
+            ...classNames?.popup,
+            root: joinPopupRootClassName(
+              'copilot-hierarchical-select-popup',
+              'copilot-task-type-select-popup',
+              classNames?.popup?.root
+            ),
+          },
+        }}
         options={resolvedOptions}
         value={value}
         {...rest}

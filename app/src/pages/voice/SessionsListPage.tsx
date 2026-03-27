@@ -1012,7 +1012,7 @@ export default function SessionsListPage() {
                         allowClear
                         options={projectFilterOptions}
                         style={{ width: '100%', marginBottom: 8 }}
-                        popupClassName="w-[350px]"
+                        classNames={{ popup: { root: 'w-[350px]' } }}
                         onChange={(projectId) => {
                             setSelectedKeys(projectId ? [projectId] : []);
                             confirm();
@@ -1080,7 +1080,7 @@ export default function SessionsListPage() {
                                         allowClear
                                         placeholder="Выбрать проект"
                                         options={projectSelectOptions}
-                                        popupClassName="voice-project-select-popup"
+                                        classNames={{ popup: { root: 'voice-project-select-popup' } }}
                                     />
                                 );
                             })()

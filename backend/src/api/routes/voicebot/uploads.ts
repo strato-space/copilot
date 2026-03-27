@@ -34,6 +34,11 @@ const resolveUploadRequestId = (req: Request): string => {
     if (normalized) return normalized;
     return `upl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 };
+const getOptionalTrimmedString = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : null;
+};
 
 const runtimeSessionQuery = (query: Record<string, unknown>): Record<string, unknown> => query;
 
@@ -450,6 +455,8 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
 
     try {
         const session_id = String(req.body?.session_id || '').trim();
+        const requestTransitionId = getOptionalTrimmedString(req.body?.transition_id);
+        const requestCorrelationId = getOptionalTrimmedString(req.body?.correlation_id) || requestTransitionId;
         if (!session_id) {
             return res.status(400).json({ error: 'session_id is required', request_id: requestId });
         }
@@ -462,6 +469,8 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         logger.info('[voicebot.upload_audio] started', {
             request_id: requestId,
             session_id,
+            transition_id: requestTransitionId,
+            correlation_id: requestCorrelationId,
             files: filesArray.map((file) => ({
                 name: file.originalname,
                 size: file.size,
@@ -477,6 +486,15 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         if (isSessionInactive(session)) {
             return res.status(409).json({ error: 'session_inactive', request_id: requestId });
         }
+        const sessionTransitionId =
+            getOptionalTrimmedString(session.transition_id) ||
+            getOptionalTrimmedString(session.open_transition_id);
+        const sessionCorrelationId =
+            getOptionalTrimmedString(session.correlation_id) ||
+            getOptionalTrimmedString(session.open_correlation_id) ||
+            sessionTransitionId;
+        const effectiveTransitionId = requestTransitionId || sessionTransitionId;
+        const effectiveCorrelationId = requestCorrelationId || sessionCorrelationId || effectiveTransitionId;
         const chatId = Number(session.chat_id);
         const sessionRuntimeTag = typeof session.runtime_tag === 'string' ? session.runtime_tag.trim() : '';
         const voiceQueue = (req.app.get('voicebotQueues') as Record<string, VoiceQueueLike> | undefined)?.[VOICEBOT_QUEUES.VOICE];
@@ -523,6 +541,8 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                     mime_type: persistedMimeType,
                     duration,
                     upload_timestamp: createdAt,
+                    transition_id: effectiveTransitionId || null,
+                    correlation_id: effectiveCorrelationId || null,
                 },
                 uploaded_by: performer._id,
                 user_id: performer._id,
@@ -536,6 +556,8 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 is_deleted: false,
                 created_at: createdAt,
                 updated_at: createdAt,
+                ...(effectiveTransitionId ? { transition_id: effectiveTransitionId } : {}),
+                ...(effectiveCorrelationId ? { correlation_id: effectiveCorrelationId } : {}),
                 ...(consumePendingImageAnchor
                     ? {
                         image_anchor_message_id: consumePendingImageAnchor,
@@ -628,6 +650,8 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 file_size: messageDoc.file_size,
                 mime_type: messageDoc.mime_type,
                 duration: messageDoc.duration,
+                transition_id: messageDoc.transition_id ?? null,
+                correlation_id: messageDoc.correlation_id ?? null,
                 to_transcribe: !voiceQueue,
                 is_transcribed: false,
                 transcription_text: '',
@@ -651,6 +675,8 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 },
                 processing_status: 'queued',
                 deduplicated_previous_count: deduplicatedCount,
+                transition_id: effectiveTransitionId || null,
+                correlation_id: effectiveCorrelationId || null,
             });
             logger.info('[voicebot.upload_audio] file_processed', {
                 request_id: requestId,
@@ -660,6 +686,8 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                 file_size: file.size,
                 mime_type: persistedMimeType,
                 deduplicated_previous_count: deduplicatedCount,
+                transition_id: effectiveTransitionId || null,
+                correlation_id: effectiveCorrelationId || null,
             });
 
             if (deduplicatedCount > 0) {
@@ -676,6 +704,8 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
                     last_voice_timestamp: new Date(),
                     updated_at: new Date(),
                     is_messages_processed: false,
+                    ...(effectiveTransitionId ? { transition_id: effectiveTransitionId } : {}),
+                    ...(effectiveCorrelationId ? { correlation_id: effectiveCorrelationId } : {}),
                 },
                 ...(pendingImageAnchorConsumed
                     ? {
@@ -695,6 +725,8 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
             session_id,
             files_count: filesArray.length,
             results_count: results.length,
+            transition_id: effectiveTransitionId || null,
+            correlation_id: effectiveCorrelationId || null,
         });
 
         const io = req.app.get('io') as SocketIOServer | undefined;
@@ -732,6 +764,8 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         logger.error('[voicebot.upload_audio] failed', {
             request_id: requestId,
             error: error instanceof Error ? error.message : String(error),
+            transition_id: getOptionalTrimmedString(req.body?.transition_id),
+            correlation_id: getOptionalTrimmedString(req.body?.correlation_id),
         });
         return res.status(500).json({ error: String(error), request_id: requestId });
     }

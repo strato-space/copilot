@@ -9,9 +9,10 @@ import {
   type GroupedSelectOption,
 } from '../../utils/projectSelectOptions';
 
-type ProjectSelectProps = Omit<SelectProps<string, DefaultOptionType>, 'options' | 'value'> & {
+type ProjectSelectProps = Omit<SelectProps<string, DefaultOptionType>, 'options' | 'value' | 'popupClassName'> & {
   options: GroupedSelectOption[];
   value?: string | null;
+  popupClassName?: never;
 };
 
 type ProjectSelectOption = GroupedSelectOption['options'][number];
@@ -22,8 +23,8 @@ const asProjectSelectOption = (value: unknown): ProjectSelectOption | null => {
   return typeof record.value === 'string' ? (value as ProjectSelectOption) : null;
 };
 
-const joinPopupClassName = (popupClassName?: string): string =>
-  ['copilot-hierarchical-select-popup', 'copilot-project-select-popup', popupClassName].filter(Boolean).join(' ');
+const joinPopupRootClassName = (...classNames: Array<string | undefined>): string =>
+  classNames.filter(Boolean).join(' ');
 
 const renderProjectLabel = ({ label, value }: { label: unknown; value: unknown }): string => {
   const resolved = projectSelectLabel(label, value);
@@ -56,7 +57,7 @@ const withCurrentProjectValueOption = (
 };
 
 const ProjectSelect = forwardRef<RefSelectProps, ProjectSelectProps>(function ProjectSelect(
-  { options, popupClassName, value = null, labelRender, ...rest },
+  { options, classNames, value = null, labelRender, ...rest },
   ref
 ) {
   const resolvedOptions = withCurrentProjectValueOption(options, value);
@@ -84,7 +85,17 @@ const ProjectSelect = forwardRef<RefSelectProps, ProjectSelectProps>(function Pr
       }}
       listItemHeight={44}
       popupMatchSelectWidth={false}
-      popupClassName={joinPopupClassName(popupClassName)}
+      classNames={{
+        ...classNames,
+        popup: {
+          ...classNames?.popup,
+          root: joinPopupRootClassName(
+            'copilot-hierarchical-select-popup',
+            'copilot-project-select-popup',
+            classNames?.popup?.root
+          ),
+        },
+      }}
       options={resolvedOptions}
       value={value}
       {...rest}

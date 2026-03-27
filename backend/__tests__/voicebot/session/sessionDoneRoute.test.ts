@@ -202,4 +202,27 @@ describe('Voicebot session_done REST route', () => {
     expect(response.body.error).toBe('session_id is required');
     expect(completeSessionDoneFlowMock).not.toHaveBeenCalled();
   });
+
+  it('passes transition/correlation trace fields to done-flow source', async () => {
+    const { app } = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session_done')
+      .send({
+        session_id: sessionId.toHexString(),
+        transition_id: 'tr-done-start-1',
+        correlation_id: 'corr-done-start-1',
+      });
+
+    expect(response.status).toBe(200);
+    expect(completeSessionDoneFlowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({
+          type: 'rest',
+          route: '/api/voicebot/session_done',
+          transition_id: 'tr-done-start-1',
+          correlation_id: 'corr-done-start-1',
+        }),
+      })
+    );
+  });
 });

@@ -174,6 +174,63 @@ describe('CRM codex route runtime behavior', () => {
     expect(spawnMock).toHaveBeenCalledTimes(2);
   });
 
+  it('suppresses repeated import-only sync retries after token-too-long and serves fallback during cooldown', async () => {
+    const now = Date.now() + 360_000;
+    jest.spyOn(Date, 'now').mockReturnValue(now);
+
+    jest.spyOn(fs, 'createReadStream').mockImplementation(() => {
+      const stream = new PassThrough();
+      queueMicrotask(() => {
+        stream.end([
+          JSON.stringify({ id: 'copilot-open', title: 'Open issue', status: 'open' }),
+          JSON.stringify({ id: 'copilot-closed', title: 'Closed issue', status: 'closed' }),
+        ].join('\n'));
+      });
+      return stream as unknown as fs.ReadStream;
+    });
+
+    queueSpawnPlans([
+      {
+        code: 1,
+        stdout: "Database out of sync with JSONL. Run 'bd sync --import-only' to fix.",
+      },
+      {
+        code: 1,
+        stderr: 'Error: importing: error reading JSONL: bufio.Scanner: token too long',
+      },
+      {
+        code: 1,
+        stdout: "Database out of sync with JSONL. Run 'bd sync --import-only' to fix.",
+      },
+    ]);
+
+    const app = buildApp();
+    const firstResponse = await request(app).post('/crm/codex/issues').send({ view: 'open', limit: 1000 });
+    const secondResponse = await request(app).post('/crm/codex/issues').send({ view: 'open', limit: 1000 });
+
+    expect(firstResponse.status).toBe(200);
+    expect(firstResponse.body).toEqual([{ id: 'copilot-open', title: 'Open issue', status: 'open' }]);
+    expect(secondResponse.status).toBe(200);
+    expect(secondResponse.body).toEqual([{ id: 'copilot-open', title: 'Open issue', status: 'open' }]);
+
+    // First request: bd list + bd sync(import-only).
+    // Second request in cooldown: bd list only (no sync retry).
+    expect(spawnMock).toHaveBeenCalledTimes(3);
+    const [, secondArgs] = spawnMock.mock.calls[1] as [string, string[]];
+    const [, thirdArgs] = spawnMock.mock.calls[2] as [string, string[]];
+    expect(secondArgs).toEqual(['sync', '--import-only']);
+    expect(thirdArgs).toEqual(['--no-daemon', 'list', '--json', '--limit', '1000']);
+
+    const cooldownWarnings = loggerWarnMock.mock.calls
+      .map((entry) => String(entry[0] ?? ''))
+      .filter((message) => message.includes('import-only sync disabled during cooldown after token-too-long'));
+    const outOfSyncWarnings = loggerWarnMock.mock.calls
+      .map((entry) => String(entry[0] ?? ''))
+      .filter((message) => message.includes('bd out-of-sync detected, running import-only sync'));
+    expect(cooldownWarnings).toHaveLength(1);
+    expect(outOfSyncWarnings).toHaveLength(1);
+  });
+
   it('maps bd show not-found failures to 404', async () => {
     queueSpawnPlans([
       {

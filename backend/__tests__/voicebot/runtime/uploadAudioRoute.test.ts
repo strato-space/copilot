@@ -147,6 +147,82 @@ describe('POST /voicebot/upload_audio', () => {
     expect((persisted.file_metadata as Record<string, unknown>)?.duration).toBe(123.456);
   });
 
+  it('propagates transition/correlation trace from session into first uploaded chunk', async () => {
+    const sessionId = new ObjectId();
+    const performerId = new ObjectId('507f1f77bcf86cd7994390f1');
+    const insertedMessages: Array<Record<string, unknown>> = [];
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toString(),
+      access_level: 'private',
+      is_deleted: false,
+      transition_id: 'tr-create-42',
+      correlation_id: 'corr-create-42',
+    }));
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionFindOne,
+            updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return createMessagesCollection(insertedMessages);
+        }
+        return {
+          findOne: jest.fn(async () => null),
+          updateOne: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+          insertOne: jest.fn(async () => ({ insertedId: new ObjectId() })),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(dbStub);
+
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      const vreq = req as express.Request & {
+        performer: Record<string, unknown>;
+        user: Record<string, unknown>;
+      };
+      vreq.performer = {
+        _id: performerId,
+        telegram_id: '123456',
+        projects_access: [],
+      };
+      vreq.user = { userId: performerId.toString() };
+      next();
+    });
+    app.use('/voicebot', uploadsRouter);
+
+    const response = await request(app)
+      .post('/voicebot/upload_audio')
+      .field('session_id', sessionId.toString())
+      .attach('audio', Buffer.from('webm-audio-fixture'), {
+        filename: 'chunk.webm',
+        contentType: 'audio/webm',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.transition_id).toBe('tr-create-42');
+    expect(response.body.correlation_id).toBe('corr-create-42');
+    expect(insertedMessages).toHaveLength(1);
+    const persisted = insertedMessages[0] ?? {};
+    const storedPath = typeof persisted.file_path === 'string' ? persisted.file_path : '';
+    if (storedPath) uploadedFilePaths.add(storedPath);
+
+    expect(persisted.transition_id).toBe('tr-create-42');
+    expect(persisted.correlation_id).toBe('corr-create-42');
+    expect((persisted.file_metadata as Record<string, unknown>)?.transition_id).toBe('tr-create-42');
+    expect((persisted.file_metadata as Record<string, unknown>)?.correlation_id).toBe('corr-create-42');
+  });
+
   it('accepts video/webm uploads and normalizes mime type to audio/webm', async () => {
     const sessionId = new ObjectId();
     const performerId = new ObjectId('507f1f77bcf86cd799439015');

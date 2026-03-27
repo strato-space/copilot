@@ -2700,3 +2700,59 @@
 - **22:04** Updated `app/src/utils/{voiceSessionTaskSource,voiceSourceFileName,voiceMetadataSignature}.ts`, `app/src/pages/operops/taskPageUtils.ts`, `backend/src/api/routes/voicebot/sessions.ts`, `backend/src/services/voicebot/{createTasksAgent,voicebotDoneNotify}.ts`, worker handlers, and focused tests/e2e so Voice session matching prefers `external_ref` when `source_ref` is an OperOps self-link (`copilot-ztlv.27`), Codex issue creation uses unique `#codex-task=` refs, manual Draft refresh and summary save carry/reconcile correlation ids, `runCreateTasksAgent(...)` injects bounded `project_crm_window`, mojibake filenames are normalized in metadata signatures, and live parity tests assert CRM/Voice tab counts against live APIs.
 - **22:04** Updated root `AGENTS.md` with the subagent execution policy: subagents should start with clean history by default, while final integration verification and deploy/smoke remain parent-thread responsibilities.
 - **22:26** Finalized the follow-up task-ref hotfix: accepted-row reuse now preserves original `created_at`, `create_tickets` no longer blanket-deletes unrelated `codex_task` docs before bd sync, and canonical task-source helpers no longer emit a bare `/operops/task` URL when the Mongo task id is missing (`copilot-jhvx`, `copilot-ji84`).
+
+## 2026-03-23
+### PROBLEM SOLVED
+- **18:40** Voice task surfaces still drifted between session processors, review artifacts, and forensic tooling, which slowed down incident resolution.
+
+### FEATURE IMPLEMENTED
+- **18:40** Stabilized `CREATE_TASKS` parity, unified review surfaces, and added first-class voice session forensics tooling.
+
+### CHANGES
+- **18:40** Stabilized voice task surfaces and added inactive-session auto-close (`c48672e`).
+- **19:12** Unified voice review surfaces and hardened composite task analysis (`19c2879`).
+- **20:01** Hardened `CREATE_TASKS` parity and added voice forensics tooling (`392a724`).
+
+## 2026-03-25
+### PROBLEM SOLVED
+- **23:20** Sessions list and task workspace behavior were too slow/noisy after recovery waves; retry/error paths for transcription and taskflow were inconsistent.
+
+### FEATURE IMPLEMENTED
+- **23:20** Landed a full voice reliability wave: faster sessions list, deterministic task workspace/footer flow, stricter transcription recovery, and ontology-backed draft persistence.
+
+### CHANGES
+- **12:04** Split persistence specs and rehomed dual-stream ontology docs (`254a1b7`).
+- **13:27** Stabilized production voice-operops parity surfaces (`a97e745`).
+- **15:03** Implemented ontology-backed Draft task persistence slice (`24b0370`).
+- **16:41** Accelerated sessions list and stabilized Draft workspace layout (`9a6da86`).
+- **17:10** Fixed backend sessions-list typing regression after deploy build failure (`294460b`).
+- **21:33** Stabilized voice taskflow runtime and footer flow (`6872c70`).
+- **23:20** Hardened transcription recovery and garbage gating (`74054ce`).
+
+## 2026-03-26
+### PROBLEM SOLVED
+- **22:47** Voice stale-repair and temporal taskflow semantics were fragmented across routing paths; lifecycle and CRM refresh flows still had race-prone behavior.
+
+### FEATURE IMPLEMENTED
+- **22:47** Canonicalized stale-repair/temporal policy and hardened session lifecycle + CRM refresh contracts.
+
+### CHANGES
+- **09:41** Stabilized voice stale-repair and sessions parity test contracts (`ad90fca`).
+- **11:18** Aligned recall-first temporal policy across spec and ontology (`0dbf64d`).
+- **12:02** Added `copilot-xmcm` swarm execution plan docs (`898bc96`).
+- **20:57** Hardened voice session lifecycle and CRM task refresh flows (`fda39a2`).
+- **22:34** Normalized legacy Draft `updated_at` values on read compatibility (`8602d1c`).
+
+## 2026-03-27
+### PROBLEM SOLVED
+- **10:10** Runtime recovery needed one strict path after restart: Codex/CRM transport drift, voice upload/session forensic trace continuity, noisy test warnings, and selector/task-pane deprecation fallout were still mixed in active diffs.
+
+### FEATURE IMPLEMENTED
+- **10:10** Delivered a recovery-focused hardening package with deterministic route behavior, warning suppression policy in tests, and UI selector/task-pane contract cleanups.
+
+### CHANGES
+- **09:32** Stabilized voice runtime recovery and temporal taskflow contracts (`1126f4f`).
+- **10:10** Added CRM temporal/codex runtime route hardening and tests (`backend/src/api/routes/crm/{tickets.ts,codex.ts}`, `backend/__tests__/api/*`).
+- **10:10** Added forensic trace continuity for `session_done` and `upload_audio` flows plus regression coverage (`backend/src/api/routes/voicebot/{sessions.ts,uploads.ts}`, `backend/__tests__/voicebot/*`, `backend/__tests__/smoke/voicebotApiSmoke.test.ts`).
+- **10:10** Centralized backend test logger noise policy and test script warning suppression (`backend/src/utils/logger.ts`, `backend/__tests__/services/logger.test.ts`, `backend/package.json`).
+- **10:10** Completed UI contract cleanup for shared selectors and OperOps `TaskPage` card API migration (`variant=\"borderless\"`) with parity test updates across `app/src/components/shared/*`, `app/src/pages/operops/*`, and `app/__tests__/*`.

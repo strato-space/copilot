@@ -41,12 +41,13 @@ describe('VoiceBot API smoke', () => {
   it('serves critical flat endpoints without 404 regressions', async () => {
     const performerId = new ObjectId('507f1f77bcf86cd799439011');
     const createdSessionId = new ObjectId();
+    const insertSessionMock = jest.fn(async () => ({ insertedId: createdSessionId }));
 
     const dbStub = {
       collection: (name: string) => {
         if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
           return {
-            insertOne: jest.fn(async () => ({ insertedId: createdSessionId })),
+            insertOne: insertSessionMock,
             findOne: jest.fn(async () => ({
               _id: createdSessionId,
               chat_id: 123,
@@ -102,9 +103,21 @@ describe('VoiceBot API smoke', () => {
 
     const createRes = await request(app)
       .post('/voicebot/create_session')
-      .send({ session_name: 'Smoke' });
+      .send({
+        session_name: 'Smoke',
+        transition_id: 'tr-create-1',
+        correlation_id: 'corr-create-1',
+      });
     expect(createRes.status).toBe(201);
     expect(createRes.body.session_id).toBe(createdSessionId.toString());
+    expect(createRes.body.transition_id).toBe('tr-create-1');
+    expect(createRes.body.correlation_id).toBe('corr-create-1');
+    expect(insertSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transition_id: 'tr-create-1',
+        correlation_id: 'corr-create-1',
+      })
+    );
 
     const addTextRes = await request(app)
       .post('/voicebot/add_text')

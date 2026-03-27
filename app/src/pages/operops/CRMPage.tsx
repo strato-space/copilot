@@ -1171,7 +1171,7 @@ const CRMPage = () => {
                                     <ProjectSelect
                                         allowClear
                                         className="w-[280px]"
-                                        popupClassName="w-[380px]"
+                                        classNames={{ popup: { root: 'w-[380px]' } }}
                                         options={projectFilterOptions}
                                         placeholder="Все проекты"
                                         value={selectedProjectFilter}

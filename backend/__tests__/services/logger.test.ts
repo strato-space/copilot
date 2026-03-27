@@ -8,6 +8,7 @@ const clearLoggerEnv = (): void => {
   delete process.env.LOGS_DIR;
   delete process.env.LOGS_LEVEL;
   delete process.env.INSTANCE_ID;
+  delete process.env.LOGS_TEST_CONSOLE;
 };
 
 describe('logger service', () => {
@@ -59,5 +60,38 @@ describe('logger service', () => {
     expect(childLogger).not.toBe(rootLogger);
 
     rootLogger.close();
+  });
+
+  it('does not attach console transport in Jest runtime by default', async () => {
+    const logsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copilot-logger-test-silent-'));
+    process.env.LOGS_DIR = logsDir;
+
+    const { initLogger } = await import('../../src/utils/logger.js');
+    const logger = initLogger('CopilotBackend', '3');
+
+    const hasConsoleTransport = logger.transports.some((transport) => {
+      const candidate = transport as unknown as { name?: string; constructor?: { name?: string } };
+      return candidate.name === 'console' || candidate.constructor?.name === 'Console';
+    });
+
+    expect(hasConsoleTransport).toBe(false);
+    logger.close();
+  });
+
+  it('attaches console transport in Jest runtime when LOGS_TEST_CONSOLE is enabled', async () => {
+    const logsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copilot-logger-test-console-'));
+    process.env.LOGS_DIR = logsDir;
+    process.env.LOGS_TEST_CONSOLE = '1';
+
+    const { initLogger } = await import('../../src/utils/logger.js');
+    const logger = initLogger('CopilotBackend', '4');
+
+    const hasConsoleTransport = logger.transports.some((transport) => {
+      const candidate = transport as unknown as { name?: string; constructor?: { name?: string } };
+      return candidate.name === 'console' || candidate.constructor?.name === 'Console';
+    });
+
+    expect(hasConsoleTransport).toBe(true);
+    logger.close();
   });
 });
