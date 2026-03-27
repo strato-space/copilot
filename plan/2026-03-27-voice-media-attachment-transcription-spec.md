@@ -46,6 +46,7 @@ Current AS-IS behavior intentionally treats such messages as attachment-only. Th
 - `runtime staging artifact` — execution-local working file such as extracted audio or downloaded payload path. It is not a transport fact.
 - `attachment-only message` — a message that carries a file but is not transcription-eligible under the current feature boundary.
 - `speech-bearing classifier` — the runtime mechanism that produces a `speech-bearing assessment` from currently available evidence.
+- `transcription job key` — the canonical dedupe identity for ASR work on one attachment payload, derived from message identity plus attachment identity plus a stable payload/transport fingerprint.
 
 Normalization rule:
 
@@ -314,7 +315,8 @@ If the payload has audio but is resolved as non-speech under the configured nega
 - message-level fields such as `primary_payload_media_kind` and `transcription_eligibility` describe that primary attachment projection only, not the attachment set as a whole
 - if no attachment is `eligible` but one or more attachments remain unresolved, the message remains `classification_resolution_state=pending`
 - in that pending case, `primary_transcription_attachment_index=null` until an eligible primary is resolved
-- in that pending case, automatic classification/probe work must target unresolved attachments individually inside `attachments[]`; after each per-attachment resolution event, the stable rule is re-run to determine whether message-level projection should remain null, switch to an eligible primary, or switch to a resolved-ineligible primary
+- in that pending case, automatic classification/probe work must target unresolved attachments individually inside `attachments[]`; after each per-attachment resolution event, the stable rule is re-run to determine whether message-level projection should remain null or switch to an eligible primary
+- only once all unresolved attachments have become resolved and none is eligible may the message switch from pending to a resolved-ineligible primary projection
 - if all attachments are `resolved` and none is `eligible`, the message is `transcription_eligibility=ineligible` and `primary_transcription_attachment_index` must still be chosen deterministically from the resolved attachments by the same duration-first, then size, then lowest-index rule
 - if multiple attachments are `eligible`, the first-wave system still transcribes only the deterministic primary attachment chosen by the stable rule above
 - if a pending attachment later resolves to `eligible`, the stable rule must be re-run and the primary projection may change accordingly
@@ -395,6 +397,12 @@ Authoritative retry selector:
 - `transcription_processing_state=transcribed` excludes the message from retry;
 - `transcription_processing_state=transcription_error` keeps the eligible message retryable unless another policy explicitly suppresses retry.
 
+Canonical payload identity for dedupe:
+
+- implementations must define a `transcription job key` or exact semantic equivalent at least over `voice_message.id`, attachment identity (`primary_transcription_attachment_index` or authoritative attachment id), and a stable payload/transport fingerprint such as `file_unique_id` or equivalent;
+- duplicate prevention and in-flight detection are with respect to that key, not merely the current message-level processing state text;
+- if primary selection changes to a different attachment, the job key changes with it; duplicate suppression must still apply per key and stale completions from an old key must not overwrite the current primary projection.
+
 `POST /api/voicebot/transcription/retry` must not arm `classification_resolution_state=pending` messages for ASR. Those messages must first become `eligible` through classifier/probe resolution or explicit operator action. The endpoint should report such messages separately rather than silently no-oping on them, and if a pending-classification probe queue exists it may enqueue or refresh that non-ASR path idempotently.
 
 Retry must be idempotent with respect to in-flight transcription work:
@@ -446,6 +454,7 @@ Recommended message-level fields:
 Required per-attachment classification fields inside `attachments[]` whenever message-level projection is persisted:
 
 - `payload_media_kind`
+- `speech_bearing_assessment`
 - `classification_resolution_state`
 - `transcription_eligibility`
 - `transcription_eligibility_basis`
