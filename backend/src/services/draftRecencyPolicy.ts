@@ -2,6 +2,7 @@ import { ObjectId, type Db } from 'mongodb';
 
 import { COLLECTIONS, TASK_STATUSES, VOICEBOT_COLLECTIONS } from '../constants.js';
 import { isVoiceSessionSourceRef } from './taskSourceRef.js';
+import { resolveDateLikeEpochMs } from './taskUpdatedAt.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -12,24 +13,9 @@ const toText = (value: unknown): string => {
 };
 
 const parseDateLike = (value: unknown): Date | null => {
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    const normalized = value > 1e12 ? value : value * 1000;
-    const date = new Date(normalized);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const numeric = Number(trimmed);
-    if (Number.isFinite(numeric)) {
-      return parseDateLike(numeric);
-    }
-    const parsed = Date.parse(trimmed);
-    if (Number.isNaN(parsed)) return null;
-    return new Date(parsed);
-  }
-  return null;
+  const timestamp = resolveDateLikeEpochMs(value);
+  if (timestamp === null) return null;
+  return new Date(timestamp);
 };
 
 const parseBooleanish = (value: unknown, defaultValue = false): boolean => {

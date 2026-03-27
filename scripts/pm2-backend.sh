@@ -49,6 +49,7 @@ PM2_NAME="copilot-backend-prod"
 PM2_MINI_NAME="copilot-miniapp-backend-prod"
 PM2_ECOSYSTEM="$ROOT_DIR/scripts/pm2-backend.ecosystem.config.js"
 VOICEBOT_PM2_ECOSYSTEM="$ROOT_DIR/scripts/pm2-voicebot-cutover.ecosystem.config.js"
+RUNTIME_READINESS_SCRIPT="$ROOT_DIR/scripts/pm2-runtime-readiness.sh"
 PROD_VOICEBOT_PM2_NAMES=(copilot-voicebot-workers-prod copilot-voicebot-tgbot-prod)
 
 if [[ "$MODE" == "dev" ]]; then
@@ -123,4 +124,11 @@ if [[ "$MODE" == "prod" ]]; then
     ensure_pm2_process "$VOICEBOT_PM2_ECOSYSTEM" "$VOICEBOT_PM2_NAME"
     assert_pm2_online "$VOICEBOT_PM2_NAME"
   done
+
+  if [[ ! -x "$RUNTIME_READINESS_SCRIPT" ]]; then
+    echo "Runtime readiness script is missing or not executable: $RUNTIME_READINESS_SCRIPT" >&2
+    exit 1
+  fi
+
+  "$RUNTIME_READINESS_SCRIPT" "$MODE"
 fi

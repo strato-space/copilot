@@ -16,6 +16,7 @@ import {
   collectVoicePossibleTaskLocatorKeys,
   normalizeVoicePossibleTaskDocForApi,
   normalizeVoiceTaskDiscussionSessions,
+  recomputeVoiceTaskSourceDataSessionLinkage,
   resolveVoicePossibleTaskRowId,
 } from '../../api/routes/voicebot/possibleTasksMasterModel.js';
 import { toIdString, toTaskText } from '../../api/routes/voicebot/sessionsSharedUtils.js';
@@ -880,6 +881,10 @@ const softDeletePossibleTaskMasterRows = async ({
       const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
         previousUpdatedAt: doc.updated_at,
       });
+      const nextSourceData = recomputeVoiceTaskSourceDataSessionLinkage({
+        sourceData,
+        discussionSessions: remainingVoiceSessions,
+      });
       await db.collection(COLLECTIONS.TASKS).updateOne(
         { _id: docObjectId },
         {
@@ -889,12 +894,7 @@ const softDeletePossibleTaskMasterRows = async ({
               external_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
             }),
             discussion_sessions: remainingVoiceSessions,
-            source_data: {
-              ...sourceData,
-              session_id: toTaskText(nextPrimary.session_id),
-              session_name: toTaskText(nextPrimary.session_name),
-              voice_sessions: remainingVoiceSessions,
-            },
+            source_data: nextSourceData,
             updated_at: nextUpdatedAt,
           },
         }
@@ -1166,6 +1166,16 @@ export const persistPossibleTasksForSession = async ({
       ...existingVoiceSessions.filter((entry) => toTaskText(entry.session_id) !== sessionId),
     ];
     const discussionSessions = normalizeVoiceTaskDiscussionSessions(mergedVoiceSessions);
+    const nextSourceData = recomputeVoiceTaskSourceDataSessionLinkage({
+      sourceData: {
+        ...persistedSourceData,
+        ...(sessionName ? { session_name: sessionName } : {}),
+        voice_task_kind: 'possible_task',
+        row_id: canonicalRowId,
+        last_refresh_mode: refreshMode,
+      },
+      discussionSessions,
+    });
     const taskObjectId = existingDoc?._id instanceof ObjectId ? existingDoc._id : new ObjectId();
 
     const nextDoc = canonicalizePossibleTaskMongoDocument({
@@ -1189,15 +1199,7 @@ export const persistPossibleTasksForSession = async ({
           existingCreatedAt: existingDoc?.created_at,
         }),
         external_ref: canonicalExternalRef,
-        source_data: {
-          ...persistedSourceData,
-          session_id: sessionId,
-          ...(sessionName ? { session_name: sessionName } : {}),
-          voice_task_kind: 'possible_task',
-          row_id: canonicalRowId,
-          voice_sessions: discussionSessions,
-          last_refresh_mode: refreshMode,
-        },
+        source_data: nextSourceData,
         discussion_sessions: discussionSessions,
       },
     });

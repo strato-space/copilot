@@ -1,4 +1,5 @@
 import { ObjectId } from 'mongodb';
+import { resolveDateLikeEpochMs } from '../../../services/taskUpdatedAt.js';
 
 export const toObjectIdOrNull = (value: unknown): ObjectId | null => {
     if (value instanceof ObjectId) return value;
@@ -24,14 +25,22 @@ export const toTaskText = (value: unknown): string => {
 };
 
 export const normalizeDateField = (value: unknown): string | number | null => {
-    if (value instanceof Date) return value.toISOString();
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        const parsedEpochMs = resolveDateLikeEpochMs(value);
+        if (parsedEpochMs === null) return null;
+        return new Date(parsedEpochMs).toISOString();
+    }
     if (typeof value === 'string') {
         const trimmed = value.trim();
         if (!trimmed) return null;
-        const parsed = Date.parse(trimmed);
-        if (Number.isNaN(parsed)) return trimmed;
-        return new Date(parsed).toISOString();
+        const parsedEpochMs = resolveDateLikeEpochMs(trimmed);
+        if (parsedEpochMs === null) return trimmed;
+        return new Date(parsedEpochMs).toISOString();
+    }
+    if (value instanceof Date) {
+        const parsedEpochMs = resolveDateLikeEpochMs(value);
+        if (parsedEpochMs === null) return null;
+        return new Date(parsedEpochMs).toISOString();
     }
     return null;
 };

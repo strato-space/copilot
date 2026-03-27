@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 
 import {
   buildMonotonicUpdatedAtBump,
+  resolveDateLikeEpochMs,
   resolveMonotonicUpdatedAtNext,
 } from '../../src/services/taskUpdatedAt.js';
 
@@ -67,5 +68,29 @@ describe('taskUpdatedAt monotonic rule', () => {
     })).toEqual({
       $max: { updated_at: new Date(effectiveAt.getTime()) },
     });
+  });
+
+  it('parses mixed date-like timestamp formats deterministically', () => {
+    const expectedIsoMs = Date.parse('2026-03-26T15:00:00.000Z');
+    const expectedIsoSec = Math.trunc(expectedIsoMs / 1000);
+    const historicalEpochSec = Date.parse('1999-01-01T00:00:00.000Z') / 1000;
+    const historicalEpochMs = Date.parse('1999-01-01T00:00:00.000Z');
+    const earlyEpochMs = Date.parse('1970-03-01T00:00:00.000Z');
+
+    expect(resolveDateLikeEpochMs(new Date(expectedIsoMs))).toBe(expectedIsoMs);
+    expect(resolveDateLikeEpochMs(expectedIsoMs)).toBe(expectedIsoMs);
+    expect(resolveDateLikeEpochMs(expectedIsoSec)).toBe(expectedIsoSec * 1000);
+    expect(resolveDateLikeEpochMs(String(expectedIsoMs))).toBe(expectedIsoMs);
+    expect(resolveDateLikeEpochMs(String(expectedIsoSec))).toBe(expectedIsoSec * 1000);
+    expect(resolveDateLikeEpochMs(historicalEpochSec)).toBe(historicalEpochMs);
+    expect(resolveDateLikeEpochMs(String(historicalEpochSec))).toBe(historicalEpochMs);
+    expect(resolveDateLikeEpochMs(historicalEpochMs)).toBe(historicalEpochMs);
+    expect(resolveDateLikeEpochMs(String(historicalEpochMs))).toBe(historicalEpochMs);
+    expect(resolveDateLikeEpochMs(earlyEpochMs)).toBe(earlyEpochMs);
+    expect(resolveDateLikeEpochMs(String(earlyEpochMs))).toBe(earlyEpochMs);
+    expect(resolveDateLikeEpochMs('2026-03-26T15:00:00.000Z')).toBe(expectedIsoMs);
+    expect(resolveDateLikeEpochMs('2026-03-26')).toBe(Date.parse('2026-03-26T00:00:00.000Z'));
+    expect(resolveDateLikeEpochMs('not-a-date')).toBeNull();
+    expect(resolveDateLikeEpochMs('')).toBeNull();
   });
 });

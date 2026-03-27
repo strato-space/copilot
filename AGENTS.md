@@ -190,7 +190,8 @@ Preferred engineering principles for this repo:
 - Preferred (PM2): `./scripts/pm2-backend.sh <dev|prod|local>` from repo root.
   - `dev`: builds `app` + `miniapp` with `build-dev`, builds backend, starts `copilot-backend-dev` and `copilot-miniapp-backend-dev`, then starts agents via `agents/pm2-agents.sh` when available.
   - `local`: builds `app` with `build-local`, `miniapp` with `build-dev`, builds backend, starts `copilot-backend-local` and `copilot-miniapp-backend-local`, then starts agents when available.
-  - `prod`: builds `app` + `miniapp` with `build`, builds backend, starts `copilot-backend-prod` and `copilot-miniapp-backend-prod`, then starts agents when available; the same script must also recreate or restart `copilot-voicebot-workers-prod` / `copilot-voicebot-tgbot-prod` so VoiceBot runtimes do not stay missing after deploy.
+  - `prod`: builds `app` + `miniapp` with `build`, builds backend, starts `copilot-backend-prod` and `copilot-miniapp-backend-prod`, then starts agents when available; the same script must also recreate or restart `copilot-voicebot-workers-prod` / `copilot-voicebot-tgbot-prod` so VoiceBot runtimes do not stay missing after deploy, and must run `scripts/pm2-runtime-readiness.sh prod` as a fail-fast readiness gate.
+  - post-deploy/reboot notify integration smoke command is canonical: `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production` (non-zero on non-2xx or transport failure).
 - Validate environment files before startup: `./scripts/check-envs.sh`.
 - Frontend build (manual): `cd app && npm install && npm run build` (outputs to `app/dist`).
 - Miniapp build (manual): `cd miniapp && npm install && npm run build` (outputs to `miniapp/dist`).
@@ -415,11 +416,10 @@ Preferred engineering principles for this repo:
   - draft recency must not be keyed off `task.updated_at`; use linked session discussion timestamps instead,
   - for session-scoped Draft reads, the window is evaluated in both directions around the current session against the task's linked discussion range (`first_linked_session_at .. last_linked_session_at`),
   - if `draft_horizon_days` is omitted, Draft reads remain unbounded,
-  - `include_older_drafts=true` overrides the horizon for explicit historical drilldown,
   - `READY_10+` remains full-history regardless of any Draft horizon policy.
 - Accepted session-task reads are canonical on `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Ready+' }`: the bucket is accepted-only, may return only non-draft lifecycle rows, and `DRAFT_10` leakage there is a contract violation (`copilot-f6z4`), not compatibility behavior.
 - Session-scoped taskflow parity is now canonical across backend + MCP + Actions:
-  - list: `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Draft' }` as strict canonical `DRAFT_10` draft baseline; accepted bucket is `Ready+`, codex bucket is `Codex`, and lowercase aliases are not part of the live contract; optional `draft_horizon_days` / `include_older_drafts` tune visibility policy without changing storage truth
+  - list: `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Draft' }` as strict canonical `DRAFT_10` draft baseline; accepted bucket is `Ready+`, codex bucket is `Codex`, and lowercase aliases are not part of the live contract; optional `draft_horizon_days` tunes visibility policy without changing storage truth
   - create regular: `create_session_tasks`
   - create codex: `create_session_codex_tasks`
   - delete row: `delete_session_possible_task`
@@ -442,7 +442,7 @@ Preferred engineering principles for this repo:
 - Manual `POST /api/voicebot/generate_possible_tasks` and background `CREATE_TASKS` worker refresh must share the same composite side effects: session `summary_md_text` / `review_md_text` / generated `session_name` / `project_id`, Ready+ comment enrichment, Codex note enrichment, processor success markers, and `session_update.taskflow_refresh.summary` when summary text is produced.
 - `incremental_refresh` preserves unmatched draft candidates as `source_data.refresh_state='stale'` compatibility rows instead of hard-deleting them; `full_recompute` remains the explicit destructive refresh mode.
 - `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
-- Backend `runCreateTasksAgent(...)` must derive a bounded `project_crm_window` from session/message bounds and keep project-wide CRM enrichment capped to `30d`; unbounded project CRM is not part of the active contract.
+- Backend `runCreateTasksAgent(...)` must derive a bounded `project_crm_window` from session/message bounds using `VOICEBOT_PROJECT_CRM_LOOKBACK_DAYS` (default `14`, backend clamp `1..30`) and keep project-wide CRM enrichment bounded; unbounded project CRM is not part of the active contract.
 - Historical CREATE_TASKS payload migration (legacy human-title keys -> canonical schema) is executed via `backend/scripts/voicebot-migrate-create-tasks-schema.ts` and archived in `docs/archive/VOICEBOT_CREATE_TASKS_MIGRATION.legacy.md`.
 - Composite `create_tasks` output is the canonical runtime contract for session naming; legacy standalone title-agent cards are no longer part of the active execution path.
 - The offline title-generation utility `backend/scripts/voicebot-generate-session-titles.ts` now uses the same quota-recovery rule and compare-before-copy guard as backend `create_tasks`.

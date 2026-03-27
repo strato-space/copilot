@@ -304,6 +304,70 @@ export const normalizeVoiceTaskDiscussionSessions = (value: unknown): VoiceTaskD
   return Array.from(bySessionId.values());
 };
 
+const SOURCE_DATA_PRIMARY_SESSION_CARRIER_FIELDS = [
+  'session_id',
+  'session_name',
+  'voice_session_id',
+  'session_db_id',
+  'voice_sessions',
+] as const;
+
+const SOURCE_DATA_PAYLOAD_SESSION_CARRIER_FIELDS = [
+  'session_id',
+  'session_db_id',
+  'voice_session_id',
+] as const;
+
+export const recomputeVoiceTaskSourceDataSessionLinkage = ({
+  sourceData,
+  discussionSessions,
+}: {
+  sourceData: unknown;
+  discussionSessions: VoiceTaskDiscussionSession[];
+}): Record<string, unknown> => {
+  const nextSourceData =
+    sourceData && typeof sourceData === 'object' && !Array.isArray(sourceData)
+      ? { ...(sourceData as Record<string, unknown>) }
+      : {};
+  const normalizedDiscussionSessions = normalizeVoiceTaskDiscussionSessions(discussionSessions);
+  const payload =
+    nextSourceData.payload && typeof nextSourceData.payload === 'object' && !Array.isArray(nextSourceData.payload)
+      ? { ...(nextSourceData.payload as Record<string, unknown>) }
+      : {};
+
+  if (normalizedDiscussionSessions.length === 0) {
+    SOURCE_DATA_PRIMARY_SESSION_CARRIER_FIELDS.forEach((field) => {
+      delete nextSourceData[field];
+    });
+    SOURCE_DATA_PAYLOAD_SESSION_CARRIER_FIELDS.forEach((field) => {
+      delete payload[field];
+    });
+    if (Object.keys(payload).length > 0) {
+      nextSourceData.payload = payload;
+    } else {
+      delete nextSourceData.payload;
+    }
+    return nextSourceData;
+  }
+
+  const primary = normalizedDiscussionSessions[0]!;
+  const primarySessionId = toTaskText(primary.session_id);
+  const primarySessionName = toTaskText(primary.session_name);
+
+  nextSourceData.session_id = primarySessionId;
+  nextSourceData.session_name = primarySessionName;
+  nextSourceData.voice_session_id = primarySessionId;
+  nextSourceData.session_db_id = primarySessionId;
+  nextSourceData.voice_sessions = normalizedDiscussionSessions;
+
+  payload.session_id = primarySessionId;
+  payload.session_db_id = primarySessionId;
+  payload.voice_session_id = primarySessionId;
+  nextSourceData.payload = payload;
+
+  return nextSourceData;
+};
+
 export const resolveVoicePossibleTaskRowId = ({
   rawTask,
   index,
@@ -473,9 +537,19 @@ export const buildVoicePossibleTaskMasterQuery = ({
         { source_ref: VOICE_SESSION_SOURCE_REF_REGEX },
       ],
     },
+    { 'source_data.voice_session_id': sessionObjectId },
+    { 'source_data.voice_session_id': sessionId },
     { 'source_data.session_id': sessionObjectId },
     { 'source_data.session_id': sessionId },
+    { 'source_data.session_db_id': sessionObjectId },
+    { 'source_data.session_db_id': sessionId },
     { 'source_data.voice_sessions.session_id': sessionId },
+    { 'source_data.payload.voice_session_id': sessionObjectId },
+    { 'source_data.payload.voice_session_id': sessionId },
+    { 'source_data.payload.session_id': sessionObjectId },
+    { 'source_data.payload.session_id': sessionId },
+    { 'source_data.payload.session_db_id': sessionObjectId },
+    { 'source_data.payload.session_db_id': sessionId },
   ],
 });
 

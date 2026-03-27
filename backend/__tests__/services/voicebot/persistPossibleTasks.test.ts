@@ -1289,6 +1289,105 @@ describe('persistPossibleTasksForSession', () => {
     );
   });
 
+  it('recomputes all source_data linkage carriers when full-recompute unlinks a stale session edge', async () => {
+    const retainedSessionId = new ObjectId().toHexString();
+    const staleDocId = new ObjectId();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: new ObjectId(),
+        row_id: 'draft-active',
+        id: 'draft-active',
+        name: 'Keep active',
+        description: 'Current-session draft must stay linked',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          row_id: 'draft-active',
+          session_id: sessionId,
+          voice_session_id: sessionId,
+          session_db_id: sessionId,
+          payload: { session_id: sessionId, session_db_id: sessionId },
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+      },
+      {
+        _id: staleDocId,
+        row_id: 'draft-stale-linkage',
+        id: 'draft-stale-linkage',
+        name: 'Unlink stale edge',
+        description: 'Should be retained for another linked session',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        discussion_sessions: [
+          { session_id: sessionId, project_id: 'proj-1', role: 'primary' },
+          { session_id: retainedSessionId, project_id: 'proj-1', role: 'secondary' },
+        ],
+        source_data: {
+          row_id: 'draft-stale-linkage',
+          session_id: sessionId,
+          session_name: 'Old session',
+          voice_session_id: sessionId,
+          session_db_id: sessionId,
+          payload: {
+            session_id: sessionId,
+            session_db_id: sessionId,
+            voice_session_id: sessionId,
+          },
+          voice_sessions: [
+            { session_id: sessionId, session_name: 'Old session', project_id: 'proj-1', role: 'primary' },
+            { session_id: retainedSessionId, session_name: 'Retained session', project_id: 'proj-1', role: 'secondary' },
+          ],
+        },
+      },
+    ]);
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Current session',
+      defaultProjectId: 'proj-1',
+      taskItems: [{
+        row_id: 'draft-active',
+        id: 'draft-active',
+        name: 'Keep active',
+        description: 'Current-session draft must stay linked',
+        project_id: 'proj-1',
+      }],
+      refreshMode: 'full_recompute',
+    });
+
+    const staleDoc = tasksCollection.snapshot().find((doc) => String(doc._id) === String(staleDocId));
+    expect(staleDoc).toEqual(expect.objectContaining({
+      external_ref: `https://copilot.stratospace.fun/voice/session/${retainedSessionId}`,
+    }));
+    const staleSourceData = ((staleDoc?.source_data as Record<string, unknown> | undefined) ?? {});
+    const stalePayload = ((staleSourceData.payload as Record<string, unknown> | undefined) ?? {});
+    const staleVoiceSessions = Array.isArray(staleSourceData.voice_sessions)
+      ? staleSourceData.voice_sessions as Array<Record<string, unknown>>
+      : [];
+
+    expect(staleSourceData.session_id).toBe(retainedSessionId);
+    expect(staleSourceData.voice_session_id).toBe(retainedSessionId);
+    expect(staleSourceData.session_db_id).toBe(retainedSessionId);
+    expect(stalePayload.session_id).toBe(retainedSessionId);
+    expect(stalePayload.session_db_id).toBe(retainedSessionId);
+    expect(stalePayload.voice_session_id).toBe(retainedSessionId);
+    expect(staleVoiceSessions).toEqual([
+      expect.objectContaining({ session_id: retainedSessionId }),
+    ]);
+    expect(staleVoiceSessions.some((entry) => String(entry.session_id || '') === sessionId)).toBe(false);
+  });
+
   it('keeps existing draft rows untouched when full recompute receives zero extracted tasks', async () => {
     const existingDocA = new ObjectId();
     const existingDocB = new ObjectId();

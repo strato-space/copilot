@@ -36,7 +36,6 @@ import {
     filterVoiceDerivedDraftsByRecency,
     filterTasksByProjectFilters,
     parseDraftHorizonDays,
-    parseIncludeOlderDrafts,
     parseProjectFilterValues,
 } from '../../../services/draftRecencyPolicy.js';
 import { resolveDateLikeEpochMs, resolveMonotonicUpdatedAtNext } from '../../../services/taskUpdatedAt.js';
@@ -90,6 +89,8 @@ const SUMMARY_DRAFT_RECENCY_TRANSIENT_FIELDS = [
     'source',
     'source_kind',
     'source_data',
+    'discussion_window_start_at',
+    'discussion_window_end_at',
 ] as const;
 
 const DRAFT_RECENCY_PREFILTER_PROJECTION = {
@@ -250,7 +251,6 @@ type ResolvedCrmTicketsTransportPayload = {
     axis_date: unknown;
     range_mode: unknown;
     draft_horizon_days: unknown;
-    include_older_drafts: unknown;
     legacy_warnings: CrmTicketsLegacyAliasWarning[];
 };
 
@@ -326,12 +326,28 @@ export const resolveCrmTicketsTransportPayload = (rawBody: unknown): ResolvedCrm
     });
     if (projectResolution.warning) warnings.push(projectResolution.warning);
 
+    const responseModeAliasResolution = resolveCanonicalOverLegacyField({
+        body,
+        canonicalKey: 'response_mode',
+        legacyKey: 'responseMode',
+    });
+    if (responseModeAliasResolution.warning) warnings.push(responseModeAliasResolution.warning);
+
     const responseModeResolution = resolveCanonicalOverLegacyField({
         body,
         canonicalKey: 'response_mode',
         legacyKey: 'mode',
     });
     if (responseModeResolution.warning) warnings.push(responseModeResolution.warning);
+    const responseModeCanonicalPresent =
+        hasOwnProperty(body, 'response_mode') && body.response_mode !== undefined;
+    const responseModeAliasPresent =
+        hasOwnProperty(body, 'responseMode') && body.responseMode !== undefined;
+    const responseModeValue = responseModeCanonicalPresent
+        ? body.response_mode
+        : responseModeAliasPresent
+            ? body.responseMode
+            : responseModeResolution.value;
 
     const fromDateResolution = resolveCanonicalOverLegacyField({
         body,
@@ -347,36 +363,23 @@ export const resolveCrmTicketsTransportPayload = (rawBody: unknown): ResolvedCrm
     });
     if (toDateResolution.warning) warnings.push(toDateResolution.warning);
 
-    const includeOlderDraftsPresent =
-        hasOwnProperty(body, 'include_older_drafts') && body.include_older_drafts !== undefined;
-    if (includeOlderDraftsPresent) {
-        const draftHorizonPresent = hasOwnProperty(body, 'draft_horizon_days') && body.draft_horizon_days !== undefined;
-        warnings.push({
-            legacy_param: 'include_older_drafts',
-            canonical_param: 'draft_horizon_days(omit_for_unbounded)',
-            conflict: draftHorizonPresent,
-            canonical_present: draftHorizonPresent,
-            legacy_present: true,
-            canonical_preview: toTelemetryPreview(draftHorizonPresent ? body.draft_horizon_days : undefined),
-            legacy_preview: toTelemetryPreview(body.include_older_drafts),
-        });
-    }
-
     return {
         statuses: statusesResolution.value,
         project: projectResolution.value,
-        response_mode: responseModeResolution.value ?? body.responseMode,
+        response_mode: responseModeValue,
         from_date: fromDateResolution.value,
         to_date: toDateResolution.value,
         axis_date: body.axis_date,
         range_mode: body.range_mode,
         draft_horizon_days: body.draft_horizon_days,
-        include_older_drafts: body.include_older_drafts,
         legacy_warnings: warnings,
     };
 };
 
 const CRM_TICKETS_LEGACY_SUNSET_DEFAULT_ZERO_USAGE_DAYS = 14;
+const CRM_TICKETS_INCLUDE_OLDER_DRAFTS_ERROR =
+    'include_older_drafts is deprecated; omit draft_horizon_days for unbounded draft visibility';
+type CrmTicketsEndpoint = '/api/crm/tickets' | '/api/crm/tickets/status-counts';
 
 const resolveCrmTicketsLegacySunsetZeroUsageDays = (): number => {
     const raw = Number(process.env.CRM_TICKETS_LEGACY_ZERO_USAGE_DAYS);
@@ -395,13 +398,39 @@ const resolveCrmTicketsLegacyCaller = (req: Request): string => {
     return actor.id ?? actor.name ?? 'unknown';
 };
 
+const hasDeprecatedIncludeOlderDrafts = (rawBody: unknown): boolean => {
+    if (!rawBody || typeof rawBody !== 'object') return false;
+    const body = rawBody as Record<string, unknown>;
+    return hasOwnProperty(body, 'include_older_drafts') && body.include_older_drafts !== undefined;
+};
+
+const logCrmTicketsDeprecatedIncludeOlderDrafts = ({
+    req,
+    endpoint,
+}: {
+    req: Request;
+    endpoint: CrmTicketsEndpoint;
+}): void => {
+    const requestId = resolveRequestId(req);
+    logger.warn('[crm.tickets.deprecated_param]', {
+        endpoint,
+        legacy_param: 'include_older_drafts',
+        canonical_param: 'draft_horizon_days(omit_for_unbounded)',
+        runtime_tag: RUNTIME_TAG,
+        caller: resolveCrmTicketsLegacyCaller(req),
+        sunset_phase: 'hard_fail',
+        error_code: 'validation_error',
+        ...(requestId ? { request_id: requestId } : {}),
+    });
+};
+
 const logCrmTicketsLegacyTransportWarnings = ({
     req,
     endpoint,
     warnings,
 }: {
     req: Request;
-    endpoint: '/api/crm/tickets' | '/api/crm/tickets/status-counts';
+    endpoint: CrmTicketsEndpoint;
     warnings: CrmTicketsLegacyAliasWarning[];
 }): void => {
     if (!warnings.length) return;
@@ -607,7 +636,7 @@ const buildCommentsSummaryLookupByTicket = (): Record<string, unknown> => ({
     },
 });
 
-const parseTicketsResponseMode = (rawMode: unknown): TicketsResponseMode | null => {
+export const parseTicketsResponseMode = (rawMode: unknown): TicketsResponseMode | null => {
     if (rawMode === undefined || rawMode === null) {
         return 'detail';
     }
@@ -628,6 +657,244 @@ const parseTicketsResponseMode = (rawMode: unknown): TicketsResponseMode | null 
         return 'summary';
     }
     return null;
+};
+
+export const CRM_TICKETS_RANGE_MODE_VALUES = [
+    'entity_temporal_any',
+    'entity_primary',
+    'session_linkage_only',
+] as const;
+export type CrmTicketsRangeMode = (typeof CRM_TICKETS_RANGE_MODE_VALUES)[number];
+
+type CrmTemporalValidationErrorCode = 'validation_error' | 'ambiguous_temporal_filter';
+type CrmTemporalValidationError = {
+    status: 400;
+    error: string;
+    error_code: CrmTemporalValidationErrorCode;
+};
+
+export type CrmNormalizedTemporalFilter = {
+    from: Date | null;
+    to: Date | null;
+    axis_date: Date | null;
+    range_mode: CrmTicketsRangeMode;
+    draft_horizon_days: number | null;
+};
+
+const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const buildCrmTemporalValidationError = ({
+    error,
+    errorCode = 'validation_error',
+}: {
+    error: string;
+    errorCode?: CrmTemporalValidationErrorCode;
+}): CrmTemporalValidationError => ({
+    status: 400,
+    error,
+    error_code: errorCode,
+});
+
+const parseCrmTemporalDateInput = ({
+    value,
+    fieldName,
+    endOfDay,
+}: {
+    value: unknown;
+    fieldName: 'from_date' | 'to_date' | 'axis_date';
+    endOfDay?: boolean;
+}): Date | null => {
+    if (value === undefined || value === null) return null;
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+
+        if (ISO_DATE_ONLY_PATTERN.test(trimmed)) {
+            const isoWithBoundary = `${trimmed}${endOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z'}`;
+            const parsedEpochMs = resolveDateLikeTimestamp(isoWithBoundary);
+            if (parsedEpochMs !== null) {
+                return new Date(parsedEpochMs);
+            }
+        }
+    }
+
+    const timestamp = resolveDateLikeTimestamp(value);
+    if (timestamp === null) {
+        throw buildCrmTemporalValidationError({
+            error: `${fieldName} must be a valid ISO-8601 date or datetime`,
+        });
+    }
+
+    return new Date(timestamp);
+};
+
+const parseCrmDraftHorizonDaysStrict = (value: unknown): number | null => {
+    if (value === undefined || value === null) return null;
+    if (typeof value === 'string' && value.trim().length === 0) return null;
+
+    const asNumber =
+        typeof value === 'number'
+            ? value
+            : Number(value);
+    if (!Number.isFinite(asNumber) || !Number.isInteger(asNumber) || asNumber <= 0) {
+        throw buildCrmTemporalValidationError({
+            error: 'draft_horizon_days must be a positive integer',
+        });
+    }
+
+    return asNumber;
+};
+
+const parseCrmRangeMode = (value: unknown): CrmTicketsRangeMode => {
+    if (value === undefined || value === null || value === '') return 'entity_temporal_any';
+    if (typeof value !== 'string') {
+        throw buildCrmTemporalValidationError({
+            error: `range_mode must be one of: ${CRM_TICKETS_RANGE_MODE_VALUES.join(', ')}`,
+        });
+    }
+
+    const normalized = value.trim().toLowerCase();
+    if (
+        normalized === 'entity_temporal_any' ||
+        normalized === 'entity_primary' ||
+        normalized === 'session_linkage_only'
+    ) {
+        return normalized;
+    }
+
+    throw buildCrmTemporalValidationError({
+        error: `range_mode must be one of: ${CRM_TICKETS_RANGE_MODE_VALUES.join(', ')}`,
+    });
+};
+
+export const normalizeCrmTicketsTemporalFilter = ({
+    from_date,
+    to_date,
+    axis_date,
+    range_mode,
+    draft_horizon_days,
+    now = new Date(),
+}: {
+    from_date: unknown;
+    to_date: unknown;
+    axis_date: unknown;
+    range_mode: unknown;
+    draft_horizon_days: unknown;
+    now?: Date;
+}): CrmNormalizedTemporalFilter => {
+    const from = parseCrmTemporalDateInput({ value: from_date, fieldName: 'from_date', endOfDay: false });
+    const to = parseCrmTemporalDateInput({ value: to_date, fieldName: 'to_date', endOfDay: true });
+    const axisDate = parseCrmTemporalDateInput({ value: axis_date, fieldName: 'axis_date', endOfDay: false });
+    const rangeMode = parseCrmRangeMode(range_mode);
+    const parsedDraftHorizonDays = parseCrmDraftHorizonDaysStrict(draft_horizon_days);
+
+    if (parsedDraftHorizonDays !== null && (from !== null || to !== null)) {
+        throw buildCrmTemporalValidationError({
+            error: 'draft_horizon_days cannot be combined with from_date or to_date',
+            errorCode: 'ambiguous_temporal_filter',
+        });
+    }
+
+    if (parsedDraftHorizonDays !== null) {
+        const resolvedAxisDate = axisDate ?? now;
+        return {
+            from: new Date(resolvedAxisDate.getTime() - parsedDraftHorizonDays * DAY_MS),
+            to: new Date(resolvedAxisDate.getTime() + parsedDraftHorizonDays * DAY_MS),
+            axis_date: resolvedAxisDate,
+            range_mode: rangeMode,
+            draft_horizon_days: parsedDraftHorizonDays,
+        };
+    }
+
+    if (from && to && from.getTime() > to.getTime()) {
+        throw buildCrmTemporalValidationError({
+            error: 'from_date must be less than or equal to to_date',
+        });
+    }
+
+    return {
+        from,
+        to,
+        axis_date: axisDate,
+        range_mode: rangeMode,
+        draft_horizon_days: null,
+    };
+};
+
+type CrmTemporalAxisInterval = {
+    start: number;
+    end: number;
+};
+
+const resolveCrmTaskTemporalAxisInterval = ({
+    task,
+    startField,
+    endField,
+}: {
+    task: Record<string, unknown>;
+    startField: string;
+    endField: string;
+}): CrmTemporalAxisInterval | null => {
+    const startTimestamp = resolveDateLikeTimestamp(task[startField]);
+    const endTimestamp = resolveDateLikeTimestamp(task[endField]);
+    if (startTimestamp === null && endTimestamp === null) return null;
+
+    if (startTimestamp === null && endTimestamp !== null) {
+        return { start: endTimestamp, end: endTimestamp };
+    }
+    if (startTimestamp !== null && endTimestamp === null) {
+        return { start: startTimestamp, end: startTimestamp };
+    }
+
+    const normalizedStart = Math.min(startTimestamp!, endTimestamp!);
+    const normalizedEnd = Math.max(startTimestamp!, endTimestamp!);
+    return {
+        start: normalizedStart,
+        end: normalizedEnd,
+    };
+};
+
+const doesCrmAxisIntervalOverlap = ({
+    axisInterval,
+    filter,
+}: {
+    axisInterval: CrmTemporalAxisInterval | null;
+    filter: CrmNormalizedTemporalFilter;
+}): boolean => {
+    if (!axisInterval) return false;
+    const fromTimestamp = filter.from?.getTime() ?? null;
+    const toTimestamp = filter.to?.getTime() ?? null;
+
+    if (fromTimestamp !== null && axisInterval.end < fromTimestamp) return false;
+    if (toTimestamp !== null && axisInterval.start > toTimestamp) return false;
+    return true;
+};
+
+export const taskMatchesCrmTemporalFilter = (
+    task: Record<string, unknown>,
+    filter: CrmNormalizedTemporalFilter
+): boolean => {
+    if (filter.from === null && filter.to === null) return true;
+
+    const mutationAxis = resolveCrmTaskTemporalAxisInterval({
+        task,
+        startField: 'created_at',
+        endField: 'updated_at',
+    });
+    const linkageAxis = resolveCrmTaskTemporalAxisInterval({
+        task,
+        startField: 'discussion_window_start_at',
+        endField: 'discussion_window_end_at',
+    });
+
+    const mutationMatch = doesCrmAxisIntervalOverlap({ axisInterval: mutationAxis, filter });
+    const linkageMatch = doesCrmAxisIntervalOverlap({ axisInterval: linkageAxis, filter });
+
+    if (filter.range_mode === 'entity_primary') return mutationMatch;
+    if (filter.range_mode === 'session_linkage_only') return linkageMatch;
+    return mutationMatch || linkageMatch;
 };
 
 const aggregateTicketByMatch = async ({
@@ -735,6 +1002,18 @@ const normalizePerformer = async (db: Db, rawPerformer: unknown): Promise<Perfor
 router.post('/', async (req: Request, res: Response) => {
     const requestStartedAt = Date.now();
     try {
+        if (hasDeprecatedIncludeOlderDrafts(req.body)) {
+            logCrmTicketsDeprecatedIncludeOlderDrafts({
+                req,
+                endpoint: '/api/crm/tickets',
+            });
+            res.status(400).json({
+                error: CRM_TICKETS_INCLUDE_OLDER_DRAFTS_ERROR,
+                error_code: 'validation_error',
+            });
+            return;
+        }
+
         const db = getDb();
         const transportPayload = resolveCrmTicketsTransportPayload(req.body);
         logCrmTicketsLegacyTransportWarnings({
@@ -749,8 +1028,33 @@ router.post('/', async (req: Request, res: Response) => {
             return;
         }
         const rawStatuses = Array.isArray(transportPayload.statuses) ? transportPayload.statuses as string[] : [];
-        const includeOlderDrafts = parseIncludeOlderDrafts(transportPayload.include_older_drafts);
         const draftHorizonDays = parseDraftHorizonDays(transportPayload.draft_horizon_days);
+        let normalizedTemporalFilter: CrmNormalizedTemporalFilter;
+        try {
+            normalizedTemporalFilter = normalizeCrmTicketsTemporalFilter({
+                from_date: transportPayload.from_date,
+                to_date: transportPayload.to_date,
+                axis_date: transportPayload.axis_date,
+                range_mode: transportPayload.range_mode,
+                draft_horizon_days: transportPayload.draft_horizon_days,
+                now: new Date(),
+            });
+        } catch (error) {
+            if (
+                error &&
+                typeof error === 'object' &&
+                (error as Partial<CrmTemporalValidationError>).status === 400 &&
+                typeof (error as Partial<CrmTemporalValidationError>).error === 'string'
+            ) {
+                const validationError = error as CrmTemporalValidationError;
+                res.status(400).json({
+                    error: validationError.error,
+                    error_code: validationError.error_code,
+                });
+                return;
+            }
+            throw error;
+        }
         const projectFilters = parseProjectFilterValues(transportPayload.project);
         const statusKeys = rawStatuses
             .map((status) => (isTaskStatusKey(status) ? status : null))
@@ -766,17 +1070,18 @@ router.post('/', async (req: Request, res: Response) => {
             : { task_status: { $ne: TASK_STATUSES.ARCHIVE } };
         const isDraftOnlyStatusRequest =
             statusKeys.length === 1 && statusKeys[0] === 'DRAFT_10';
+        const shouldApplyLegacyDraftRecency =
+            Boolean(draftHorizonDays) &&
+            normalizedTemporalFilter.draft_horizon_days === null;
         const shouldUseDraftSummaryPrefilter =
             responseMode === 'summary' &&
-            Boolean(draftHorizonDays) &&
-            !includeOlderDrafts &&
+            shouldApplyLegacyDraftRecency &&
             isDraftOnlyStatusRequest;
         const isArchiveOnlyStatusRequest =
             statusKeys.length === 1 && statusKeys[0] === 'ARCHIVE';
         const shouldUseArchiveSummaryPrefilter =
             responseMode === 'summary' &&
-            Boolean(draftHorizonDays) &&
-            !includeOlderDrafts &&
+            shouldApplyLegacyDraftRecency &&
             isArchiveOnlyStatusRequest;
         const projectFilterMatchQuery = buildProjectFilterMatchQuery(projectFilters);
 
@@ -803,7 +1108,7 @@ router.post('/', async (req: Request, res: Response) => {
             const visibleDrafts = await filterVoiceDerivedDraftsByRecency({
                 db,
                 tasks: draftCandidatesByProject,
-                includeOlderDrafts,
+                includeOlderDrafts: false,
                 draftHorizonDays,
             });
 
@@ -839,7 +1144,7 @@ router.post('/', async (req: Request, res: Response) => {
 
             const visibleArchive = filterArchivedTasksByRecency({
                 tasks: archiveCandidatesByProject,
-                includeOlderDrafts,
+                includeOlderDrafts: false,
                 draftHorizonDays,
             });
 
@@ -975,6 +1280,8 @@ router.post('/', async (req: Request, res: Response) => {
                         source_data: 1,
                         source_ref: 1,
                         external_ref: 1,
+                        discussion_window_start_at: 1,
+                        discussion_window_end_at: 1,
                         discussion_count: 1,
                         total_hours: 1,
                         comments_count: 1,
@@ -1003,19 +1310,26 @@ router.post('/', async (req: Request, res: Response) => {
 
         let data = await db.collection(COLLECTIONS.TASKS).aggregate(aggregatePipeline).toArray();
 
-        if (draftHorizonDays) {
+        data = data.filter((ticket) =>
+            taskMatchesCrmTemporalFilter(
+                ticket as Record<string, unknown>,
+                normalizedTemporalFilter
+            )
+        );
+
+        if (shouldApplyLegacyDraftRecency) {
             if (!prefilteredDraftVisibleIds) {
                 data = await filterVoiceDerivedDraftsByRecency({
                     db,
                     tasks: data as Array<Record<string, unknown>>,
-                    includeOlderDrafts,
+                    includeOlderDrafts: false,
                     draftHorizonDays,
                 });
             }
             if (!prefilteredArchiveVisibleIds) {
                 data = filterArchivedTasksByRecency({
                     tasks: data as Array<Record<string, unknown>>,
-                    includeOlderDrafts,
+                    includeOlderDrafts: false,
                     draftHorizonDays,
                 });
             }
@@ -1127,6 +1441,18 @@ router.post('/', async (req: Request, res: Response) => {
 router.post('/status-counts', async (req: Request, res: Response) => {
     const requestStartedAt = Date.now();
     try {
+        if (hasDeprecatedIncludeOlderDrafts(req.body)) {
+            logCrmTicketsDeprecatedIncludeOlderDrafts({
+                req,
+                endpoint: '/api/crm/tickets/status-counts',
+            });
+            res.status(400).json({
+                error: CRM_TICKETS_INCLUDE_OLDER_DRAFTS_ERROR,
+                error_code: 'validation_error',
+            });
+            return;
+        }
+
         const db = getDb();
         const transportPayload = resolveCrmTicketsTransportPayload(req.body);
         logCrmTicketsLegacyTransportWarnings({
@@ -1135,7 +1461,6 @@ router.post('/status-counts', async (req: Request, res: Response) => {
             warnings: transportPayload.legacy_warnings,
         });
 
-        const includeOlderDrafts = parseIncludeOlderDrafts(transportPayload.include_older_drafts);
         const draftHorizonDays = parseDraftHorizonDays(transportPayload.draft_horizon_days);
         const projectFilters = parseProjectFilterValues(transportPayload.project);
         const projectFilterMatchQuery = buildProjectFilterMatchQuery(projectFilters);
@@ -1188,7 +1513,7 @@ router.post('/status-counts', async (req: Request, res: Response) => {
                     draftTasks as Array<Record<string, unknown>>,
                     projectFilters
                 ),
-                includeOlderDrafts,
+                includeOlderDrafts: false,
                 draftHorizonDays,
             });
 
@@ -1209,7 +1534,7 @@ router.post('/status-counts', async (req: Request, res: Response) => {
                     archiveTasks as Array<Record<string, unknown>>,
                     projectFilters
                 ),
-                includeOlderDrafts,
+                includeOlderDrafts: false,
                 draftHorizonDays,
             });
 

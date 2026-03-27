@@ -1,5 +1,12 @@
 const SECONDS_TO_MILLISECONDS = 1000;
 const EPOCH_MILLISECONDS_THRESHOLD = 1e12;
+const PLAUSIBLE_OPERATIONAL_YEAR_MIN = 1990;
+const PLAUSIBLE_OPERATIONAL_YEAR_MAX = 2100;
+
+const isPlausibleOperationalEpochMs = (value: number): boolean => {
+  const year = new Date(value).getUTCFullYear();
+  return Number.isFinite(year) && year >= PLAUSIBLE_OPERATIONAL_YEAR_MIN && year <= PLAUSIBLE_OPERATIONAL_YEAR_MAX;
+};
 
 export const resolveDateLikeEpochMs = (value: unknown): number | null => {
   if (value instanceof Date) {
@@ -8,9 +15,19 @@ export const resolveDateLikeEpochMs = (value: unknown): number | null => {
   }
 
   if (typeof value === 'number' && Number.isFinite(value)) {
-    return value >= EPOCH_MILLISECONDS_THRESHOLD
-      ? Math.trunc(value)
-      : Math.trunc(value * SECONDS_TO_MILLISECONDS);
+    const normalized = Math.trunc(value);
+    if (Math.abs(normalized) >= EPOCH_MILLISECONDS_THRESHOLD) {
+      return normalized;
+    }
+
+    const asMilliseconds = normalized;
+    const asSeconds = normalized * SECONDS_TO_MILLISECONDS;
+    const millisecondsPlausible = isPlausibleOperationalEpochMs(asMilliseconds);
+    const secondsPlausible = isPlausibleOperationalEpochMs(asSeconds);
+
+    if (secondsPlausible && !millisecondsPlausible) return asSeconds;
+    if (millisecondsPlausible && !secondsPlausible) return asMilliseconds;
+    return asMilliseconds;
   }
 
   if (typeof value === 'string') {

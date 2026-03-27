@@ -1,0 +1,187 @@
+{
+  "generated_at": "2026-03-27T04:54:16.299Z",
+  "session": {
+    "session_id": "69c60caf4926f6f263d066d6",
+    "exists": true,
+    "session": {
+      "_id": "69c60caf4926f6f263d066d6",
+      "session_name": "",
+      "status": "",
+      "state": "",
+      "source_type": "",
+      "session_type": "multiprompt_voice_session",
+      "is_active": true,
+      "to_finalize": false,
+      "is_deleted": false,
+      "project_id": "",
+      "has_summary_md_text": false,
+      "has_review_md_text": false,
+      "summary_saved_at": "",
+      "title_generated_at": "",
+      "user_id": "6863eab6a6d7b324e2df310a",
+      "chat_id": "3045664",
+      "created_at": "2026-03-27T04:50:55.131Z",
+      "updated_at": "2026-03-27T04:51:25.823Z",
+      "done_at": ""
+    },
+    "counters": {
+      "messages_total": 1,
+      "session_log_total": 0,
+      "linked_tasks_total": 0,
+      "linked_tasks_by_status": {},
+      "pm2_log_hits_total": 4,
+      "queue_job_matches_total": 0
+    },
+    "create_tasks_state": {
+      "is_processing": null,
+      "is_processed": null,
+      "has_payload_array": false,
+      "payload_items": 0,
+      "has_summary_md_text": false,
+      "has_review_md_text": false,
+      "job_queued_timestamp": "",
+      "job_finished_timestamp": "",
+      "auto_requested_at": "",
+      "error_message": ""
+    },
+    "session_surfaces": {
+      "has_summary_md_text": false,
+      "has_review_md_text": false,
+      "summary_saved_at": "",
+      "title_generated_at": ""
+    },
+    "diagnostics": {
+      "queue_snapshot_error": "redis_unreachable"
+    },
+    "anomalies": [
+      "session_name_empty",
+      "queue_snapshot_unavailable"
+    ],
+    "slices": {
+      "recent_messages": [
+        {
+          "_id": "69c60ccd4926f6f263d066d7",
+          "created_at": "2026-03-27T04:51:25.778Z",
+          "updated_at": "",
+          "message_type": "document",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": "",
+          "mime_type": "",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": null,
+          "is_deleted": false
+        }
+      ],
+      "recent_session_log": [],
+      "recent_linked_tasks": [],
+      "recent_pm2_log_hits": [
+        {
+          "session_id": "69c60caf4926f6f263d066d6",
+          "file": "294475",
+          "line": 0,
+          "text": "50:55 [\u001b[32minfo\u001b[39m]: [voicebot-worker] start_multiprompt handled {\"service\":\"copilot-backend\",\"session_id\":\"69c60caf4926f6f263d066d6\",\"chat_id\":3045664}"
+        },
+        {
+          "session_id": "69c60caf4926f6f263d066d6",
+          "file": "28338",
+          "line": 0,
+          "text": "50:55 [\u001b[32minfo\u001b[39m]: [tg-api][ctx.reply][request] args=[\"Сессия создана\\nhttps://copilot.stratospace.fun/voice/session/69c60caf4926f6f263d066d6\\n—\\n—\"] {\"service\":\"copilot-backend\"}"
+        },
+        {
+          "session_id": "69c60caf4926f6f263d066d6",
+          "file": "28339",
+          "line": 0,
+          "text": "50:55 [\u001b[32minfo\u001b[39m]: [tg-api][ctx.reply][response] duration_ms=225 body={\"message_id\":17131,\"from\":{\"id\":7697834667,\"is_bot\":true,\"first_name\":\"StratoVoice\",\"username\":\"strato_voice_bot\"},\"chat\":{\"id\":3045664,\"first_name\":\"Valéry Pavlovitch\",\"username\":\"Valeriy_Pavlovich\",\"type\":\"private\"},\"date\":1774587055,\"text\":\"Сессия создана\\nhttps://copilot.stratospace.fun/voice/session/69c60caf4926f6f263d066d6\\n—\\n—\",\"entities\":[{\"offset\":15,\"length\":70,\"type\":\"url\"}],\"link_preview_options\":{\"url\":\"https://copilot.stratospace.fun/voice/session/69c60caf4926f6f263d066d6\"}} {\"service\":\"copilot-backend\"}"
+        },
+        {
+          "session_id": "69c60caf4926f6f263d066d6",
+          "file": "28343",
+          "line": 0,
+          "text": "51:25 [\u001b[32minfo\u001b[39m]: [voicebot-tgbot] attachment ingress accepted {\"service\":\"copilot-backend\",\"session_id\":\"69c60caf4926f6f263d066d6\",\"message_id\":\"69c60ccd4926f6f263d066d7\",\"created_session\":false,\"attachments\":1}"
+        }
+      ],
+      "queue_snapshots": [],
+      "recent_queue_jobs": []
+    },
+    "timeline": [
+      {
+        "session_id": "69c60caf4926f6f263d066d6",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "294475",
+          "line": 0,
+          "text": "50:55 [\u001b[32minfo\u001b[39m]: [voicebot-worker] start_multiprompt handled {\"service\":\"copilot-backend\",\"session_id\":\"69c60caf4926f6f263d066d6\",\"chat_id\":3045664}"
+        }
+      },
+      {
+        "session_id": "69c60caf4926f6f263d066d6",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "28338",
+          "line": 0,
+          "text": "50:55 [\u001b[32minfo\u001b[39m]: [tg-api][ctx.reply][request] args=[\"Сессия создана\\nhttps://copilot.stratospace.fun/voice/session/69c60caf4926f6f263d066d6\\n—\\n—\"] {\"service\":\"copilot-backend\"}"
+        }
+      },
+      {
+        "session_id": "69c60caf4926f6f263d066d6",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "28339",
+          "line": 0,
+          "text": "50:55 [\u001b[32minfo\u001b[39m]: [tg-api][ctx.reply][response] duration_ms=225 body={\"message_id\":17131,\"from\":{\"id\":7697834667,\"is_bot\":true,\"first_name\":\"StratoVoice\",\"username\":\"strato_voice_bot\"},\"chat\":{\"id\":3045664,\"first_name\":\"Valéry Pavlovitch\",\"username\":\"Valeriy_Pavlovich\",\"type\":\"private\"},\"date\":1774587055,\"text\":\"Сессия создана\\nhttps://copilot.stratospace.fun/voice/session/69c60caf4926f6f263d066d6\\n—\\n—\",\"entities\":[{\"offset\":15,\"length\":70,\"type\":\"url\"}],\"link_preview_options\":{\"url\":\"htt"
+        }
+      },
+      {
+        "session_id": "69c60caf4926f6f263d066d6",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "28343",
+          "line": 0,
+          "text": "51:25 [\u001b[32minfo\u001b[39m]: [voicebot-tgbot] attachment ingress accepted {\"service\":\"copilot-backend\",\"session_id\":\"69c60caf4926f6f263d066d6\",\"message_id\":\"69c60ccd4926f6f263d066d7\",\"created_session\":false,\"attachments\":1}"
+        }
+      },
+      {
+        "session_id": "69c60caf4926f6f263d066d6",
+        "ts": "2026-03-27T04:50:55.131Z",
+        "source": "session",
+        "kind": "session_created",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      },
+      {
+        "session_id": "69c60caf4926f6f263d066d6",
+        "ts": "2026-03-27T04:51:25.778Z",
+        "source": "message",
+        "kind": "document",
+        "details": {
+          "_id": "69c60ccd4926f6f263d066d7",
+          "source_type": "telegram",
+          "speaker": "",
+          "file_name": ""
+        }
+      },
+      {
+        "session_id": "69c60caf4926f6f263d066d6",
+        "ts": "2026-03-27T04:51:25.823Z",
+        "source": "session",
+        "kind": "session_updated",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      }
+    ]
+  }
+}

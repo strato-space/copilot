@@ -12,6 +12,6 @@ describe('CRM kanban transport contract', () => {
 
   it('does not emit deprecated include_older_drafts in request payloads', () => {
     expect(source).not.toContain('requestPayload.include_older_drafts');
-    expect(source).toContain('legacy_include_older_drafts_requested');
+    expect(source).not.toContain('legacy_include_older_drafts_requested');
   });
 });

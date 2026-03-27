@@ -362,7 +362,7 @@ describe('Voicebot session_tab_counts route', () => {
     }
   });
 
-  it('treats include_older_drafts=true as an unbounded override in session_tab_counts', async () => {
+  it('hard-fails deprecated include_older_drafts on session routes', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-03-21T00:00:00.000Z'));
     try {
@@ -451,12 +451,118 @@ describe('Voicebot session_tab_counts route', () => {
           include_older_drafts: true,
         });
 
+      const includeOlderDraftBucketResponse = await request(app)
+        .post('/voicebot/session_tasks')
+        .send({
+          session_id: scopedSessionId.toHexString(),
+          bucket: 'Draft',
+          draft_horizon_days: 30,
+          include_older_drafts: true,
+        });
+
       expect(boundedResponse.status).toBe(200);
-      expect(includeOlderResponse.status).toBe(200);
+      expect(includeOlderResponse.status).toBe(400);
       expect(boundedResponse.body.draft_count).toBe(1);
-      expect(includeOlderResponse.body.draft_count).toBe(2);
+      expect(includeOlderResponse.body).toEqual({
+        error: 'include_older_drafts is deprecated; omit draft_horizon_days for unbounded draft visibility',
+        error_code: 'validation_error',
+      });
+      expect(includeOlderDraftBucketResponse.status).toBe(400);
+      expect(includeOlderDraftBucketResponse.body).toEqual({
+        error: 'include_older_drafts is deprecated; omit draft_horizon_days for unbounded draft visibility',
+        error_code: 'validation_error',
+      });
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('keeps draft dedupe deterministic for mixed timestamp formats in session routes', async () => {
+    const mixedSessionId = new ObjectId('507f1f77bcf86cd799439016');
+    const mixedSessionRef = `https://copilot.stratospace.fun/voice/session/${mixedSessionId.toHexString()}`;
+    const newerIso = '2026-03-20T11:00:00.000Z';
+    const olderIso = '2026-03-20T10:00:00.000Z';
+    const draftDocs = [
+      {
+        row_id: 'draft-mixed',
+        id: 'draft-mixed',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        source_ref: mixedSessionRef,
+        source_data: { session_id: mixedSessionId.toHexString(), refresh_state: 'active' },
+        created_at: new Date(olderIso),
+        updated_at: String(Date.parse(olderIso)),
+      },
+      {
+        row_id: 'draft-mixed',
+        id: 'draft-mixed',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        source_ref: mixedSessionRef,
+        source_data: { session_id: mixedSessionId.toHexString(), refresh_state: 'active' },
+        created_at: new Date(newerIso),
+        updated_at: new Date(newerIso),
+      },
+    ];
+
+    const tasksFind = jest.fn((filter?: Record<string, unknown>) => {
+      const docs =
+        filter?.task_status === TASK_STATUSES.DRAFT_10
+          ? draftDocs
+          : [...draftDocs, { task_status: TASK_STATUSES.READY_10 }];
+      return {
+        sort: () => ({ toArray: async () => docs }),
+        toArray: async () => docs,
+      };
+    });
+
+    const scopedSessionDoc = {
+      _id: mixedSessionId,
+      chat_id: 123456,
+      user_id: performerId,
+      is_active: true,
+      access_level: 'private',
+      source_ref: mixedSessionRef,
+      created_at: '2026-03-20T09:00:00.000Z',
+      last_voice_timestamp: Math.trunc(Date.parse('2026-03-20T12:00:00.000Z') / 1000),
+    };
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            countDocuments: jest.fn(async () => 0),
+            aggregate: tasksAggregateMock,
+            find: tasksFind,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => scopedSessionDoc),
+            find: jest.fn(() => ({ toArray: async () => [] })),
+          };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(dbStub);
+
+    const app = buildApp();
+    const countsResponse = await request(app)
+      .post('/voicebot/session_tab_counts')
+      .send({ session_id: mixedSessionId.toHexString() });
+    const draftResponse = await request(app)
+      .post('/voicebot/session_tasks')
+      .send({ session_id: mixedSessionId.toHexString(), bucket: 'Draft' });
+
+    expect(countsResponse.status).toBe(200);
+    expect(draftResponse.status).toBe(200);
+    expect(countsResponse.body.draft_count).toBe(1);
+    expect(draftResponse.body.count).toBe(1);
+    expect(draftResponse.body.items[0]?.row_id).toBe('draft-mixed');
   });
 });

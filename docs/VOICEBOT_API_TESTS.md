@@ -111,7 +111,8 @@ Draft visibility policy coverage:
   - linked discussion window semantics
 - runtime session route coverage now includes:
   - `session_tasks(bucket='Draft', draft_horizon_days=...)`
-  - `include_older_drafts=true` override
+  - `include_older_drafts` hard-fails with `400 validation_error`
+  - unbounded Draft visibility via omission of `draft_horizon_days`
   - `session_tasks(bucket='Draft')` using `automation_tasks` master rows checked against the strict Draft-master scalar subset plus invariants
   - `save_possible_tasks` soft-delete/update semantics through ontology-backed scalar field translation
 
@@ -127,7 +128,7 @@ npx jest --runTestsByPath \
 
 NODE_OPTIONS='--experimental-vm-modules' npx jest --runTestsByPath \
   __tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts \
-  -t "save_possible_tasks|session_tasks\\(Draft\\)|respects draft recency window override when include_older_drafts is true"
+  -t "save_possible_tasks|session_tasks\\(Draft\\)|hard-fails deprecated include_older_drafts"
 ```
 
 ## Notes

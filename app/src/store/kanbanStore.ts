@@ -130,7 +130,6 @@ interface KanbanFetchSlice {
         statuses?: string[],
         options?: {
             draftHorizonDays?: number | null;
-            includeOlderDrafts?: boolean;
         }
     ) => Promise<void>;
     fetchTicketById: (ticket_id: string, options?: { syncList?: boolean }) => Promise<Ticket | null>;
@@ -396,13 +395,11 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         statuses?: string[],
         options: {
             draftHorizonDays?: number | null;
-            includeOlderDrafts?: boolean;
         } = {}
     ): Promise<void> => {
         const useLastPayload = statuses === undefined && Object.keys(options).length === 0;
         const resolvedStatuses = useLastPayload ? lastTicketsFetchPayload.statuses : statuses;
         const resolvedDraftHorizonDays = useLastPayload ? lastTicketsFetchPayload.draftHorizonDays : options.draftHorizonDays;
-        const legacyIncludeOlderDraftsRequested = Boolean(options.includeOlderDrafts);
 
         const key = JSON.stringify({
             statuses: resolvedStatuses ?? [],
@@ -418,7 +415,6 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
         console.info('[crm.perf] tickets.fetch.start', {
             statuses: resolvedStatuses ?? [],
             draft_horizon_days: resolvedDraftHorizonDays ?? null,
-            legacy_include_older_drafts_requested: legacyIncludeOlderDraftsRequested,
             fetch_key: key,
         });
 
@@ -492,7 +488,6 @@ export const useKanbanStore = create<KanbanState>((set, get) => {
                 duration_ms: Number((getPerfNow() - fetchPerfStartedAt).toFixed(2)),
                 statuses: resolvedStatuses ?? [],
                 draft_horizon_days: resolvedDraftHorizonDays ?? null,
-                legacy_include_older_drafts_requested: legacyIncludeOlderDraftsRequested,
                 fetch_key: key,
                 tickets_count: fetchTicketCount,
                 tickets_updated_at: ticketsUpdatedAt,

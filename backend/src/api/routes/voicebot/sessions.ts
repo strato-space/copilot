@@ -67,6 +67,7 @@ import {
     normalizeVoicePossibleTaskDocForApi,
     normalizeVoicePossibleTaskRelations,
     normalizeVoiceTaskDiscussionSessions,
+    recomputeVoiceTaskSourceDataSessionLinkage,
     resolveVoicePossibleTaskRowId,
 } from './possibleTasksMasterModel.js';
 import {
@@ -119,10 +120,9 @@ import { applyCreateTasksCompositeCommentSideEffects } from '../../../services/v
 import {
     filterVoiceDerivedDraftsByRecency,
     parseDraftHorizonDays,
-    parseIncludeOlderDrafts,
 } from '../../../services/draftRecencyPolicy.js';
 import { writeSummaryAuditLog } from '../../../services/voicebot/voicebotDoneNotify.js';
-import { resolveMonotonicUpdatedAtNext } from '../../../services/taskUpdatedAt.js';
+import { resolveDateLikeEpochMs, resolveMonotonicUpdatedAtNext } from '../../../services/taskUpdatedAt.js';
 
 // NOTE: Import MCPProxyClient only when MCP integration is enabled.
 // import { MCPProxyClient } from '../../../services/mcp/proxyClient.js';
@@ -252,7 +252,6 @@ const sessionCodexTasksInputSchema = z.object({
 
 const sessionTabCountsInputSchema = z.object({
     session_id: z.string().trim().min(1),
-    include_older_drafts: z.union([z.boolean(), z.number(), z.string()]).optional(),
     draft_horizon_days: z.union([z.number(), z.string()]).optional(),
 });
 
@@ -263,7 +262,6 @@ const sessionTasksInputSchema = z.object({
     session_id: z.string().trim().min(1),
     bucket: z.enum(['Draft', 'Ready+', 'Codex']),
     status_keys: z.array(z.enum(VOICE_SESSION_TASK_STATUS_KEYS)).optional(),
-    include_older_drafts: z.union([z.boolean(), z.number(), z.string()]).optional(),
     draft_horizon_days: z.union([z.number(), z.string()]).optional(),
 });
 
@@ -899,6 +897,18 @@ const collectSessionTaskMutationLocatorKeys = (value: unknown): string[] => {
     return sourceDataRowId ? [sourceDataRowId] : [];
 };
 
+const collectSessionPossibleTaskDiscussionSessions = (doc: Record<string, unknown>): Array<Record<string, unknown>> => {
+    const direct = Array.isArray(doc.discussion_sessions) ? doc.discussion_sessions : [];
+    const sourceData =
+        doc.source_data && typeof doc.source_data === 'object'
+            ? (doc.source_data as Record<string, unknown>)
+            : {};
+    const sourceDataVoiceSessions = Array.isArray(sourceData.voice_sessions) ? sourceData.voice_sessions : [];
+    return [...direct, ...sourceDataVoiceSessions].filter(
+        (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'
+    );
+};
+
 const normalizeSessionPossibleTaskForApi = (value: unknown): Record<string, unknown> | null => {
     if (!value || typeof value !== 'object') return null;
     const row = value as Record<string, unknown>;
@@ -1116,9 +1126,7 @@ const buildPossibleTaskMasterAliasMap = (
     };
     const docUpdatedAtMs = (doc: Record<string, unknown>): number => {
         const raw = doc.updated_at ?? doc.created_at;
-        if (raw instanceof Date) return raw.getTime();
-        const parsed = Date.parse(String(raw || ''));
-        return Number.isFinite(parsed) ? parsed : 0;
+        return resolveDateLikeEpochMs(raw) ?? 0;
     };
     docs.forEach((doc) => {
         collectSessionTaskMutationLocatorKeys(doc).forEach((key) => {
@@ -1182,15 +1190,19 @@ const softDeletePossibleTaskMasterRows = async ({
         const sourceData = doc.source_data && typeof doc.source_data === 'object'
             ? doc.source_data as Record<string, unknown>
             : {};
-        const voiceSessions = Array.isArray(sourceData.voice_sessions)
-            ? sourceData.voice_sessions.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
-            : [];
+        const voiceSessions = normalizeVoiceTaskDiscussionSessions(
+            collectSessionPossibleTaskDiscussionSessions(doc)
+        );
         const remainingVoiceSessions = voiceSessions.filter((entry) => toTaskText(entry.session_id) !== sessionId);
 
         if (remainingVoiceSessions.length > 0) {
             const nextPrimary = remainingVoiceSessions[0]!;
             const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
                 previousUpdatedAt: doc.updated_at,
+            });
+            const nextSourceData = recomputeVoiceTaskSourceDataSessionLinkage({
+                sourceData,
+                discussionSessions: remainingVoiceSessions,
             });
             if (typeof tasksCollection.updateOne !== 'function') continue;
             await tasksCollection.updateOne(
@@ -1199,9 +1211,8 @@ const softDeletePossibleTaskMasterRows = async ({
                     $set: {
                         source_ref: buildCanonicalTaskSourceRef(docObjectId),
                         external_ref: voiceSessionUrlUtils.canonical(toTaskText(nextPrimary.session_id)),
-                        'source_data.session_id': toTaskText(nextPrimary.session_id),
-                        'source_data.session_name': toTaskText(nextPrimary.session_name),
-                        'source_data.voice_sessions': remainingVoiceSessions,
+                        discussion_sessions: remainingVoiceSessions,
+                        source_data: nextSourceData,
                         updated_at: nextUpdatedAt,
                     },
                 }
@@ -5225,6 +5236,18 @@ const materializeSessionTickets = async ({
                 },
             ];
         const discussionSessions = normalizeVoiceTaskDiscussionSessions(mergedVoiceSessions);
+        const materializedSourceData = recomputeVoiceTaskSourceDataSessionLinkage({
+            sourceData: {
+                ...incomingSourceData,
+                row_id: canonicalRowId,
+                session_name:
+                    toTaskText(incomingSourceData.session_name) ||
+                    String((session as Record<string, unknown>).session_name || ''),
+                session_id: toTaskText(incomingSourceData.session_id) || sessionId,
+                voice_sessions: discussionSessions,
+            },
+            discussionSessions,
+        });
 
         const pushRejectedRow = (
             field: CreateTicketsRejectedField,
@@ -5406,15 +5429,7 @@ const materializeSessionTickets = async ({
                 source_ref: buildCanonicalTaskSourceRef(materializedTaskId),
                 external_ref: canonicalExternalRef,
                 discussion_sessions: discussionSessions,
-                source_data: {
-                    ...incomingSourceData,
-                    row_id: canonicalRowId,
-                    session_name:
-                        toTaskText(incomingSourceData.session_name) ||
-                        String((session as Record<string, unknown>).session_name || ''),
-                    session_id: toTaskText(incomingSourceData.session_id) || sessionId,
-                    voice_sessions: discussionSessions,
-                },
+                source_data: materializedSourceData,
                 ...(isAcceptedFromPossibleTask
                     ? {
                         accepted_from_possible_task: true,
@@ -6102,10 +6117,10 @@ const draftRowRank = (value: unknown): number => {
 const draftRowTimestamp = (value: unknown): number => {
     if (!value || typeof value !== 'object') return 0;
     const record = value as Record<string, unknown>;
-    const updatedAt = normalizeDateField(record.updated_at);
-    if (typeof updatedAt === 'string' || typeof updatedAt === 'number') return Date.parse(String(updatedAt)) || 0;
-    const createdAt = normalizeDateField(record.created_at);
-    if (typeof createdAt === 'string' || typeof createdAt === 'number') return Date.parse(String(createdAt)) || 0;
+    const updatedAtTimestamp = resolveDateLikeEpochMs(record.updated_at);
+    if (updatedAtTimestamp !== null) return updatedAtTimestamp;
+    const createdAtTimestamp = resolveDateLikeEpochMs(record.created_at);
+    if (createdAtTimestamp !== null) return createdAtTimestamp;
     return 0;
 };
 
@@ -6390,14 +6405,59 @@ const listSessionScopedDraftTasks = async ({
     return [];
 };
 
-const parseLooseBoolean = (value: unknown): boolean => {
-    if (typeof value === 'boolean') return value;
-    if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
-    if (typeof value === 'string') {
-        const normalized = value.trim().toLowerCase();
-        return normalized === 'true' || normalized === '1' || normalized === 'yes';
-    }
-    return false;
+const SESSION_DEPRECATED_INCLUDE_OLDER_DRAFTS_ERROR =
+    'include_older_drafts is deprecated; omit draft_horizon_days for unbounded draft visibility';
+
+const hasDeprecatedIncludeOlderDrafts = (rawBody: unknown): boolean => {
+    if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) return false;
+    const body = rawBody as Record<string, unknown>;
+    return Object.prototype.hasOwnProperty.call(body, 'include_older_drafts') && body.include_older_drafts !== undefined;
+};
+
+const resolveDeprecatedParamHeaderValue = (value: unknown): unknown => (Array.isArray(value) ? value[0] : value);
+
+const resolveVoiceSessionsDeprecatedParamCaller = (req: Request): string => {
+    const explicitCaller =
+        toNonEmptyString(resolveDeprecatedParamHeaderValue(req.headers['x-caller'])) ||
+        toNonEmptyString(resolveDeprecatedParamHeaderValue(req.headers['x-client'])) ||
+        toNonEmptyString(resolveDeprecatedParamHeaderValue(req.headers['x-source']));
+    if (explicitCaller) return explicitCaller;
+
+    const authReq = req as VoicebotRequest;
+    return (
+        toNonEmptyString(authReq.user?.userId) ||
+        toNonEmptyString(authReq.user?.email) ||
+        toNonEmptyString(authReq.user?.name) ||
+        'unknown'
+    );
+};
+
+const rejectDeprecatedIncludeOlderDrafts = ({
+    req,
+    rawBody,
+    res,
+    endpoint,
+}: {
+    req: Request;
+    rawBody: unknown;
+    res: Response;
+    endpoint: '/api/voicebot/session_tab_counts' | '/api/voicebot/session_tasks';
+}): boolean => {
+    if (!hasDeprecatedIncludeOlderDrafts(rawBody)) return false;
+    logger.warn('[voicebot.sessions.deprecated_param]', {
+        endpoint,
+        legacy_param: 'include_older_drafts',
+        canonical_param: 'draft_horizon_days(omit_for_unbounded)',
+        runtime_tag: RUNTIME_TAG,
+        caller: resolveVoiceSessionsDeprecatedParamCaller(req),
+        sunset_phase: 'hard_fail',
+        error_code: 'validation_error',
+    });
+    res.status(400).json({
+        error: SESSION_DEPRECATED_INCLUDE_OLDER_DRAFTS_ERROR,
+        error_code: 'validation_error',
+    });
+    return true;
 };
 
 router.post('/session_tab_counts', async (req: Request, res: Response) => {
@@ -6406,6 +6466,17 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
     const db = getDb();
 
     try {
+        if (
+            rejectDeprecatedIncludeOlderDrafts({
+                req,
+                rawBody: req.body,
+                res,
+                endpoint: '/api/voicebot/session_tab_counts',
+            })
+        ) {
+            return;
+        }
+
         const parsedBody = sessionTabCountsInputSchema.safeParse(req.body || {});
         if (!parsedBody.success) {
             return res.status(400).json({ error: 'session_id is required' });
@@ -6428,7 +6499,6 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
         const sessionRecord = session as Record<string, unknown>;
         const sessionScopedTaskMatch = buildSessionScopedTaskMatch({ sessionId, session: sessionRecord });
         const externalRef = voiceSessionUrlUtils.canonical(sessionId);
-        const includeOlderDrafts = parseIncludeOlderDrafts(parsedBody.data.include_older_drafts);
         const draftHorizonDays = parseDraftHorizonDays(parsedBody.data.draft_horizon_days);
 
         const nonCodexSessionTaskMatch = mergeWithRuntimeFilter(
@@ -6469,7 +6539,7 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
                 db,
                 sessionId,
                 session: sessionRecord,
-                includeOlderDrafts,
+                includeOlderDrafts: false,
                 draftHorizonDays,
             }),
         ]);
@@ -6538,6 +6608,17 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
     const db = getDb();
 
     try {
+        if (
+            rejectDeprecatedIncludeOlderDrafts({
+                req,
+                rawBody: req.body,
+                res,
+                endpoint: '/api/voicebot/session_tasks',
+            })
+        ) {
+            return;
+        }
+
         const parsedBody = sessionTasksInputSchema.safeParse(req.body || {});
         if (!parsedBody.success) {
             return res.status(400).json({ error: 'session_id and bucket are required' });
@@ -6558,14 +6639,13 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
         if (!hasAccess) return res.status(403).json({ error: 'Access denied to this session' });
 
         const bucket = parsedBody.data.bucket;
-        const includeOlderDrafts = parseIncludeOlderDrafts(parsedBody.data.include_older_drafts);
         const draftHorizonDays = parseDraftHorizonDays(parsedBody.data.draft_horizon_days);
         if (bucket === 'Draft') {
             const draftDocs = await listSessionScopedDraftTasks({
                 db,
                 sessionId,
                 session: session as Record<string, unknown>,
-                includeOlderDrafts,
+                includeOlderDrafts: false,
                 draftHorizonDays,
             });
             const items = collapseVisibleDraftRows(draftDocs)

@@ -65,6 +65,15 @@ function withHarness(runCase: (run: (mode: 'prod', onlineProcesses: string[]) =>
     fs.chmodSync(scriptPath, 0o755);
     fs.writeFileSync(path.join(scriptsDir, 'pm2-backend.ecosystem.config.js'), 'module.exports = {};', 'utf8');
     fs.writeFileSync(path.join(scriptsDir, 'pm2-voicebot-cutover.ecosystem.config.js'), 'module.exports = {};', 'utf8');
+    writeExecutable(
+      path.join(scriptsDir, 'pm2-runtime-readiness.sh'),
+      `#!/usr/bin/env bash
+set -euo pipefail
+code="\${READINESS_EXIT_CODE:-0}"
+echo "READINESS:$*:exit=$code" >> "\${MOCK_LOG_FILE:?}"
+exit "$code"
+`,
+    );
 
     writeExecutable(
       path.join(agentsDir, 'pm2-agents.sh'),
@@ -152,7 +161,7 @@ esac
 `,
     );
 
-    const run = (mode: 'prod', onlineProcesses: string[]): HarnessRun => {
+    const run = (mode: 'prod', onlineProcesses: string[], readinessExitCode = 0): HarnessRun => {
       fs.writeFileSync(stateFile, onlineProcesses.length > 0 ? `${onlineProcesses.join('\n')}\n` : '', 'utf8');
       fs.writeFileSync(logFile, '', 'utf8');
 
@@ -163,6 +172,7 @@ esac
           PATH: `${mockBinDir}:${process.env.PATH ?? ''}`,
           PM2_MOCK_STATE_FILE: stateFile,
           MOCK_LOG_FILE: logFile,
+          READINESS_EXIT_CODE: String(readinessExitCode),
         },
         encoding: 'utf8',
       });
@@ -209,6 +219,7 @@ describe('pm2-backend prod bootstrap', () => {
 
       expect(result.logLines).toContain(`PM2:pid:${PROD_WORKERS_NAME}`);
       expect(result.logLines).toContain(`PM2:pid:${PROD_TGBOT_NAME}`);
+      expect(result.logLines).toContain('READINESS:prod:exit=0');
       expect(result.finalOnline.has(PROD_WORKERS_NAME)).toBe(true);
     });
   });
@@ -222,10 +233,23 @@ describe('pm2-backend prod bootstrap', () => {
       assertSinglePm2Action(result.logLines, PROD_MINI_NAME, 'start');
       assertSinglePm2Action(result.logLines, PROD_WORKERS_NAME, 'start');
       assertSinglePm2Action(result.logLines, PROD_TGBOT_NAME, 'start');
+      expect(result.logLines).toContain('READINESS:prod:exit=0');
 
       expect(result.finalOnline).toEqual(
         new Set([PROD_BACKEND_NAME, PROD_MINI_NAME, PROD_WORKERS_NAME, PROD_TGBOT_NAME]),
       );
+    });
+  });
+
+  it('fails fast when readiness gate returns non-zero', () => {
+    withHarness((run) => {
+      const result = run(
+        'prod',
+        [PROD_BACKEND_NAME, PROD_MINI_NAME, PROD_WORKERS_NAME, PROD_TGBOT_NAME],
+        2,
+      );
+      expect(result.status).toBe(2);
+      expect(result.logLines).toContain('READINESS:prod:exit=2');
     });
   });
 });

@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-03-27
+### PROBLEM SOLVED
+- **08:34** После аварийного рестарта прод-среды часть Voice runtime-поведения оставалась недетерминированной: readiness запускался неявно, notify-поверхность проверялась вручную, а восстановление PM2-процессов зависело от локального состояния хоста.
+- **08:34** CRM temporal/read contracts продолжали принимать смешанные legacy-формы параметров (`mode`, диапазоны дат, `include_older_drafts`), что создавало drift между app/backend и давало нестабильные результаты в session/task списках.
+- **08:34** Session/task linkage и recency-семантика для Voice Drafts сохраняли риски stale-сопоставлений и неунифицированного `updated_at` bump при смешанных типах данных на маршрутах CRM/Voice.
+
+### FEATURE IMPLEMENTED
+- **08:34** Добавлен production-grade runtime recovery kit: отдельные readiness/healthcheck скрипты, bootstrap-путь для PM2, и тестовое покрытие на обязательные recovery-инварианты после сбоя.
+- **08:34** Temporal API-контракт приведен к каноническому виду: нормализация `response_mode` и диапазонов дат, удаление deprecated-пути `include_older_drafts`, плюс parity-тесты для route matcher/runtime.
+- **08:34** Усилен Voice Draft consistency layer: безопасная нормализация date-like значений, устойчивое `updated_at` поведение и явная рекомпоновка session linkage в persistence/read путях.
+
+### CHANGES
+- **08:34** Добавлены скрипты `scripts/pm2-runtime-readiness.sh` и `scripts/voice-notify-healthcheck.sh`, обновлен `scripts/pm2-backend.sh`, добавлены тесты `backend/__tests__/scripts/{pm2RuntimeReadiness,voiceNotifyHealthcheck,pm2BackendProdBootstrap}.test.ts`.
+- **08:34** Обновлены `backend/src/api/routes/crm/tickets.ts`, `app/src/store/kanbanStore.ts` и связанные контрактные тесты (`backend/__tests__/api/crmTicketsTransportLegacyContract.test.ts`, `backend/__tests__/api/crmTicketsTemporal*.test.ts`, `app/__tests__/operops/crmKanbanTransportContract.test.ts`) для canonical temporal/transport поведения.
+- **08:34** Обновлены `backend/src/api/routes/voicebot/{sessions,sessionsSharedUtils,possibleTasksMasterModel}.ts`, `backend/src/services/{draftRecencyPolicy,taskUpdatedAt}.ts`, `backend/src/services/voicebot/{createTasksAgent,persistPossibleTasks}.ts` и связанные runtime/service тесты для устойчивого session linkage и recency/date нормализации.
+- **08:34** Обновлены документы `AGENTS.md`, `README.md`, `docs/VOICEBOT_API.md`, `docs/VOICEBOT_API_TESTS.md`, `agents/agent-cards/create_tasks.md`, добавлен spec `plan/2026-03-27-voice-media-attachment-transcription-spec.md` и forensic bundle `tmp/voice-investigation-artifacts/20260327T045412Z-69c60caf4926f6f263d066d6/`.
+- **08:34** Verification:
+  - `bash -n scripts/voice-notify-healthcheck.sh scripts/pm2-runtime-readiness.sh scripts/pm2-backend.sh`
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/scripts/voiceNotifyHealthcheck.test.ts __tests__/scripts/pm2RuntimeReadiness.test.ts __tests__/scripts/pm2BackendProdBootstrap.test.ts __tests__/services/voicebot/agentsRuntimeRecovery.test.ts __tests__/services/voicebot/createTasksAgentRecovery.test.ts`
+
 ## 2026-03-26
 ### PROBLEM SOLVED
 - **05:52** `test:parallel-safe` was unstable because stale `CREATE_TASKS` repair tests implicitly depended on fresh `ObjectId` timestamps, causing false `skip_recent` decisions instead of deterministic stale repair verdicts.

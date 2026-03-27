@@ -49,6 +49,42 @@ describe('draftRecencyPolicy', () => {
     ).toBe(false);
   });
 
+  it('accepts mixed epoch seconds/milliseconds/ISO timestamps for session anchors', () => {
+    const axisNow = new Date('2026-03-21T00:00:00.000Z');
+    const inRangeIsoMs = Date.parse('2026-03-20T12:00:00.000Z');
+    const inRangeIsoSec = Math.trunc(inRangeIsoMs / 1000);
+
+    expect(
+      isSessionWithinDraftRecencyWindow(
+        {
+          last_voice_timestamp: inRangeIsoSec,
+          created_at: '2020-01-01T00:00:00.000Z',
+        },
+        { draftHorizonDays: 30, now: axisNow }
+      )
+    ).toBe(true);
+
+    expect(
+      isSessionWithinDraftRecencyWindow(
+        {
+          last_voice_timestamp: String(inRangeIsoMs),
+          created_at: '2020-01-01T00:00:00.000Z',
+        },
+        { draftHorizonDays: 30, now: axisNow }
+      )
+    ).toBe(true);
+
+    expect(
+      isSessionWithinDraftRecencyWindow(
+        {
+          last_voice_timestamp: 'invalid-timestamp',
+          created_at: new Date(inRangeIsoMs),
+        },
+        { draftHorizonDays: 30, now: axisNow }
+      )
+    ).toBe(true);
+  });
+
   it('detects voice-derived drafts without touching non-draft tasks', () => {
     expect(
       isVoiceDerivedDraftTask({

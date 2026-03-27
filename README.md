@@ -284,6 +284,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - TS tgbot runtime protects against duplicate pollers using env-stable Redis distributed lock key (`voicebot:tgbot:poller_lock` + env suffix); lock loss triggers controlled shutdown to prevent split Telegram update consumption.
 - `copilot-voicebot-workers-prod` runs TypeScript worker runtime from `backend/dist/workers/voicebot/runtime.js` (`npm run start:voicebot-workers`) via `scripts/pm2-voicebot-cutover.ecosystem.config.js`; queue workers consume all `VOICEBOT_QUEUES` and dispatch through `VOICEBOT_WORKER_MANIFEST` with `backend/.env.production`.
 - Production bootstrap `./scripts/pm2-backend.sh prod` is responsible for recreating missing `copilot-voicebot-workers-prod` / `copilot-voicebot-tgbot-prod` runtimes, not only restarting already-existing PM2 entries.
+- Canonical post-reboot/deploy readiness smoke: `./scripts/pm2-runtime-readiness.sh prod` (machine-readable JSON; non-zero exit on missing mandatory runtime).
+- Canonical notify-upstream smoke: `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production` (machine-readable JSON; non-zero exit on non-2xx/transport failure).
 - Backend API process runs dedicated socket-events consumer (`startVoicebotSocketEventsWorker`) for `voicebot--events-*` queue and uses Socket.IO Redis adapter for cross-process room delivery.
 - TS transcribe handler never silently skips missing transport now: Telegram messages with `file_id` but without local `file_path` are marked `transcription_error=missing_transport` with diagnostics; text-only chunks without file path are transcribed via `transcription_method=text_fallback` and continue categorization pipeline.
 - TS transcribe handler additionally supports Telegram transport recovery: for `source_type=telegram` + `file_id` + missing local file path it resolves `getFile`, downloads audio into local storage, persists `file_path`, and continues transcription in the same job.
@@ -349,7 +351,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - The offline session-title utility `backend/scripts/voicebot-generate-session-titles.ts` uses the same quota-recovery rule and therefore avoids no-op agent restarts when the auth file is already up to date.
 - `create_tasks` card no longer hardcodes model; runtime default is taken from `agents/fastagent.config.yaml`.
 - Voice draft visibility is now caller-policy driven:
-  - `POST /api/voicebot/session_tasks` and `POST /api/voicebot/session_tab_counts` accept optional `draft_horizon_days` / `include_older_drafts`
+  - `POST /api/voicebot/session_tasks` and `POST /api/voicebot/session_tab_counts` accept optional `draft_horizon_days`
   - if omitted, `DRAFT_10` remains the full canonical baseline
   - for session-local reads the horizon is evaluated against the task's linked discussion window in both directions around the current session
 - Current create_tasks overflow / payload investigation notebook lives in `docs/CREATE_TASKS_CONTEXT_OVERFLOW_PROFILING_2026-03-21.md`; temporary voice investigation artifacts were moved out of `plan/` into `tmp/voice-investigation-artifacts/`.
@@ -362,7 +364,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - `create_tasks` now expects a structured JSON envelope inside `message` and enriches context directly through MCP `voice`; it must not route through `StratoProject` execution.
 - `create_tasks` prompt is compact-session-first: it must tolerate sparse project cards, current Mongo possible-task rows (`VOICE_BOT` / `voice_possible_task` / empty `project_id` or `performer_id`), and split sequential deliverables instead of collapsing them into one task.
 - Session-backed `create_tasks` uses `voice.fetch(..., mode="transcript")` as canonical metadata source and reads a single project card through `voice.project(project_id)` when transcript metadata includes a project id.
-- Backend `runCreateTasksAgent(...)` derives a bounded `project_crm_window` from message/session timing and keeps project-wide CRM reads bounded; unbounded project CRM is not part of the active contract.
+- Backend `runCreateTasksAgent(...)` derives a bounded `project_crm_window` from message/session timing using `VOICEBOT_PROJECT_CRM_LOOKBACK_DAYS` (default `14`, backend clamp `1..30`) and keeps project-wide CRM reads bounded; unbounded project CRM is not part of the active contract.
 - Composite `create_tasks` output is the canonical session-naming path; standalone title agent cards are no longer part of the active runtime contract.
 - Frontend trigger points:
   - AI title button in `/voice/session/:id` calls MCP tool `create_tasks` and consumes `session_name` from the composite output.
@@ -458,7 +460,7 @@ For shared dev on p2, use PM2 scripts and serve static builds to avoid Vite port
 - Manual Figma module flow:
   - `cd figma && npm install && npm run build`
   - `cd figma && ./scripts/pm2-figma.sh dev start`
-- Production deploy path is `./scripts/pm2-backend.sh prod`; it now restarts `copilot-backend-prod`, `copilot-miniapp-backend-prod`, agents, and the production VoiceBot worker/TG bot runtimes when those PM2 services already exist.
+- Production deploy path is `./scripts/pm2-backend.sh prod`; it now recreates/restarts mandatory runtimes and runs `./scripts/pm2-runtime-readiness.sh prod` as a fail-fast gate.
 
 ## Host maintenance
 - Do not delete or prune `/root/.codex/sessions` during routine disk cleanup; treat it as retained session history unless the cleanup task explicitly targets that path.

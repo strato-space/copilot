@@ -464,6 +464,105 @@ describe('runCreateTasksAgent quota fallback', () => {
     expect(envelope.preferred_output_language).toBe('ru');
   });
 
+  it('resolves VOICEBOT_PROJECT_CRM_LOOKBACK_DAYS with clamp and default fallback for project CRM window', async () => {
+    const previousLookback = process.env.VOICEBOT_PROJECT_CRM_LOOKBACK_DAYS;
+    try {
+      const firstMessageAt = new Date('2026-02-01T10:00:00.000Z');
+      const lastMessageAt = new Date('2026-02-03T18:00:00.000Z');
+      const sessionFindOne = jest.fn(async () => {
+        const id = new ObjectId();
+        return {
+          _id: id,
+          created_at: new Date('2026-02-01T08:00:00.000Z'),
+          updated_at: new Date('2026-02-03T19:00:00.000Z'),
+        };
+      });
+      const messagesFindOne = jest.fn(async (_query: unknown, options?: { sort?: Record<string, number> }) => {
+        const sort = options?.sort || {};
+        if (sort.message_timestamp === 1) {
+          return {
+            message_timestamp: Math.floor(firstMessageAt.getTime() / 1000),
+            created_at: firstMessageAt,
+          };
+        }
+        if (sort.message_timestamp === -1) {
+          return {
+            message_timestamp: Math.floor(lastMessageAt.getTime() / 1000),
+            created_at: lastMessageAt,
+          };
+        }
+        return null;
+      });
+
+      const dbStub = {
+        collection: (name: string) => {
+          if (name === 'automation_voice_bot_sessions') {
+            return { findOne: sessionFindOne };
+          }
+          if (name === 'automation_voice_bot_messages') {
+            return { findOne: messagesFindOne };
+          }
+          return { findOne: jest.fn(async () => null) };
+        },
+      };
+
+      const cases: Array<{ envValue: string; expectedLookbackDays: number }> = [
+        { envValue: '120', expectedLookbackDays: 30 },
+        { envValue: '0', expectedLookbackDays: 1 },
+        { envValue: '', expectedLookbackDays: 14 },
+      ];
+
+      for (const testCase of cases) {
+        process.env.VOICEBOT_PROJECT_CRM_LOOKBACK_DAYS = testCase.envValue;
+        const sessionId = new ObjectId().toHexString();
+
+        initializeSessionMock.mockResolvedValue({ sessionId: 'window-clamp-session' });
+        closeSessionMock.mockResolvedValue(undefined);
+        callToolMock.mockResolvedValue({
+          success: true,
+          data: {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  summary_md_text: '',
+                  scholastic_review_md: '',
+                  task_draft: [],
+                  enrich_ready_task_comments: [],
+                  session_name: '',
+                  project_id: 'proj-window',
+                }),
+              },
+            ],
+          },
+        });
+
+        await runCreateTasksAgent({
+          sessionId,
+          projectId: 'proj-window',
+          db: dbStub as never,
+        });
+
+        expect(callToolMock).toHaveBeenCalledTimes(1);
+        const envelopeRaw = callToolMock.mock.calls[0]?.[1]?.message as string;
+        const envelope = JSON.parse(envelopeRaw) as Record<string, unknown>;
+        const crmWindow = envelope.project_crm_window as Record<string, unknown>;
+        const lookbackMs = testCase.expectedLookbackDays * 24 * 60 * 60 * 1000;
+
+        expect(crmWindow.from_date).toBe(new Date(lastMessageAt.getTime() - lookbackMs).toISOString());
+        expect(crmWindow.to_date).toBe(lastMessageAt.toISOString());
+
+        callToolMock.mockClear();
+      }
+    } finally {
+      if (previousLookback === undefined) {
+        delete process.env.VOICEBOT_PROJECT_CRM_LOOKBACK_DAYS;
+      } else {
+        process.env.VOICEBOT_PROJECT_CRM_LOOKBACK_DAYS = previousLookback;
+      }
+    }
+  });
+
   it('adds preferred_output_language=en to raw_text envelopes when the source text is english-only', async () => {
     initializeSessionMock.mockResolvedValue({ sessionId: 'language-session' });
     closeSessionMock.mockResolvedValue(undefined);

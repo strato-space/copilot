@@ -1664,14 +1664,11 @@ describe('Voicebot utility routes runtime behavior', () => {
         include_older_drafts: true,
       });
 
-    expect(overrideResponse.status).toBe(200);
-    expect(overrideResponse.body.items).toEqual([
-      expect.objectContaining({
-        row_id: 'old-row',
-        name: 'Old linked draft',
-        task_status: TASK_STATUSES.DRAFT_10,
-      }),
-    ]);
+    expect(overrideResponse.status).toBe(400);
+    expect(overrideResponse.body).toEqual({
+      error: 'include_older_drafts is deprecated; omit draft_horizon_days for unbounded draft visibility',
+      error_code: 'validation_error',
+    });
   });
 
   it('save_possible_tasks stores master rows in automation_tasks and syncs session compatibility data', async () => {
@@ -2890,6 +2887,113 @@ describe('Voicebot utility routes runtime behavior', () => {
         }),
       }),
     );
+  });
+
+  it('delete_task_from_session recomputes all linkage carriers when unlink keeps another session edge', async () => {
+    const sessionId = new ObjectId();
+    const retainedSessionId = new ObjectId();
+    const masterTaskId = new ObjectId();
+    const legacyUpdatedAtMs = Date.parse('2026-03-20T12:00:00.000Z');
+    const sessionFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      chat_id: 123456,
+      user_id: performerId.toHexString(),
+      session_name: 'Old session',
+      is_deleted: false,
+      runtime_tag: 'prod',
+    }));
+    const updateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 0 }));
+
+    const masterFind = jest.fn(() => ({
+      toArray: async () => [
+        {
+          _id: masterTaskId,
+          row_id: 'legacy-row',
+          id: 'legacy-row',
+          external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`,
+          updated_at: legacyUpdatedAtMs,
+          discussion_sessions: [
+            { session_id: sessionId.toHexString(), session_name: 'Old session', role: 'primary' },
+            { session_id: retainedSessionId.toHexString(), session_name: 'Retained session', role: 'secondary' },
+          ],
+          source_data: {
+            row_id: 'legacy-row',
+            session_id: sessionId.toHexString(),
+            session_name: 'Old session',
+            voice_session_id: sessionId.toHexString(),
+            session_db_id: sessionId.toHexString(),
+            payload: {
+              session_id: sessionId.toHexString(),
+              session_db_id: sessionId.toHexString(),
+              voice_session_id: sessionId.toHexString(),
+            },
+            voice_sessions: [
+              { session_id: sessionId.toHexString(), session_name: 'Old session', role: 'primary' },
+              { session_id: retainedSessionId.toHexString(), session_name: 'Retained session', role: 'secondary' },
+            ],
+          },
+        },
+      ],
+    }));
+    const masterUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return { find: masterFind, updateOne: masterUpdateOneSpy };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { updateOne: updateOneSpy };
+        }
+        return buildDefaultCollection();
+      },
+    };
+    const rawDbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return { findOne: sessionFindOne };
+        }
+        return buildDefaultCollection();
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(rawDbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/delete_task_from_session')
+      .send({
+        session_id: sessionId.toHexString(),
+        row_id: 'legacy-row',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(masterUpdateOneSpy).toHaveBeenCalledTimes(1);
+    const updateSet = ((masterUpdateOneSpy.mock.calls[0]?.[1] as Record<string, unknown>)?.$set ?? {}) as Record<string, unknown>;
+    const nextSourceData = ((updateSet.source_data as Record<string, unknown> | undefined) ?? {});
+    const nextPayload = ((nextSourceData.payload as Record<string, unknown> | undefined) ?? {});
+    const nextVoiceSessions = Array.isArray(nextSourceData.voice_sessions)
+      ? nextSourceData.voice_sessions as Array<Record<string, unknown>>
+      : [];
+
+    expect(updateSet.external_ref).toBe(`https://copilot.stratospace.fun/voice/session/${retainedSessionId.toHexString()}`);
+    expect(updateSet.updated_at).toBeInstanceOf(Date);
+    expect((updateSet.updated_at as Date).getTime()).toBeGreaterThanOrEqual(legacyUpdatedAtMs);
+    expect(nextSourceData.session_id).toBe(retainedSessionId.toHexString());
+    expect(nextSourceData.voice_session_id).toBe(retainedSessionId.toHexString());
+    expect(nextSourceData.session_db_id).toBe(retainedSessionId.toHexString());
+    expect(nextPayload.session_id).toBe(retainedSessionId.toHexString());
+    expect(nextPayload.session_db_id).toBe(retainedSessionId.toHexString());
+    expect(nextPayload.voice_session_id).toBe(retainedSessionId.toHexString());
+    expect(nextVoiceSessions).toEqual([expect.objectContaining({ session_id: retainedSessionId.toHexString() })]);
+    expect(nextVoiceSessions.some((entry) => String(entry.session_id || '') === sessionId.toHexString())).toBe(false);
+    expect(Array.isArray(updateSet.discussion_sessions)).toBe(true);
+    expect(
+      ((updateSet.discussion_sessions as Array<Record<string, unknown>>) ?? []).some(
+        (entry) => String(entry.session_id || '') === sessionId.toHexString()
+      )
+    ).toBe(false);
   });
 
   it('delete_task_from_session returns 409 for ambiguous row locator payloads', async () => {

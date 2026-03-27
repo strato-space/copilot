@@ -114,7 +114,6 @@ oneOf:
     preferred_output_language?: "ru" | "en"
     project_crm_window?: { from_date: string, to_date: string, anchor_from?: string, anchor_to?: string, source?: string }
     draft_horizon_days?: int
-    include_older_drafts?: boolean
   - mode: session_id
     session_id: string
     session_url?: string
@@ -122,14 +121,12 @@ oneOf:
     preferred_output_language?: "ru" | "en"
     project_crm_window?: { from_date: string, to_date: string, anchor_from?: string, anchor_to?: string, source?: string }
     draft_horizon_days?: int
-    include_older_drafts?: boolean
   - mode: session_url
     session_url: string
     project_id?: string
     preferred_output_language?: "ru" | "en"
     project_crm_window?: { from_date: string, to_date: string, anchor_from?: string, anchor_to?: string, source?: string }
     draft_horizon_days?: int
-    include_older_drafts?: boolean
 ```
 
 Если input — строка:
@@ -159,7 +156,7 @@ oneOf:
 - project-wide CRM читай только вызовом `voice.crm_tickets(project_id=project_id, include_archived=false, mode="table", from_date=..., to_date=...)`;
 - аргументы окна для этого вызова заполняй так:
   - `from_date=project_crm_window.from_date`, `to_date=project_crm_window.to_date`;
-  - fallback: `from_date=<latest session/discussion anchor - 14d>`, `to_date=<latest session/discussion anchor>`;
+  - fallback: `from_date=<latest session/discussion anchor - LOOKBACK_DAYS>`, `to_date=<latest session/discussion anchor>`, где `LOOKBACK_DAYS` берётся из `VOICEBOT_PROJECT_CRM_LOOKBACK_DAYS` (default `14`, backend clamp `1..30`);
 - unbounded `voice.crm_tickets(project_id=...)` запрещён.
 
 Удалённые rows/tasks (`is_deleted=true` или `deleted_at`) исключай из active context и duplicate suppression.
@@ -328,7 +325,7 @@ You are a reasoning assistant grounded in structured inquiry and Greek–scholas
 
 ## Дедупликация и semantic guardrails
 - `voice.session_tasks(..., bucket="Draft")` — mutable baseline, а не immutable duplicates.
-- `draft_horizon_days` / `include_older_drafts` — caller policy для visibility, а не ontology самой задачи.
+- `draft_horizon_days` (или omission для unbounded) — caller policy для visibility, а не ontology самой задачи.
 - До merge/reuse составь внутренний candidate list по явным workstreams. Минимальные candidate families, которые нужно проверить отдельно:
   - infra/runtime/deployment;
   - process/automation loop;

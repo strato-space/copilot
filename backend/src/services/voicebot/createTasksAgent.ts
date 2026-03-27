@@ -65,8 +65,10 @@ const REDUCED_CONTEXT_MAX_CHARS = 12000;
 const REDUCED_CONTEXT_SUMMARY_MAX_CHARS = 4000;
 const REDUCED_CONTEXT_MESSAGE_MAX_CHARS = 1200;
 const REDUCED_CONTEXT_MAX_MESSAGES = 8;
-const PROJECT_CRM_LOOKBACK_DAYS = 14;
-const PROJECT_CRM_LOOKBACK_MS = PROJECT_CRM_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+const PROJECT_CRM_LOOKBACK_DEFAULT_DAYS = 14;
+const PROJECT_CRM_LOOKBACK_MIN_DAYS = 1;
+const PROJECT_CRM_LOOKBACK_MAX_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const LANGUAGE_SAMPLE_MAX_MESSAGES = 12;
 const CYRILLIC_RE = /[А-Яа-яЁё]/g;
 const LATIN_RE = /[A-Za-z]/g;
@@ -458,6 +460,24 @@ const resolveDbForFallback = (db?: Db): Db | null => {
   }
 };
 
+const clampProjectCrmLookbackDays = (value: number): number => {
+  const normalized = Math.trunc(value);
+  if (!Number.isFinite(normalized)) return PROJECT_CRM_LOOKBACK_DEFAULT_DAYS;
+  if (normalized < PROJECT_CRM_LOOKBACK_MIN_DAYS) return PROJECT_CRM_LOOKBACK_MIN_DAYS;
+  if (normalized > PROJECT_CRM_LOOKBACK_MAX_DAYS) return PROJECT_CRM_LOOKBACK_MAX_DAYS;
+  return normalized;
+};
+
+const resolveProjectCrmLookbackDays = (): number => {
+  const envValue = process.env.VOICEBOT_PROJECT_CRM_LOOKBACK_DAYS;
+  if (typeof envValue !== 'string' || envValue.trim() === '') {
+    return PROJECT_CRM_LOOKBACK_DEFAULT_DAYS;
+  }
+  const raw = Number(envValue);
+  if (!Number.isFinite(raw)) return PROJECT_CRM_LOOKBACK_DEFAULT_DAYS;
+  return clampProjectCrmLookbackDays(raw);
+};
+
 const deriveProjectCrmWindow = async ({
   db,
   sessionId,
@@ -536,7 +556,8 @@ const deriveProjectCrmWindow = async ({
     anchorTo = swap;
   }
 
-  const fromDate = new Date(anchorTo.getTime() - PROJECT_CRM_LOOKBACK_MS).toISOString();
+  const lookbackMs = resolveProjectCrmLookbackDays() * DAY_MS;
+  const fromDate = new Date(anchorTo.getTime() - lookbackMs).toISOString();
   const toDateValue = anchorTo.toISOString();
 
   return {
