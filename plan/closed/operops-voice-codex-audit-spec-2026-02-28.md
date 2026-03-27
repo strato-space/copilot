@@ -1,12 +1,25 @@
 # OperOps / Voice / Codex Audit Spec (2026-02-28)
 
+## Status ✅Closed
+
+- Epic ticket (`copilot-ztlv`): ✅Closed 1
+- Verification ticket line (`copilot-ztlv.*`): ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 26
+- Historical `bd` note: one child slot is tombstoned and is not part of active verification scope.
+- Plan status: audit-only verification pack completed; proposals and evidence are recorded; implementation requires separate approved execution scope.
+- Parent audit epic: `copilot-ztlv`
+- Successor execution rollout: `copilot-bq81` in [voice-operops-codex-taskflow-spec.md](/home/strato-space/copilot/plan/closed/voice-operops-codex-taskflow-spec.md)
+
+**Статус документа**: verification reference closed; keep as audit evidence pack, not as active execution plan
+**Дата**: 2026-03-27
+**Основание**: current closed state of `copilot-ztlv`, closed verification children in `bd`, and the later execution rollout being tracked separately under `copilot-bq81`.
+
 ## Goal
 Сверить фактическое поведение с согласованным описанием требований и зафиксировать по каждому пункту отдельный verification-ticket в `bd`.
 
 ## Execution Mode
-- На этом этапе: только аудит, воспроизведение, анализ и предложение решений.
-- Изменения продуктового кода по этим пунктам не выполняются в рамках данного пакета.
-- Все тикеты остаются `open` до вашего ревью и явного утверждения.
+- На этапе этого пакета: только аудит, воспроизведение, анализ и предложение решений.
+- Изменения продуктового кода по этим пунктам не выполнялись в рамках данного пакета.
+- Пакет закрыт как verification-only reference; исполнение ушло в отдельные approved execution scopes.
 
 ## Approved Decisions (2026-02-28)
 - Режим работы: `audit-only` (без продуктовых изменений до отдельного approval).

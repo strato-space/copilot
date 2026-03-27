@@ -58,7 +58,7 @@ Mutation contract remains separate:
 ### Active consumers in this repo
 - `agents/agent-cards/create_tasks.md`
 - `docs/VOICEBOT_API.md`
-- `plan/voice-task-surface-normalization-spec.md`
+- `plan/closed/voice-task-surface-normalization-spec.md`
 
 ### Runtime route removed in this repo
 - `backend/src/api/routes/voicebot/sessions.ts`

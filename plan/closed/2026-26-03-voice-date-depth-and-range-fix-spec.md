@@ -2,11 +2,14 @@
 
 ## Status ✅Closed
 
-- Task-surface ticket line (`copilot-xmcm.*`): ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 12
 - Epic ticket (`copilot-xmcm`): ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 1
+- Task-surface ticket line (`copilot-xmcm.*`): ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 12
 - Plan status: implemented contract; task-surface and epic line closed; dependency chain fully closed in `bd`.
-- Snapshot date: 2026-03-27
 - Related epic: `copilot-xmcm`
+- Companion execution DAG: [2026-26-03-copilot-xmcm-swarm-plan.md](/home/strato-space/copilot/plan/closed/2026-26-03-copilot-xmcm-swarm-plan.md)
+- Postreview hardening follow-ups: `copilot-xmcm.11`, `copilot-xmcm.12` (closed).
+- Verification snapshot (2026-03-27): backend full package `135 suites / 676 tests` PASS, app full package `108 suites / 340 tests` PASS, targeted `/home/tools/voice` compatibility tests PASS.
+- Snapshot date: 2026-03-27
 
 ## Контекст
 В текущем контуре есть два разных механизма отбора задач по времени:

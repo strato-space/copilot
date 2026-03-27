@@ -2,11 +2,18 @@
 
 **Generated**: 2026-03-03
 
-## Status
-- Spec state: historical superseded reference
+## Status ✅Closed
+
+- Epic ticket (`copilot-zktc`): ✅Closed 1
+- Task-surface rollout ticket line (`copilot-zktc.*`): ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 11
+- Plan status: legacy MCP/session-taskflow parity rollout is fully closed and superseded by newer task-surface normalization and deprecation contracts.
 - Current task-surface source of truth:
-  - [voice-task-surface-normalization-spec.md](/home/strato-space/copilot/plan/voice-task-surface-normalization-spec.md)
-  - [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/voice-session-possible-tasks-deprecation-plan.md)
+- [voice-task-surface-normalization-spec.md](/home/strato-space/copilot/plan/closed/voice-task-surface-normalization-spec.md)
+- [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/closed/voice-session-possible-tasks-deprecation-plan.md)
+
+**Статус документа**: historical superseded reference; keep for rollout history and cross-repo parity context only
+**Дата**: 2026-03-03
+**Основание**: closed state of `copilot-zktc`, fully closed child rollout line, and later task-surface truth being carried by the normalization and deprecation docs above.
 
 Engineering note:
 - this document preserves the earlier MCP/session-taskflow planning context only;
@@ -327,7 +334,7 @@ T10 ─────────────────────────�
 ### T10: Cross-repo rollout sequencing and rollback gates
 - **depends_on**: []
 - **location**:
-  - `/home/strato-space/copilot/plan/archive/mcp-voice-session-taskflow-plan.legacy.md`
+  - `/home/strato-space/copilot/plan/closed/2026-03-03-mcp-voice-session-taskflow-plan.legacy.md`
   - `/home/tools/voice/README.md`
 - **description**:
   - Define deployment order to avoid production breakage:
@@ -353,7 +360,7 @@ T10 ─────────────────────────�
   - Added the stage-safe deployment order and per-stage compatibility/rollback gates for backend -> client -> MCP -> Actions -> frontend.
   - Added explicit cross-reference requirements between this plan section and `/home/tools/voice/README.md`.
 - **files edited/created**:
-  - `/home/strato-space/copilot/plan/archive/mcp-voice-session-taskflow-plan.legacy.md`
+  - `/home/strato-space/copilot/plan/closed/2026-03-03-mcp-voice-session-taskflow-plan.legacy.md`
   - `/home/tools/voice/README.md`
 
 ### T11: Documentation + assistant usage runbook

@@ -2,14 +2,18 @@
 
 **Generated**: 2026-03-06
 
-## Status
-- Ticket line: ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  Closed 10
-- Plan status: historical completed reference; superseded by current task-surface specs.
-- Canonical epic: `copilot-6d9d`
+## Status ✅Closed
 
-Current task-surface source of truth:
-- [voice-task-surface-normalization-spec.md](/home/strato-space/copilot/plan/voice-task-surface-normalization-spec.md)
-- [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/voice-session-possible-tasks-deprecation-plan.md)
+- Epic ticket (`copilot-6d9d`): ✅Closed 1
+- Task-surface rollout ticket line (`copilot-6d9d.*`): ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 9
+- Plan status: historical live-possible-tasks rollout is completed and superseded by the current task-surface normalization and deprecation specs.
+- Current task-surface source of truth:
+- [voice-task-surface-normalization-spec.md](/home/strato-space/copilot/plan/closed/voice-task-surface-normalization-spec.md)
+- [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/closed/voice-session-possible-tasks-deprecation-plan.md)
+
+**Статус документа**: historical superseded reference; keep for rollout history and pre-normalization live-possible-tasks planning context only
+**Дата**: 2026-03-06
+**Основание**: closed state of `copilot-6d9d`, fully closed child rollout line, and later task-surface truth being carried by the normalization and deprecation docs above.
 
 Engineering note:
 - this document preserves the earlier live-possible-tasks planning context only;

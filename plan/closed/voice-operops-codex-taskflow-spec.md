@@ -1,11 +1,18 @@
 # Voice ↔ OperOps ↔ Codex: Unified Task Flow Spec
 
-## Status
-- Spec state: historical mixed reference
-- Runtime state: partially landed, partially superseded by newer task-surface specs
+## Status ✅Closed
+- Epic ticket (`copilot-bq81`): ✅Closed 1
+- Execution rollout ticket line (`copilot-bq81` dependents): ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 35
+- Plan status: original Voice ↔ OperOps ↔ Codex rollout is closed; current task-surface truth lives in newer normalization/deprecation specs.
+- Master rollout epic: `copilot-bq81`
+- Residual deferred implementation item outside the closed rollout: `copilot-tmcu`
 - Current authoritative specs for task surfaces:
-  - [voice-task-surface-normalization-spec.md](/home/strato-space/copilot/plan/voice-task-surface-normalization-spec.md)
-  - [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/voice-session-possible-tasks-deprecation-plan.md)
+  - [voice-task-surface-normalization-spec.md](/home/strato-space/copilot/plan/closed/voice-task-surface-normalization-spec.md)
+  - [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/closed/voice-session-possible-tasks-deprecation-plan.md)
+
+**Статус документа**: historical mixed reference; rollout closed; keep as broad design context, not as current task-surface source of truth
+**Дата**: 2026-03-27
+**Основание**: closed state of `copilot-bq81`, closed rollout wave under this spec, and residual deferred bug `copilot-tmcu` that remains outside the completed main rollout.
 
 Engineering note:
 - task-surface sections in this document are no longer the source of truth;
@@ -208,7 +215,7 @@ Runtime note:
 ## Additional backlog (2026-02-27)
 
 This section is a decomposition source for bd tasks. Each task references this spec path:
-`/home/strato-space/copilot/plan/voice-operops-codex-taskflow-spec.md`.
+`/home/strato-space/copilot/plan/closed/voice-operops-codex-taskflow-spec.md`.
 
 ### Task card / links / source traceability
 1. Show canonical `task-id` in OperOps task card header.

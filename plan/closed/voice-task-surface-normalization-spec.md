@@ -960,7 +960,7 @@ Voice session может войти в operational bucket только если:
 `voice.session_possible_tasks(session_id)` removed from active runtime/MCP surfaces in this wave.
 
 Concrete removal design is tracked in:
-- [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/voice-session-possible-tasks-deprecation-plan.md)
+- [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/closed/voice-session-possible-tasks-deprecation-plan.md)
 
 Preferred replacement read surface:
 - `voice.session_task_counts(session_id)`
@@ -974,4 +974,4 @@ Result:
 - live prod verification confirms the Voice UI still renders the unified `Задачи` surface correctly after the replacement
 
 Historical design/rollout record:
-- [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/voice-session-possible-tasks-deprecation-plan.md)
+- [voice-session-possible-tasks-deprecation-plan.md](/home/strato-space/copilot/plan/closed/voice-session-possible-tasks-deprecation-plan.md)

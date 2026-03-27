@@ -1,10 +1,17 @@
 # Plan: copilot-xmcm Temporal Coverage and Draft Depth DAG
 
-**Generated**: 2026-03-26
 **Epic**: `copilot-xmcm`
+**Generated**: 2026-03-26
+
+## Status ✅Closed
+
+- Epic ticket (`copilot-xmcm`): ✅Closed 1
+- Task-surface ticket line (`copilot-xmcm.*`): ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 12
+- Plan status: implemented contract; dependency chain fully closed in `bd`; companion spec finalized as `Status ✅Closed`.
+- Snapshot date: 2026-03-27
 
 ## Normative Sources
-- [2026-26-03-voice-date-depth-and-range-fix-spec.md](/home/strato-space/copilot/plan/2026-26-03-voice-date-depth-and-range-fix-spec.md)
+- [2026-26-03-voice-date-depth-and-range-fix-spec.md](/home/strato-space/copilot/plan/closed/2026-26-03-voice-date-depth-and-range-fix-spec.md)
 - `bd` epic/child issues `copilot-xmcm`, `.1` ... `.8`
 
 ## Overview
@@ -27,7 +34,7 @@ Note:
 - Acceptance statements here must use final field names and final matcher semantics only.
 - This planning session changes backlog/docs only; no implementation code is part of this pass.
 
-## Dependency Graph
+## DAG: Directed acyclic graph
 
 ```text
 T1 (copilot-xmcm.2) ── T5 (copilot-xmcm.7) ── T6 (copilot-xmcm.3) ──┬── T7 (copilot-xmcm.1)
