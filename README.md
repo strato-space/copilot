@@ -122,6 +122,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - the `Draft` tab still renders the orphan/session-grouped possible-task backlog above the CRM table as presentation-only grouping,
   - accepted Voice tasks are treated as `Ready` work, not as a separate `Backlog` semantic bucket.
 - OperOps Draft/Archive visibility is operator-controlled with explicit depth presets `1d / 7d / 14d / 30d / ∞`; the default fast list/count surface is `1d`, while `∞` means an unbounded read.
+- Temporal coverage/date-depth planning wave is closed: `plan/2026-26-03-voice-date-depth-and-range-fix-spec.md` is `Status ✅Closed`, and epic `copilot-xmcm` with child line `copilot-xmcm.*` is fully closed in `bd`.
+- Media-bearing attachment transcription planning now has an explicit BD DAG decomposition in `plan/2026-03-27-voice-media-attachment-transcription-spec.md` (`copilot-qtcp` + `.1..7`) and should be executed as bounded swarm waves.
 - OperOps CRM list performance is split by payload mode: `/api/crm/tickets` list views use `response_mode=summary`, while heavy ticket fields (`work_data`, `comments_list`, `attachments`, discussion/source payloads) are hydrated lazily through detail reads when drawers or editors open; Draft/Archive summary and status-count reads may prefilter recency through lightweight source/timestamp projections before trimming transient linkage fields from response payloads.
 
 ## Voice notes

@@ -51,6 +51,7 @@ Current AS-IS behavior intentionally treats such messages as attachment-only. Th
 Normalization rule:
 
 - Telegram `document` is a transport envelope term, not a semantic claim that the payload is a product-side `document artifact`, and not a claim that ASR is inapplicable.
+- In this document, `exact semantic equivalent` means a stable one-to-one schema/read-model mapping whose fields are individually addressable, testable, and exportable for retry/UI logic. Opaque blobs or free-text explanations do not qualify.
 
 ## Ontological Diagnosis
 
@@ -239,6 +240,7 @@ Message-level classification primacy rule:
 - per-attachment classification inside `attachments[]` is authoritative;
 - message-level classification fields are a write-time projection of the attachment at `primary_transcription_attachment_index`;
 - any change to per-attachment classification that can affect primary selection must recompute `primary_transcription_attachment_index`, refresh message-level classification fields, and refresh the top-level transport projection in the same transition.
+- if `primary_transcription_attachment_index` changes, message-level transcript-bearing fields, `is_transcribed`, and `transcription_processing_state` must also be reprojected or invalidated to match the new primary attachment; transcript fact from the demoted attachment may remain only in per-attachment result fields.
 
 ### 4. Caption is not transcript
 
@@ -474,7 +476,6 @@ Recommended per-attachment fields inside `attachments[]`:
 
 - `audio_track_state`
 - `duration_ms` or exact semantic equivalent when known
-- explicit speech-bearing assessment when the implementation persists it directly
 
 If naming differs in implementation, the semantic split above is mandatory.
 
@@ -650,3 +651,231 @@ This document does not claim:
 - Treat caption as sidecar note, not transcript.
 - Preserve top-level primary-attachment transport projection for any resolved primary attachment, with retry-critical recovery guaranteed for eligible attachment-origin media.
 - Distinguish `classified skip` from `transcription error`.
+
+## BD Decomposition
+
+### BD Tracking Links
+
+- Epic: [`copilot-qtcp`](https://copilot.stratospace.fun/operops/codex/task/copilot-qtcp) (`bd show copilot-qtcp --json`)
+- T1: [`copilot-qtcp.1`](https://copilot.stratospace.fun/operops/codex/task/copilot-qtcp.1) (`bd show copilot-qtcp.1 --json`)
+- T2: [`copilot-qtcp.2`](https://copilot.stratospace.fun/operops/codex/task/copilot-qtcp.2) (`bd show copilot-qtcp.2 --json`)
+- T3: [`copilot-qtcp.3`](https://copilot.stratospace.fun/operops/codex/task/copilot-qtcp.3) (`bd show copilot-qtcp.3 --json`)
+- T4: [`copilot-qtcp.4`](https://copilot.stratospace.fun/operops/codex/task/copilot-qtcp.4) (`bd show copilot-qtcp.4 --json`)
+- T5: [`copilot-qtcp.5`](https://copilot.stratospace.fun/operops/codex/task/copilot-qtcp.5) (`bd show copilot-qtcp.5 --json`)
+- T6: [`copilot-qtcp.6`](https://copilot.stratospace.fun/operops/codex/task/copilot-qtcp.6) (`bd show copilot-qtcp.6 --json`)
+- T7: [`copilot-qtcp.7`](https://copilot.stratospace.fun/operops/codex/task/copilot-qtcp.7) (`bd show copilot-qtcp.7 --json`)
+- T8: [`copilot-qtcp.8`](https://copilot.stratospace.fun/operops/codex/task/copilot-qtcp.8) (`bd show copilot-qtcp.8 --json`)
+
+### Dependency Graph
+
+```text
+copilot-qtcp.1 ──┬── copilot-qtcp.2 ──┬── copilot-qtcp.4 ── copilot-qtcp.5 ── copilot-qtcp.6 ── copilot-qtcp.7
+                 │                    │
+                 ├── copilot-qtcp.3 ──┤
+                 └── copilot-qtcp.8 ──┘
+```
+
+### Tasks
+
+#### T1: Normalize Voice Message Contract For Media-Bearing Attachment Transcription
+- **bd issue**: `copilot-qtcp.1`
+- **depends_on**: []
+- **location**:
+  - `backend/src/api/routes/voicebot/sessions.ts`
+  - `backend/src/api/routes/voicebot/messageHelpers.ts`
+  - `app/src/types/voice.ts`
+  - `app/src/store/voiceBotStore.ts`
+- **description**:
+  - introduce the canonical message-level and per-attachment contract from this spec,
+  - define the shared classifier/probe helper contract and backward-compatible defaults for pre-migration rows,
+  - define the explicit schema-version / rollout discriminator needed for transition-era worker repair,
+  - add the fields needed for payload classification, speech-bearing assessment, eligibility/resolution state, processing state, transcript/output projection, and transport projection,
+  - align backend read-model output and frontend types/store normalization around one stable contract.
+- **validation**:
+  - session/message payloads expose the new canonical fields deterministically,
+  - legacy rows degrade safely without violating the new read-model contract,
+  - pre-contract vs post-contract rows are distinguishable without worker-side guessing,
+  - frontend types/store accept the new fields without ad hoc inference,
+  - read-model can distinguish pending classification, pending transcription, classified skip, transcription error, and transcribed.
+- **status**: Not Completed
+- **log**:
+- **files edited/created**:
+
+#### T2: Implement Attachment Ingress Classification And Projection For Transcribable Media
+- **bd issue**: `copilot-qtcp.2`
+- **depends_on**: [`copilot-qtcp.1`]
+- **location**:
+  - `backend/src/voicebot_tgbot/ingressHandlers.ts`
+  - `backend/src/api/routes/voicebot/uploads.ts`
+  - related TG ingress/runtime helpers under `backend/src/voicebot_tgbot/*`
+- **description**:
+  - classify attachment-origin payloads at Telegram and web-upload ingress,
+  - persist per-attachment and message-level projection fields,
+  - keep `source_note_text` separate from transcript-bearing fields,
+  - populate top-level primary attachment transport projection,
+  - stop creating new fake empty `legacy_attachment` transcript placeholders for media-bearing attachment messages.
+- **validation**:
+  - Telegram and web-upload media messages no longer create fake successful transcript rows,
+  - ingress writes the new contract fields for media-bearing attachments,
+  - driver-case Telemost `.webm` lands as a classified message rather than attachment-only ambiguity.
+- **status**: Not Completed
+- **log**:
+- **files edited/created**:
+
+#### T3: Implement Worker-Side Eligibility, Staging, Transport Recovery, And Dedupe Semantics
+- **bd issue**: `copilot-qtcp.3`
+- **depends_on**: [`copilot-qtcp.1`]
+- **location**:
+  - `backend/src/workers/voicebot/handlers/transcribeHandler.ts`
+  - related worker helpers under `backend/src/workers/voicebot/handlers/*`
+- **description**:
+  - make the transcription worker operate by eligibility/projection instead of original envelope kind,
+  - add staging for eligible video when direct ASR is unsafe,
+  - implement Telegram and non-Telegram recovery/error semantics,
+  - define `transcription job key` dedupe behavior,
+  - add a stale-write guard such as `primary_selection_revision` / `transcription_generation`,
+  - retain demoted in-flight completions in per-attachment result fields without corrupting message-level projection.
+- **validation**:
+  - eligible attachment-origin media can be transcribed through the worker path,
+  - pending/ineligible messages do not masquerade as ASR failures,
+  - late completions for stale primary selections cannot overwrite the current primary projection,
+  - primary churn does not let stale transcript truth overwrite current message-level truth.
+- **status**: Not Completed
+- **log**:
+- **files edited/created**:
+
+#### T4: Implement Pending-Classification Probe And Operator Resolution Workflow
+- **bd issue**: `copilot-qtcp.8`
+- **depends_on**: [`copilot-qtcp.1`]
+- **location**:
+  - `backend/src/workers/voicebot/handlers/processingLoop.ts`
+  - `backend/src/api/routes/voicebot/transcription.ts`
+  - `backend/src/api/routes/voicebot/sessions.ts`
+  - `backend/src/api/routes/voicebot/messageHelpers.ts`
+  - supporting worker/service modules for probe execution or explicit operator resolution
+- **description**:
+  - add the non-ASR pending-classification workflow required by the spec,
+  - implement classifier/probe execution and explicit operator resolution from pending to eligible/ineligible,
+  - clear stale skip/error state on regressions,
+  - make pending items actionable through API/read-model surfaces instead of passive markers only.
+- **validation**:
+  - pending-classification messages route to explicit probe/review handling,
+  - operator-visible pending items can actually be resolved,
+  - regressions out of eligible clear stale error/skip artifacts deterministically.
+- **status**: Not Completed
+- **log**:
+- **files edited/created**:
+
+#### T5: Align Retry And Processing-Loop Orchestration With Eligibility States
+- **bd issue**: `copilot-qtcp.4`
+- **depends_on**: [`copilot-qtcp.1`, `copilot-qtcp.2`, `copilot-qtcp.3`, `copilot-qtcp.8`]
+- **location**:
+  - `backend/src/api/routes/voicebot/transcription.ts`
+  - `backend/src/workers/voicebot/handlers/processingLoop.ts`
+  - session-level retry helpers under `backend/src/api/routes/voicebot/*`
+- **description**:
+  - update retry entrypoints and processing-loop selectors so only eligible/non-transcribed items re-arm ASR,
+  - keep pending-classification messages on the non-ASR probe/review path,
+  - remove caption/text fallback paths that can leak source notes back as transcript truth,
+  - align retry/orchestration semantics with the new state machine and stale-write guard.
+- **validation**:
+  - retry marks only eligible/non-transcribed items for ASR,
+  - pending-classification messages are reported distinctly and not silently no-op'ed,
+  - processing loop avoids duplicate in-flight work for the same `transcription job key`.
+- **status**: Not Completed
+- **log**:
+- **files edited/created**:
+
+#### T6: Expose Attachment Transcription States And Projection In Sessions/API/UI Surfaces
+- **bd issue**: `copilot-qtcp.5`
+- **depends_on**: [`copilot-qtcp.1`, `copilot-qtcp.2`, `copilot-qtcp.3`, `copilot-qtcp.4`, `copilot-qtcp.8`]
+- **location**:
+  - `backend/src/api/routes/voicebot/sessions.ts`
+  - `backend/src/api/routes/voicebot/messageHelpers.ts`
+  - `backend/src/api/routes/voicebot/transcription.ts`
+  - `app/src/types/voice.ts`
+  - `app/src/store/voiceBotStore.ts`
+  - `app/src/components/voice/Transcription.tsx`
+  - related voice UI surfaces under `app/src/components/voice/*`
+- **description**:
+  - surface pending classification, pending transcription, classified skip, transcription error, primary attachment projection, and per-attachment metadata/results in backend responses and frontend operator views,
+  - keep operator-visible semantics aligned with the canonical processing state contract,
+  - ensure pending items are actionable only once the pending-classification workflow exists.
+- **validation**:
+  - session/operator UI can distinguish all required states without heuristic inference,
+  - per-attachment metadata/results are visible where needed for inspection,
+  - message-level projection shown in UI matches backend primary attachment projection.
+- **status**: Not Completed
+- **log**:
+- **files edited/created**:
+
+#### T7: Add Regression Coverage For Media-Bearing Attachment Transcription Matrix
+- **bd issue**: `copilot-qtcp.6`
+- **depends_on**: [`copilot-qtcp.2`, `copilot-qtcp.3`, `copilot-qtcp.4`, `copilot-qtcp.5`, `copilot-qtcp.8`]
+- **location**:
+  - `backend/__tests__/voicebot/runtime/*`
+  - `backend/__tests__/smoke/*`
+  - `app/src/**/*.test.*`
+  - route/runtime contract suites touched by the implementation
+- **description**:
+  - encode the spec validation matrix in automated coverage,
+  - cover the Telemost `.webm` driver flow, caption vs transcript split, pending classification, skip reasons, transport expiry, retry gating, multi-attachment primary selection, and worker recovery/idempotency behavior,
+  - add at least one frontend/store contract regression for the new state mapping.
+- **validation**:
+  - automated suites exercise the core validation matrix cases,
+  - at least one smoke/runtime path covers the document-delivered Telemost driver case end-to-end,
+  - frontend/store tests fail if state mapping or note-vs-transcript separation regresses.
+- **status**: Not Completed
+- **log**:
+- **files edited/created**:
+
+#### T8: Optional Repair/Backfill For Historical `legacy_attachment` Media Messages
+- **bd issue**: `copilot-qtcp.7`
+- **depends_on**: [`copilot-qtcp.2`, `copilot-qtcp.3`, `copilot-qtcp.4`, `copilot-qtcp.6`]
+- **location**:
+  - historical repair scripts or migration helpers under `backend/` or `scripts/`
+  - any supporting docs/tests needed for rollout
+- **description**:
+  - design and implement the optional Phase 3 repair path for historical attachment-origin media records,
+  - identify eligible historical messages,
+  - populate projection/classification fields and eliminate continued dependence on fake-empty transcript semantics.
+- **validation**:
+  - repair path can distinguish historical eligible media from unsupported attachments,
+  - backfill does not regress current forward-correctness,
+  - rollout can be run independently after core feature correctness lands.
+- **status**: Not Completed
+- **log**:
+- **files edited/created**:
+
+## Parallel Execution Groups
+
+| Wave | Tasks | Can Start When |
+|------|-------|----------------|
+| 1 | `copilot-qtcp.1` | Immediately |
+| 2 | `copilot-qtcp.2`, `copilot-qtcp.3`, `copilot-qtcp.8` | `copilot-qtcp.1` complete |
+| 3 | `copilot-qtcp.4` | `copilot-qtcp.1`, `copilot-qtcp.2`, `copilot-qtcp.3`, `copilot-qtcp.8` complete |
+| 4 | `copilot-qtcp.5` | `copilot-qtcp.1`, `copilot-qtcp.2`, `copilot-qtcp.3`, `copilot-qtcp.4`, `copilot-qtcp.8` complete |
+| 5 | `copilot-qtcp.6` | `copilot-qtcp.2`, `copilot-qtcp.3`, `copilot-qtcp.4`, `copilot-qtcp.5`, `copilot-qtcp.8` complete |
+| 6 | `copilot-qtcp.7` | `copilot-qtcp.2`, `copilot-qtcp.3`, `copilot-qtcp.4`, `copilot-qtcp.6` complete |
+
+## Testing Strategy
+
+- Use the validation matrix in this spec as the canonical acceptance surface for backend/runtime coverage.
+- Validate the Telemost `.webm` driver case through attachment ingress, worker execution, retry gating, and operator-visible read-model/UI status.
+- Cover both Telegram ingress and the web upload path so old placeholder/fallback semantics cannot survive through a side surface.
+- Add regression coverage for multi-attachment primary selection, demoted in-flight ASR completion handling, transport expiry, and the prohibition on new fake-empty transcript rows.
+
+## Risks & Mitigations
+
+- Risk: contract work leaks across ingress, worker, retry, and UI simultaneously.
+  Mitigation: keep `copilot-qtcp.1` as the schema/read-model anchor before parallel backend/frontend work starts.
+- Risk: legacy side paths (`uploads.ts`, read fallback in `transcription.ts`) keep old semantics alive.
+  Mitigation: fold both paths into `copilot-qtcp.2` and `copilot-qtcp.4` rather than treating Telegram ingress as the only migration surface.
+- Risk: primary-attachment churn corrupts message-level transcript truth.
+  Mitigation: land worker-side per-attachment result sink and transcript reprojection/invalidation before enabling override-heavy flows.
+- Risk: retry route re-arms the wrong population or duplicates work.
+  Mitigation: gate `copilot-qtcp.4` on both ingress and worker contracts, and validate with explicit regression coverage in `copilot-qtcp.6`.
+- Risk: pending-classification states become visible but not actionable.
+  Mitigation: keep `copilot-qtcp.8` as a first-class task that lands before retry/UI/test waves.
+- Risk: historical cleanup expands the first-wave scope.
+  Mitigation: keep `copilot-qtcp.7` explicitly optional and downstream of core correctness.

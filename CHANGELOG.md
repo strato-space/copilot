@@ -5,11 +5,13 @@
 - **08:34** После аварийного рестарта прод-среды часть Voice runtime-поведения оставалась недетерминированной: readiness запускался неявно, notify-поверхность проверялась вручную, а восстановление PM2-процессов зависело от локального состояния хоста.
 - **08:34** CRM temporal/read contracts продолжали принимать смешанные legacy-формы параметров (`mode`, диапазоны дат, `include_older_drafts`), что создавало drift между app/backend и давало нестабильные результаты в session/task списках.
 - **08:34** Session/task linkage и recency-семантика для Voice Drafts сохраняли риски stale-сопоставлений и неунифицированного `updated_at` bump при смешанных типах данных на маршрутах CRM/Voice.
+- **10:44** Temporal range/depth spec closure status was still ambiguous (`Draft` header with implemented child backlog), which blocked objective closeout of the planning wave.
 
 ### FEATURE IMPLEMENTED
 - **08:34** Добавлен production-grade runtime recovery kit: отдельные readiness/healthcheck скрипты, bootstrap-путь для PM2, и тестовое покрытие на обязательные recovery-инварианты после сбоя.
 - **08:34** Temporal API-контракт приведен к каноническому виду: нормализация `response_mode` и диапазонов дат, удаление deprecated-пути `include_older_drafts`, плюс parity-тесты для route matcher/runtime.
 - **08:34** Усилен Voice Draft consistency layer: безопасная нормализация date-like значений, устойчивое `updated_at` поведение и явная рекомпоновка session linkage в persistence/read путях.
+- **10:44** Finalized a strict 5-gate spec closeout for the temporal wave and closed epic `copilot-xmcm` after verifying all dependent tickets are closed.
 
 ### CHANGES
 - **08:34** Добавлены скрипты `scripts/pm2-runtime-readiness.sh` и `scripts/voice-notify-healthcheck.sh`, обновлен `scripts/pm2-backend.sh`, добавлены тесты `backend/__tests__/scripts/{pm2RuntimeReadiness,voiceNotifyHealthcheck,pm2BackendProdBootstrap}.test.ts`.
@@ -19,6 +21,7 @@
 - **08:34** Verification:
   - `bash -n scripts/voice-notify-healthcheck.sh scripts/pm2-runtime-readiness.sh scripts/pm2-backend.sh`
   - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/scripts/voiceNotifyHealthcheck.test.ts __tests__/scripts/pm2RuntimeReadiness.test.ts __tests__/scripts/pm2BackendProdBootstrap.test.ts __tests__/services/voicebot/agentsRuntimeRecovery.test.ts __tests__/services/voicebot/createTasksAgentRecovery.test.ts`
+- **10:44** Updated spec headers and status accounting in `plan/2026-26-03-voice-date-depth-and-range-fix-spec.md` (`Status ✅Closed`, real ticket-line counters), accepted and preserved the expanded `copilot-qtcp` BD decomposition in `plan/2026-03-27-voice-media-attachment-transcription-spec.md`, and closed `copilot-xmcm` in `bd` with close reason tied to dependency/quality gates.
 
 ## 2026-03-26
 ### PROBLEM SOLVED

@@ -1,8 +1,11 @@
 # Спецификация: глубина в днях и date-range фильтрация Voice/CRM
 
-## Status
-- Spec state: 🟡Draft (implementation required)
-- Date: 2026-03-26
+## Status ✅Closed
+
+- Task-surface ticket line (`copilot-xmcm.*`): ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 12
+- Epic ticket (`copilot-xmcm`): ⚪Open 0  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 1
+- Plan status: implemented contract; task-surface and epic line closed; dependency chain fully closed in `bd`.
+- Snapshot date: 2026-03-27
 - Related epic: `copilot-xmcm`
 
 ## Контекст
