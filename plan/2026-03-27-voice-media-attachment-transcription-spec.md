@@ -1,11 +1,17 @@
 # Voice Media-Bearing Attachment Transcription Spec
 
-## Status
+## Status 🟡Draft
 
-- Created: 2026-03-27
-- Status: draft for discussion
-- Role: feature spec for transcribable attachment media in Voice sessions
+- Media-attachment ticket line: ⚪Open 9  🟡In Progress 0  💤Deferred 0  ⛔Blocked 0  ✅Closed 0
+- Plan status: spec drafted; ontology and forensic basis captured; `bd` decomposition and dependency DAG landed; implementation not started.
+- Canonical design epic: `copilot-qtcp`
+- Planned execution tasks: `copilot-qtcp.1`, `copilot-qtcp.2`, `copilot-qtcp.3`, `copilot-qtcp.4`, `copilot-qtcp.5`, `copilot-qtcp.6`, `copilot-qtcp.7`, `copilot-qtcp.8`
 - Canonical driver case: Telegram-delivered Telemost recording `.webm` attached into an active Voice session as `message_type=document`
+- Forensic driver session: `69c60caf4926f6f263d066d6`
+
+**Статус документа**: draft for discussion; execution DAG embedded; implementation not started
+**Дата**: 2026-03-27
+**Основание**: ontology documents `voice-dual-stream-ontology.md` and `voice-ontology-persistence-alignment-spec.md`, forensic session `69c60caf4926f6f263d066d6`, and the embedded `bd` execution plan rooted at `copilot-qtcp`.
 
 ## Inputs
 

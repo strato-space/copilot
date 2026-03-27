@@ -11,6 +11,58 @@
 - Backend Jest ESM runtime `ExperimentalWarning: VM Modules` noise: `copilot-2int` (closed).
 - Independent ticket review status: `go`.
 
+## Greek-Scholastic Review
+
+### Ontology
+
+Нормализация терминов:
+
+- `noise` = не-assertion вывод в passing run.
+- `deprecation` = код использует устаревший upstream contract; тест лишь проявляет это.
+- `render defect` = код генерирует невалидное состояние/значение во время рендера.
+- `harness leak` = полезная runtime-диагностика протекает в stdout тестов без явного контракта.
+
+При этой нормализации разбиение sound, но не все новые находки принадлежат одному и тому же роду.
+
+- `copilot-8h9u.1`, `copilot-8h9u.2`, `copilot-8h9u.3` — не просто noise. Это frontend dependency-contract bugs. Их надо чинить в коде, а не подавлять.
+- `copilot-8h9u.4` — категорически не `noise-only`. Это render invariant defect. Контрпример: если тот же `PossibleTasks` в живом UI когда-либо materialize `height=NaN`, дефект существует и без Jest. Тест его обнаружил, но не создал.
+- `copilot-8h9u.5` — это подлинный test-harness/logging boundary issue. Тут речь именно о шуме, а не о продуктовой логике.
+
+### Logic
+
+Скрытая ошибка была бы такая: все, что видно в test output, есть один класс noise. Это неверно.
+
+Premises:
+
+1. AntD deprecation warning указывает на устаревший API usage.
+2. React `NaN height` warning указывает на невалидное вычисление значения.
+3. Runtime `console.*` в passing tests указывает на отсутствие test logging contract.
+4. Эти три сигнала требуют разных repair strategies.
+
+Следствие:
+
+- единый эпик по симптому допустим как umbrella;
+- единый способ починки недопустим;
+- убирать шум через suppress/mute везде было бы salvage by trivialization: проблема исчезнет из stdout, но не из кода.
+
+### Modalities
+
+- Necessary: `copilot-8h9u.4` трактовать как реальный bug и чинить раньше чисто декоративных deprecation migration.
+- Necessary: `copilot-8h9u.1`, `copilot-8h9u.2`, `copilot-8h9u.3` чинить source-level migration, не test suppression.
+- Possible: держать все под `copilot-8h9u` как discovery umbrella.
+- Better: при исполнении приоритизировать `.4` выше `.5`.
+- Forbidden: глобально заглушить `console.error/warn` или AntD warnings, не устранив source cause.
+
+### Conclusion
+
+По `greek-scholastic` текущее разбиение в основном корректно. Минимальная поправка такая:
+
+- `copilot-8h9u.1`, `copilot-8h9u.2`, `copilot-8h9u.3` = migration bugs
+- `copilot-8h9u.4` = actual render bug
+- `copilot-8h9u.5` = harness/logging noise bug
+
+Эпик `copilot-8h9u` валиден как umbrella кампании, но онтологически главный содержательный дефект в app rerun — не deprecation, а `copilot-8h9u.4`.
+
 
 > copilot-backend@1.0.1 test:parallel-safe
 > NODE_OPTIONS='--experimental-vm-modules' jest --maxWorkers=${BACKEND_JEST_MAX_WORKERS:-50%} --testPathIgnorePatterns='/__tests__/smoke/' __tests__/api/crmCodexRouteRuntime.test.ts __tests__/api/crmCodexRouteContract.test.ts

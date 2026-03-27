@@ -22,6 +22,7 @@
   - `bash -n scripts/voice-notify-healthcheck.sh scripts/pm2-runtime-readiness.sh scripts/pm2-backend.sh`
   - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/scripts/voiceNotifyHealthcheck.test.ts __tests__/scripts/pm2RuntimeReadiness.test.ts __tests__/scripts/pm2BackendProdBootstrap.test.ts __tests__/services/voicebot/agentsRuntimeRecovery.test.ts __tests__/services/voicebot/createTasksAgentRecovery.test.ts`
 - **10:44** Updated spec headers and status accounting in `plan/2026-26-03-voice-date-depth-and-range-fix-spec.md` (`Status ✅Closed`, real ticket-line counters), accepted and preserved the expanded `copilot-qtcp` BD decomposition in `plan/2026-03-27-voice-media-attachment-transcription-spec.md`, and closed `copilot-xmcm` in `bd` with close reason tied to dependency/quality gates.
+- **10:50** Accepted and preserved additional forensic/planning notes in `plan/2026-03-27-test-noise.md` (Greek-scholastic classification split for `copilot-8h9u.*`) as part of close-session “accept all local changes” policy.
 
 ## 2026-03-26
 ### PROBLEM SOLVED
