@@ -551,6 +551,11 @@ const isPayloadTooLargeError = (error: unknown): boolean => {
 const getOpenAIKeySource = (): string =>
   OPENAI_KEY_ENV_NAMES.find((name) => Boolean(process.env[name])) || 'OPENAI_API_KEY';
 
+const getConfiguredOpenAiApiKey = (): string => {
+  const source = getOpenAIKeySource();
+  return String(process.env[source] || '').trim();
+};
+
 const maskOpenAIKey = (apiKey: string): string => {
   const raw = String(apiKey || '');
   if (!raw) return 'unknown';
@@ -896,8 +901,7 @@ const downloadTelegramFileToLocal = async ({
 };
 
 const createOpenAiClient = (): { apiKey: string; client: OpenAI | null } => {
-  const source = getOpenAIKeySource();
-  const key = String(process.env[source] || '').trim();
+  const key = getConfiguredOpenAiApiKey();
   if (!key) return { apiKey: '', client: null };
   return {
     apiKey: key,
@@ -1502,6 +1506,7 @@ export const handleTranscribeJob = async (
     }
   }
 
+  const configuredOpenAiApiKey = getConfiguredOpenAiApiKey();
   let filePath = String(message.file_path || '').trim();
   let telegramTransportError: Record<string, unknown> | null = null;
   if (!filePath) {
@@ -1646,7 +1651,7 @@ export const handleTranscribeJob = async (
         transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIPTION_ERROR,
         transcription_error_context: {
           ...getTranscriptionErrorContext({
-            apiKey: '',
+            apiKey: configuredOpenAiApiKey,
             filePath: null,
             errorCode,
           }),
@@ -1747,7 +1752,7 @@ export const handleTranscribeJob = async (
         transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIPTION_ERROR,
         transcription_error_context: {
           ...getTranscriptionErrorContext({
-            apiKey: '',
+            apiKey: configuredOpenAiApiKey,
             filePath,
             errorCode,
           }),

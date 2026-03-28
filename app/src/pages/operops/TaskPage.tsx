@@ -634,7 +634,7 @@ const TaskPage = () => {
 
                     {/* Quick Actions */}
                     <Card title="Quick Actions" variant="borderless" size="small">
-                        <Space direction="horizontal" className="w-full">
+                        <Space orientation="horizontal" className="w-full">
                             <Button icon={<CommentOutlined />}>Add Comment</Button>
                             <Button icon={<ClockCircleOutlined />}>Track Time</Button>
                             {task.notion_url && (
@@ -651,7 +651,7 @@ const TaskPage = () => {
                             <Timeline
                                 items={task.comments_list.map((comment) => ({
                                     color: 'green',
-                                    children: (
+                                    content: (
                                         <div>
                                             <div className="flex items-center gap-2 mb-1">
                                                 <Text strong>{typeof comment.author === 'object' ? comment.author?.name : comment.author ?? 'Unknown'}</Text>
@@ -680,7 +680,7 @@ const TaskPage = () => {
                             <Timeline
                                 items={discussionSessions.map((entry) => ({
                                     color: 'blue',
-                                    children: (
+                                    content: (
                                         <div className="flex flex-col gap-1">
                                             <a
                                                 href={`${CANONICAL_VOICE_SESSION_URL_BASE}/${encodeURIComponent(entry.session_id)}`}
@@ -720,7 +720,7 @@ const TaskPage = () => {
                             <Timeline
                                 items={workHoursData.map((wh) => ({
                                     color: 'blue',
-                                    children: (
+                                    content: (
                                         <div>
                                             <div className="flex items-center gap-2 mb-1">
                                                 <Text strong>{wh.work_hours}h</Text>

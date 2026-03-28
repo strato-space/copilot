@@ -64,6 +64,20 @@ const { Text } = Typography;
 
 const PRIORITY_VALUES = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'] as const;
 const AUTOSAVE_DEBOUNCE_MS = 5000;
+const DESCRIPTION_AUTOSIZE_MIN_ROWS = 24;
+const DESCRIPTION_AUTOSIZE_MAX_ROWS = 40;
+
+const supportsTextareaAutosize = (): boolean => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+  const root = document.documentElement;
+  if (!root || typeof root.getBoundingClientRect !== 'function') return false;
+  const { height } = root.getBoundingClientRect();
+  return Number.isFinite(height) && height > 0;
+};
+
+const DESCRIPTION_AUTOSIZE_CONFIG = supportsTextareaAutosize()
+  ? { minRows: DESCRIPTION_AUTOSIZE_MIN_ROWS, maxRows: DESCRIPTION_AUTOSIZE_MAX_ROWS }
+  : false;
 
 const PERFORMER_PICKER_POPUP_HEIGHT = {
   mobile: 320,
@@ -1211,7 +1225,8 @@ function PossibleTasksSessionScope() {
                 <Text strong>Описание (Markdown)</Text>
                 <Input.TextArea
                   status={activeRow.__missing.includes('description') ? 'error' : ''}
-                  autoSize={{ minRows: 24, maxRows: 40 }}
+                  autoSize={DESCRIPTION_AUTOSIZE_CONFIG}
+                  rows={DESCRIPTION_AUTOSIZE_CONFIG ? undefined : DESCRIPTION_AUTOSIZE_MIN_ROWS}
                   value={activeRow.description}
                   onChange={(event) => setDraftValue(activeRow.row_id, 'description', event.target.value)}
                   onFocus={() => focusDetailField('description')}

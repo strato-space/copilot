@@ -331,6 +331,8 @@ describe('handleTranscribeJob', () => {
     const context = setPayload.transcription_error_context as Record<string, unknown>;
     expect(String(context.telegram_file_id || '')).toBe('AQAD-tele-file-id');
     expect(String(context.error_code || '')).toBe('missing_transport');
+    expect(context.openai_key_present).toBe(true);
+    expect(String(context.openai_key_mask || '')).toMatch(/^sk-\.\.\.[A-Za-z0-9_-]{4}$/);
   });
 
   it('downloads telegram transport by file_id and continues transcription when file_path is missing', async () => {

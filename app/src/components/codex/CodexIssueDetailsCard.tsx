@@ -395,7 +395,7 @@ export default function CodexIssueDetailsCard({ issue, issueIdFallback, extra }:
 
     return (
         <Card title={toText(issue.title) || 'Без заголовка'}>
-            <Descriptions bordered size="small" column={1} labelStyle={{ width: 220 }}>
+            <Descriptions bordered size="small" column={1} styles={{ label: { width: 220 } }}>
                 <Descriptions.Item label="Issue ID">
                     {renderIssueIdToken(displayIssueId)}
                 </Descriptions.Item>
@@ -409,7 +409,7 @@ export default function CodexIssueDetailsCard({ issue, issueIdFallback, extra }:
             {relationshipRows.length > 0 ? (
                 <div className="mt-5">
                     <Text strong>Relationships</Text>
-                    <Descriptions bordered size="small" column={1} labelStyle={{ width: 220 }} className="mt-2">
+                    <Descriptions bordered size="small" column={1} styles={{ label: { width: 220 } }} className="mt-2">
                         {relationshipRows.map((row) => (
                             <Descriptions.Item key={row.key} label={row.label}>
                                 {renderRelationshipItems(row.items, row.key)}
@@ -434,8 +434,8 @@ export default function CodexIssueDetailsCard({ issue, issueIdFallback, extra }:
                     <Text strong>Comments</Text>
                     <div className="mt-2 space-y-3">
                         {comments.map((comment) => (
-                            <Card key={comment.key} size="small" bodyStyle={{ padding: 12 }}>
-                                <Space direction="vertical" size={4} className="w-full">
+                            <Card key={comment.key} size="small" styles={{ body: { padding: 12 } }}>
+                                <Space orientation="vertical" size={4} className="w-full">
                                     <Space size={8} wrap>
                                         <Text strong>{comment.author}</Text>
                                         <Text type="secondary">{comment.createdAt}</Text>

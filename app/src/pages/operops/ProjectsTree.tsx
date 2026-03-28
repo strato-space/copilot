@@ -855,7 +855,7 @@ const ProjectsTree: React.FC = () => {
                     okText="Переместить"
                     width={560}
                 >
-                    <Space direction="vertical" size={14} className="w-full">
+                    <Space orientation="vertical" size={14} className="w-full">
                         <Text>
                             {moveDialog.row?.type === 'group'
                                 ? `Группа: ${moveDialog.row?.name ?? '—'}`
@@ -910,7 +910,7 @@ const ProjectsTree: React.FC = () => {
                     ]}
                     width={680}
                 >
-                    <Space direction="vertical" size={14} className="w-full">
+                    <Space orientation="vertical" size={14} className="w-full">
                         <Text>Источник: {mergeDialog.sourceRow?.name ?? '—'}</Text>
                         <Select
                             value={mergeDialog.targetId}

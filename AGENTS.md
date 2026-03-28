@@ -761,6 +761,12 @@ For more details, see `.beads/README.md`, run `bd quickstart`, or use `bd --help
 - If push fails, resolve and retry until it succeeds
 
 ## Session closeout update
+- Close-session refresh (2026-03-28 00:40):
+  - Closed Phase I of the current Voice stabilization program: `copilot-qtcp.9` plus the full `copilot-8h9u*` test-noise/UI-warning bundle are now resolved in repo and in `bd`.
+  - Closed Phase II (`copilot-c4n8`, `copilot-haq2`): WebRTC now blocks stale late chunk uploads after `Done`, guarantees fallback transition correlation for the close path, and the existing end-to-end `create_tasks` correlation logging was re-verified and accepted as canonical.
+  - Hardened transcription forensics in `backend/src/workers/voicebot/handlers/transcribeHandler.ts` so missing transport/path error branches report the real configured OpenAI runtime-key state instead of a false `openai_key_present=false` diagnosis.
+  - Replaced the previously rejected test-only textarea workaround with a capability-based autosize guard in `app/src/components/voice/PossibleTasks.tsx`, and removed remaining Ant Design deprecation surfaces from active Voice/OperOps pages.
+  - Validation passed: `cd app && npm test`, `cd backend && npm run test:parallel-safe`.
 - Close-session refresh (2026-03-27 10:10):
   - Hardened post-restart recovery paths in backend CRM/Voice routes: `backend/src/api/routes/crm/{tickets.ts,codex.ts}` and `backend/src/api/routes/voicebot/{sessions.ts,uploads.ts}` now keep deterministic temporal/forensic behavior under retry and transport drift.
   - Added focused regression coverage for the same surfaces (`backend/__tests__/api/crm*`, `backend/__tests__/voicebot/session/sessionDoneRoute.test.ts`, `backend/__tests__/voicebot/runtime/uploadAudioRoute.test.ts`, `backend/__tests__/smoke/voicebotApiSmoke.test.ts`).

@@ -6,6 +6,8 @@ describe('Voice activate_session resilience contract', () => {
   const storeSource = fs.readFileSync(storePath, 'utf8');
   const webrtcPath = path.resolve(process.cwd(), 'public/webrtc/webrtc-voicebot-lib.js');
   const webrtcSource = fs.readFileSync(webrtcPath, 'utf8');
+  let warnSpy: jest.SpyInstance;
+  let errorSpy: jest.SpyInstance;
 
   function extractStoreMethodBody(source: string, signature: string): string {
     const start = source.indexOf(signature);
@@ -54,6 +56,15 @@ describe('Voice activate_session resilience contract', () => {
     return factory({ ...deps, console }) as (sessionId: string) => Promise<boolean>;
   }
 
+  beforeEach(() => {
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('retries transient activate_session errors and succeeds after recovery', async () => {
     const errors = [new Error('timeout-1'), new Error('timeout-2')];
     const request = jest.fn(async () => {
@@ -71,6 +82,27 @@ describe('Voice activate_session resilience contract', () => {
 
     await expect(activateSession('session-123')).resolves.toBe(true);
     expect(request).toHaveBeenCalledTimes(3);
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenNthCalledWith(
+      1,
+      'Повтор активации сессии после сетевой ошибки',
+      expect.objectContaining({
+        sessionId: 'session-123',
+        attempt: 1,
+        maxAttempts: 3,
+        retryDelayMs: 250,
+      })
+    );
+    expect(warnSpy).toHaveBeenNthCalledWith(
+      2,
+      'Повтор активации сессии после сетевой ошибки',
+      expect.objectContaining({
+        sessionId: 'session-123',
+        attempt: 2,
+        maxAttempts: 3,
+        retryDelayMs: 500,
+      })
+    );
   });
 
   it('does not treat 409 session_inactive as successful local fallback activation', async () => {
@@ -95,6 +127,15 @@ describe('Voice activate_session resilience contract', () => {
 
     await expect(activateSession('session-123')).resolves.toBe(false);
     expect(request).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith('Ошибка при активации сессии:', inactiveConflict);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Локальный fallback активации отменен: сессия уже закрыта на сервере',
+      expect.objectContaining({ sessionId: 'session-123' })
+    );
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      'Повтор активации сессии после сетевой ошибки',
+      expect.anything()
+    );
   });
 
   it('uses retry + degraded fallback for activate_session in webrtc runtime', () => {

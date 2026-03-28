@@ -14,8 +14,9 @@ describe('Voice socket realtime contract', () => {
   it('upserts realtime messages and keeps chronological sort', () => {
     expect(source).toContain('const messageListUtils = {');
     expect(source).toContain('sort(messages: VoiceBotMessage[]): VoiceBotMessage[] {');
-    expect(source).toContain('const updatedMessages = messageListUtils.upsert(state.voiceBotMessages, data)');
-    expect(source).toContain('const updatedMessages = messageListUtils.upsert(state.voiceBotMessages, data.message as VoiceBotMessage)');
+    expect(source).toContain('const normalizedIncoming = normalizeVoiceBotMessage(data.message);');
+    expect(source).toContain('const normalizedIncoming = normalizeVoiceBotMessage(data);');
+    expect(source).toContain('const updatedMessages = messageListUtils.upsert(state.voiceBotMessages, normalizedIncoming)');
   });
 
   it('handles session_status done_queued to update local session state without refresh', () => {

@@ -549,6 +549,12 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-03-28 00:40):
+  - Closed Phase I of the current Voice stabilization wave: `copilot-qtcp.9` and the full `copilot-8h9u*` test-noise/UI-warning bundle are resolved and synchronized in `bd`.
+  - Closed Phase II (`copilot-c4n8`, `copilot-haq2`): WebRTC now drops stale post-`Done` chunk uploads with guaranteed fallback transition correlation, and the end-to-end `create_tasks` correlation logging contract was re-verified as already canonical.
+  - Hardened transcription forensics in `backend/src/workers/voicebot/handlers/transcribeHandler.ts` so missing transport/path branches surface the real configured OpenAI runtime-key state instead of a false negative.
+  - Replaced the rejected test-only textarea workaround with a capability-based autosize guard in `app/src/components/voice/PossibleTasks.tsx`, and removed the remaining Ant Design deprecation surfaces from active Voice/OperOps pages.
+  - Validation passed: `cd app && npm test`, `cd backend && npm run test:parallel-safe`.
 - Close-session refresh (2026-03-27 10:10):
   - Hardened recovery-critical backend paths in `crm/tickets`, `crm/codex`, `voicebot/sessions`, and `voicebot/uploads` so restart/post-recovery behavior is deterministic and forensic correlation survives route boundaries.
   - Added targeted regression coverage for CRM temporal contracts, session-done/upload trace continuity, and backend smoke stability (`backend/__tests__/api/*`, `backend/__tests__/voicebot/*`, `backend/__tests__/smoke/voicebotApiSmoke.test.ts`).

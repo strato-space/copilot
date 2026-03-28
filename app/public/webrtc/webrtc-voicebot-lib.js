@@ -81,6 +81,61 @@
                 correlation_id: normalized,
             };
         }
+        function resolveTransitionCorrelationId(opts = {}) {
+            return normalizeTransitionId(
+                opts?.transition_id || opts?.transitionId || opts?.correlation_id || opts?.correlationId
+            ) || createTransitionCorrelationId();
+        }
+        const DONE_CLOSED_SESSION_TTL_MS = 15 * 60 * 1000;
+        const DONE_CLOSED_SESSION_MAX_ENTRIES = 128;
+        const doneClosedSessionMeta = new Map();
+        function pruneDoneClosedSessionMeta(nowTs = Date.now()) {
+            try {
+                for (const [sessionId, meta] of doneClosedSessionMeta.entries()) {
+                    const closedAtMs = Number(meta?.closed_at_ms || 0);
+                    if (!closedAtMs || (nowTs - closedAtMs) > DONE_CLOSED_SESSION_TTL_MS) {
+                        doneClosedSessionMeta.delete(sessionId);
+                    }
+                }
+                while (doneClosedSessionMeta.size > DONE_CLOSED_SESSION_MAX_ENTRIES) {
+                    const oldestKey = doneClosedSessionMeta.keys().next().value;
+                    if (!oldestKey) break;
+                    doneClosedSessionMeta.delete(oldestKey);
+                }
+            } catch {}
+        }
+        function rememberDoneClosedSession(sessionId, transitionId = '') {
+            const normalizedSessionId = String(sessionId || '').trim();
+            if (!normalizedSessionId) return null;
+            const nowTs = Date.now();
+            const normalizedTransitionId = normalizeTransitionId(transitionId);
+            const meta = {
+                session_id: normalizedSessionId,
+                transition_id: normalizedTransitionId,
+                correlation_id: normalizedTransitionId,
+                closed_at_ms: nowTs,
+            };
+            doneClosedSessionMeta.set(normalizedSessionId, meta);
+            pruneDoneClosedSessionMeta(nowTs);
+            return meta;
+        }
+        function getDoneClosedSessionMeta(sessionId) {
+            const normalizedSessionId = String(sessionId || '').trim();
+            if (!normalizedSessionId) return null;
+            pruneDoneClosedSessionMeta(Date.now());
+            const meta = doneClosedSessionMeta.get(normalizedSessionId);
+            return (meta && typeof meta === 'object') ? meta : null;
+        }
+        function buildDoneClosedUploadTrace(sessionId, extra = {}) {
+            const normalizedSessionId = String(sessionId || '').trim();
+            const base = { session_id: normalizedSessionId, ...extra };
+            const meta = getDoneClosedSessionMeta(normalizedSessionId);
+            if (!meta) return base;
+            return withTransitionTraceFields(meta.transition_id, {
+                ...base,
+                closed_at_ms: Number(meta.closed_at_ms || 0),
+            });
+        }
         function isCableLabel(label) {
             return /(cable output|virtual cable)/i.test(String(label || ''));
         }
@@ -3996,7 +4051,7 @@
 
         async function handleDoneAction(opts = {}) {
             const isLogout = !!opts.logout;
-            const transitionId = normalizeTransitionId(opts?.transition_id || opts?.transitionId || opts?.correlation_id || opts?.correlationId);
+            const transitionId = resolveTransitionCorrelationId(opts);
             if (isFinalUploading) return false;
 
             if (!AUTH_TOKEN) {
@@ -4098,6 +4153,7 @@
                 // Close session (best-effort).
                 const closeOk = await closeSessionViaRest(prevSid, withTransitionTraceFields(transitionId, { timeoutMs: 4000 }));
                 if (!closeOk) throw new Error('session_done_failed');
+                rememberDoneClosedSession(prevSid, transitionId);
                 if (transitionId) {
                     try {
                         logUi('old_session_closed', withTransitionTraceFields(transitionId, {
@@ -6527,10 +6583,36 @@
                     if (!sessionId && sessionBinding !== 'recording') {
                         sessionId = getSessionIdValue();
                     }
-                    if (!sessionId && sessionBinding === 'recording') {
+	            if (!sessionId && sessionBinding === 'recording') {
                         throw new Error('Chunk upload blocked: recording session binding is missing');
                     }
                     if (sessionId && li?.dataset && !li.dataset.sessionId) li.dataset.sessionId = sessionId;
+                    const closedSessionMeta = getDoneClosedSessionMeta(sessionId);
+                    if (closedSessionMeta) {
+                        const blockedMsg = 'Chunk upload blocked: session already closed after Done';
+                        if (li?.dataset) {
+                            li.dataset.uploadError = blockedMsg;
+                            li.dataset.chunkState = 'stale_session_closed';
+                            li.dataset.doneClosed = '1';
+                        }
+                        if (statusMark) {
+                            statusMark.textContent = ' · skipped (session closed)';
+                            statusMark.style.color = '#b45309';
+                            statusMark.title = blockedMsg;
+                        }
+                        try {
+                            const trace = buildDoneClosedUploadTrace(sessionId, {
+                                chunk: String(li?.dataset?.filename || '').trim(),
+                                reason: 'session_closed_after_done',
+                            });
+                            logApi('upload_audio_blocked_closed_session', trace);
+                            logUi('upload.blocked.closed_session', trace);
+                        } catch {}
+                        if (!silent) {
+                            try { showFabToast('Chunk skipped: session already closed', 2200); } catch {}
+                        }
+                        return false;
+                    }
 	            const uploadOpts = {};
 	            if (sessionId) uploadOpts.sessionId = sessionId;
             if (speaker) uploadOpts.speaker = speaker;

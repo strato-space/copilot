@@ -251,7 +251,19 @@ describe('handleTranscribeJob', () => {
       const setPayload = (update?.$set || {}) as Record<string, unknown>;
       return setPayload.transcription_method === 'text_fallback';
     });
+    const missingPathUpdateCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload.transcription_error === 'missing_file_path';
+    });
     expect(textFallbackUpdateCall).toBeUndefined();
+    expect(missingPathUpdateCall).toBeTruthy();
+    const missingPathSetPayload = ((missingPathUpdateCall?.[1] as Record<string, unknown>).$set ||
+      {}) as Record<string, unknown>;
+    const context = missingPathSetPayload.transcription_error_context as Record<string, unknown>;
+    expect(String(context.error_code || '')).toBe('missing_file_path');
+    expect(context.openai_key_present).toBe(true);
+    expect(String(context.openai_key_mask || '')).toMatch(/^sk-\.\.\.[A-Za-z0-9_-]{4}$/);
     expect(processorsQueueAdd).not.toHaveBeenCalled();
   });
 });

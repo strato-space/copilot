@@ -56,7 +56,7 @@ const ProjectManagementPage: React.FC = () => {
     return (
         <div className="w-full max-w-[1400px] mx-auto">
             <Card>
-                <Space direction="vertical" size={20} className="w-full">
+                <Space orientation="vertical" size={20} className="w-full">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                             <ProjectOutlined className="text-lg text-green-500" />

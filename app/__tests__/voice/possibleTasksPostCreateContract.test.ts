@@ -178,6 +178,7 @@ const createTask = (patch: Partial<VoicePossibleTask>): VoicePossibleTask =>
 
 describe('PossibleTasks post-create contract', () => {
   const initialVoiceState = useVoiceBotStore.getState();
+  let infoSpy: jest.SpyInstance;
 
   beforeAll(() => {
     Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', {
@@ -213,6 +214,7 @@ describe('PossibleTasks post-create contract', () => {
 
   beforeEach(() => {
     mockHasPermission.mockReturnValue(true);
+    infoSpy = jest.spyOn(console, 'info').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -260,6 +262,23 @@ describe('PossibleTasks post-create contract', () => {
       'voicebot/process_possible_tasks',
       expect.objectContaining({
         session_id: 'session-1',
+      })
+    );
+    expect(infoSpy).toHaveBeenCalledWith(
+      '[voice.possible_tasks] process_possible_tasks.request',
+      expect.objectContaining({
+        sessionId: 'session-1',
+        selectedRowIds: ['row-1'],
+        selectedCount: 1,
+      })
+    );
+    expect(infoSpy).toHaveBeenCalledWith(
+      '[voice.possible_tasks] process_possible_tasks.response',
+      expect.objectContaining({
+        sessionId: 'session-1',
+        createdTaskIds: ['row-1'],
+        removedRowIds: ['row-1'],
+        rowErrorsCount: 0,
       })
     );
     expect(successSpy).toHaveBeenCalledWith('Создано 1 задач');
@@ -319,6 +338,23 @@ describe('PossibleTasks post-create contract', () => {
             priority: 'P2',
           }),
         ]
+      );
+      expect(infoSpy).toHaveBeenCalledWith(
+        '[voice.possible_tasks] save.submit',
+        expect.objectContaining({
+          sessionId: 'session-1',
+          rowId: 'row-1',
+          performer_id: 'perf-1',
+          routing: 'human',
+        })
+      );
+      expect(infoSpy).toHaveBeenCalledWith(
+        '[voice.possible_tasks] save.result',
+        expect.objectContaining({
+          sessionId: 'session-1',
+          rowId: 'row-1',
+          routing: 'human',
+        })
       );
     } finally {
       view.unmount();

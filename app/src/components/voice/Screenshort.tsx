@@ -159,7 +159,7 @@ function AttachmentPreview({ attachment }: { attachment: VoiceSessionAttachment 
     if (!src || !isImageAttachment(attachment) || isBroken) {
         return (
             <div className="flex h-[180px] items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
-                <Space direction="vertical" size={4} align="center">
+                <Space orientation="vertical" size={4} align="center">
                     <span>Превью недоступно</span>
                     <Text type="secondary" ellipsis={{ tooltip: name }}>
                         {name}
@@ -172,7 +172,7 @@ function AttachmentPreview({ attachment }: { attachment: VoiceSessionAttachment 
     if (isLoading || !resolvedSrc) {
         return (
             <div className="flex h-[180px] items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
-                <Space direction="vertical" size={4} align="center">
+                <Space orientation="vertical" size={4} align="center">
                     <span>Загрузка превью...</span>
                     <Text type="secondary" ellipsis={{ tooltip: name }}>
                         {name}
@@ -242,7 +242,7 @@ export default function Screenshort({ attachments = [] }: { attachments?: VoiceS
                                     <Title level={5} className="!mb-2" ellipsis={{ tooltip: item.caption || 'Без подписи' }}>
                                         {item.caption || 'Без подписи'}
                                     </Title>
-                                    <Space size={4} direction="vertical" className="w-full">
+                                    <Space size={4} orientation="vertical" className="w-full">
                                         <Text type="secondary" className="text-[12px]">
                                             {formatTimestamp(item.message_timestamp) || '—'}
                                         </Text>

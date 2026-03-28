@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-03-28
+### PROBLEM SOLVED
+- **00:40** Voice transcription error forensics still drifted in the `missing_transport` / `missing_file_path` branches: the worker stored `openai_key_present=false` even when a runtime key was configured, which made Telegram/media repair investigations point at the wrong root cause.
+- **00:40** Backend/app test output remained noisy after the previous stabilization wave: Ant Design deprecation warnings, textarea autosize behavior under JSDOM, and direct console assertions in Voice contract tests all made passing suites harder to interpret.
+- **00:40** WebRTC `Done` could still leave a stale late-upload path for already-closed sessions if a chunk arrived after close, and the trace metadata on that path was not guaranteed when the caller omitted an explicit `transition_id`.
+
+### FEATURE IMPLEMENTED
+- **00:40** Closed Phase I (`copilot-qtcp.9`, `copilot-8h9u*`) with deterministic transcription-error context, UI/test-noise cleanup, and capability-based textarea autosize fallback that works both in browsers and Jest.
+- **00:40** Closed Phase II (`copilot-c4n8`, `copilot-haq2`) by enforcing a client-side post-`Done` closed-session upload barrier with fallback transition correlation, while verifying that the end-to-end `create_tasks` correlation logging path already satisfied the required contract.
+
+### CHANGES
+- **00:40** Updated `backend/src/workers/voicebot/handlers/transcribeHandler.ts` and focused worker tests (`backend/__tests__/voicebot/workers/workerTranscribeHandler.{errorPaths,fallbackAndConfig}.test.ts`) so `missing_transport` / `missing_file_path` error payloads now reuse the configured OpenAI key mask/presence instead of forcing a false-negative runtime diagnosis.
+- **00:40** Updated `app/src/components/codex/CodexIssueDetailsCard.tsx`, `app/src/components/voice/Screenshort.tsx`, `app/src/pages/operops/{ProjectManagementPage,ProjectsTree,TaskPage}.tsx`, and related Voice contract tests to remove deprecated Ant Design API usage (`Descriptions.styles`, `Card.styles.body`, `Space.orientation`, `Timeline.items.content`).
+- **00:40** Updated `app/src/components/voice/PossibleTasks.tsx` plus `app/__tests__/voice/possibleTasksDesignContract.test.ts` so the Draft description textarea now uses a capability-based autosize config (`supportsTextareaAutosize`) instead of a test-only branch, preserving browser behavior while avoiding JSDOM `NaN` sizing warnings.
+- **00:40** Updated `app/public/webrtc/webrtc-voicebot-lib.js` and added `app/__tests__/voice/webrtcLateDoneChunkUploadRaceContract.test.ts` so `Done` always gets a fallback correlation id, closed sessions are remembered for a bounded TTL, and stale post-close chunk uploads are skipped with explicit trace/log metadata instead of hitting the backend.
+- **00:40** Updated Voice contract tests (`app/__tests__/voice/{activateSessionResilienceContract,possibleTasksPostCreateContract,voiceSocketRealtimeContract}.test.ts`) so expected diagnostics are asserted via spies instead of leaking passing-test console noise.
+- **00:40** Verification:
+  - `cd app && npm test` (`110` suites, `343` tests, passed)
+  - `cd backend && npm run test:parallel-safe` (`141` suites, `716` tests, passed)
+
 ## 2026-03-27
 ### PROBLEM SOLVED
 - **08:34** После аварийного рестарта прод-среды часть Voice runtime-поведения оставалась недетерминированной: readiness запускался неявно, notify-поверхность проверялась вручную, а восстановление PM2-процессов зависело от локального состояния хоста.

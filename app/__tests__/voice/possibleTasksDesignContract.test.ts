@@ -77,7 +77,10 @@ describe('PossibleTasks design contract', () => {
     expect(source).toContain('<Text strong>Тип</Text>');
     expect(source).toContain('<Text strong>Исполнитель</Text>');
     expect(source).toContain('<Text strong>Описание (Markdown)</Text>');
-    expect(source).toContain('autoSize={{ minRows: 24, maxRows: 40 }}');
+    expect(source).toContain('const supportsTextareaAutosize = (): boolean => {');
+    expect(source).toContain('const DESCRIPTION_AUTOSIZE_CONFIG = supportsTextareaAutosize()');
+    expect(source).toContain('autoSize={DESCRIPTION_AUTOSIZE_CONFIG}');
+    expect(source).toContain('rows={DESCRIPTION_AUTOSIZE_CONFIG ? undefined : DESCRIPTION_AUTOSIZE_MIN_ROWS}');
     expect(source).toContain('getCompactInlinePillClassName(Boolean(row.performer_id))');
     expect(source).toContain("const [openDetailSelectField, setOpenDetailSelectField] = useState<string | null>(null);");
     expect(source).toContain("const isInlineEditingActive = Boolean(editingNameRowId || inlineListEdit || focusedDetailField || openDetailSelectField);");
