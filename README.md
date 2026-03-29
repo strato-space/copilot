@@ -395,6 +395,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - `copilot /agents` is an ACP-only chat surface.
 - Shared UI/kernel comes from `@strato-space/acp-ui`.
 - `/agents` and `/agents/session/:id` consume the shared ACP package instead of copying ACP UI code into `copilot`.
+- Cold-load restore for `/agents/session/:id` is route-authoritative: if the requested ACP session exists in persisted local storage, the page must keep the deep link until the live session store hydrates and then select that session instead of redirecting to `/agents`.
 - ACP runtime transport is isolated from the Voice MCP proxy path:
   - frontend uses `app/src/services/acpSocket.ts`
   - frontend host bridge uses `app/src/services/acpHostBridge.ts`
@@ -447,6 +448,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Synced voice migration planning docs are stored under `docs/voicebot-plan-sync/`.
 - Keep `docs/voicebot-plan-sync/implementation-draft-v1.md` and session-level transcript versioning specs (`edit-event-log-plan.md`, `gpt-4o-transcribe-diarize-plan.md`) current with migration decisions.
 - Session close/finalization outcomes for voice migration should be documented in `CHANGELOG.md` and mirrored in `AGENTS.md` + `README.md`.
+- Recovered execution handoffs belong in dedicated plan artifacts such as `plan/acp-review-session-resume.md` and `plan/comfy-session-resume.md`, not in root governance text.
 
 ## Versioning And Dependencies
 - SemVer policy: `MAJOR.MINOR.PATCH`.

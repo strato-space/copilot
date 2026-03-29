@@ -5,12 +5,16 @@
 - **11:30** ACP conversation surfaces still had no single reusable kernel: VS Code ACP UI lived in the `acp-plugin` repo, while `copilot /agents` had no package-backed ACP surface and would have required another host-specific reimplementation.
 - **11:35** ACP and MCP boundaries in `copilot` were still easy to blur at the planning/runtime level, which risked leaking MCP transport assumptions into `/agents` even though `/agents` is supposed to be an ACP-only interaction surface.
 - **11:45** Repo-level execution governance was duplicated and partially ambiguous: spec-driven subagent work did not yet encode a strict precedence rule for full `bd show --json`, local spec path lineage, and parent-packet overrides.
+- **22:34** Valid ACP deep links at `/agents/session/:id` still redirected to `/agents` on cold load before persisted sessions hydrated, so session resume/share URLs could not reliably reopen the requested ACP conversation after refresh.
+- **22:46** ACP follow-up findings and Comfy/LTX forensics restart points were preserved only in local session logs and `tmux` scrollback, which made the next implementation pass depend on fragile operator memory instead of checked-in handoff artifacts.
 
 ### FEATURE IMPLEMENTED
 - **11:40** Materialized an ACP-only `/agents` surface in `copilot` that consumes the shared `@strato-space/acp-ui` package instead of reimplementing ACP UI logic locally.
 - **11:50** Split repo governance into a cleaner contract: `AGENTS.md` now carries repository execution policy, while `RUNTIME.md` carries deploy/runtime topology and smoke-check authority.
 - **12:10** Added deterministic ACP harness coverage so `copilot /agents` can be verified against the same shared UI/kernel contract used by ACP Plugin and browser `acp-chat`.
 - **12:25** Closed the ACP UI package wave (`copilot-o7g3`) with normalized BD decomposition, ACP-only host adapter boundaries, and checked-in verification lanes.
+- **22:34** Closed `copilot-iseg` by making persisted ACP sessions authoritative during cold-load hydrate and adding a focused route-regression test for `/agents/session/:id` restore.
+- **22:46** Opened `copilot-jory` and preserved two reusable session-resume artifacts for the ACP review wave and the blocked Comfy/LTX forensics thread.
 
 ### CHANGES
 - **11:40** Added ACP-only host/runtime files for `copilot /agents`:
@@ -39,6 +43,11 @@
   - `cd backend && npm test -- --runTestsByPath __tests__/services/acpSocketIsolationContract.test.ts`
   - `cd app && PLAYWRIGHT_BASE_URL=http://127.0.0.1:4174 npm run test:e2e:agents-harness`
 - **13:12** Production deploy smoke passed via `./scripts/pm2-backend.sh prod`: mandatory PM2 runtimes came back online, `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production` returned HTTP 200, `/api/health` returned `status=ok`, and `https://copilot.stratospace.fun/agents` answered with HTTP 200 after rollout.
+- **22:34** Updated `app/src/pages/AgentsOpsPage.tsx` and added `app/__tests__/agents/agentsDeepLinkRestore.test.tsx` so persisted ACP sessions hold a valid deep link during cold-load hydration and the requested session is selected once the live store catches up.
+- **22:46** Added checked-in restart/handoff artifacts `plan/acp-review-session-resume.md` and `plan/comfy-session-resume.md`; updated `AGENTS.md` and `README.md` so recovered session-handoff notes have an explicit home outside root governance text.
+- **22:49** Verification:
+  - `cd app && npm test -- --runTestsByPath __tests__/agents/agentsDeepLinkRestore.test.tsx __tests__/agents/acpHostBridge.test.ts __tests__/agents/agentsAcpSurfaceContract.test.ts`
+  - `cd app && npm run build`
 
 ## 2026-03-28
 ### PROBLEM SOLVED

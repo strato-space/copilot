@@ -291,6 +291,7 @@ Notes:
 - ✅ Check `bd ready` before asking "what should I work on?"
 - ✅ Create only user-scoped or implementation-scoped issues; keep parser/orchestration probes in memory/logs
 - ✅ Keep dated implementation history in `CHANGELOG.md` or `docs/AGENTS_SESSION_HISTORY.md`, not in root `AGENTS.md`
+- ✅ Preserve recovered session-handoff notes in dedicated `plan/*-session-resume.md` artifacts or other scoped docs, not in root `AGENTS.md`
 - ❌ Do NOT create markdown TODO lists
 - ❌ Do NOT use external issue trackers
 - ❌ Do NOT duplicate tracking systems

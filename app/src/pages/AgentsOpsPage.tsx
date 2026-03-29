@@ -11,7 +11,7 @@ import {
 } from '@strato-space/acp-ui';
 import '@strato-space/acp-ui/styles.css';
 import { getAcpSocket, disconnectAcpSocket } from '../services/acpSocket';
-import { createCopilotAcpHostBridge } from '../services/acpHostBridge';
+import { createCopilotAcpHostBridge, loadStoredAcpSessions } from '../services/acpHostBridge';
 import { useAuthStore } from '../store/authStore';
 
 const ACP_EVENT = 'acp_message';
@@ -24,6 +24,12 @@ export default function AgentsOpsPage(): ReactElement {
   const currentSessionId = useChatStore((state) => state.currentSessionId);
   const sessions = useChatStore((state) => state.sessions);
   const selectSession = useChatStore((state) => state.selectSession);
+  const initialStoredSessions = useMemo(() => loadStoredAcpSessions(), []);
+  const effectiveSessions = sessions.length > 0 ? sessions : initialStoredSessions;
+  const hasRequestedRouteSession = useMemo(
+    () => Boolean(sessionId && effectiveSessions.some((session) => session.id === sessionId)),
+    [effectiveSessions, sessionId],
+  );
 
   const socketRef = useRef<Socket | null>(null);
   const pendingMessagesRef = useRef<unknown[]>([]);
@@ -123,24 +129,26 @@ export default function AgentsOpsPage(): ReactElement {
 
   useEffect(() => {
     if (!sessionId) return;
-    const sessionExists = sessions.some((session) => session.id === sessionId);
-    if (!sessionExists) {
+    if (!hasRequestedRouteSession) {
       navigate('/agents', { replace: true });
       return;
     }
     if (currentSessionId !== sessionId) {
       selectSession(sessionId);
     }
-  }, [currentSessionId, navigate, selectSession, sessionId, sessions]);
+  }, [currentSessionId, hasRequestedRouteSession, navigate, selectSession, sessionId, sessions]);
 
   useEffect(() => {
+    if (sessionId && hasRequestedRouteSession && currentSessionId !== sessionId) {
+      return;
+    }
     const targetPath = currentSessionId
       ? `/agents/session/${encodeURIComponent(currentSessionId)}`
       : '/agents';
     if (location.pathname !== targetPath) {
       navigate(targetPath, { replace: true });
     }
-  }, [currentSessionId, location.pathname, navigate]);
+  }, [currentSessionId, hasRequestedRouteSession, location.pathname, navigate, sessionId]);
 
   return (
     <div className="copilot-acp-page">
