@@ -38,6 +38,7 @@
   - `cd app && npm test -- --runTestsByPath __tests__/agents/acpHostBridge.test.ts __tests__/agents/agentsAcpSurfaceContract.test.ts`
   - `cd backend && npm test -- --runTestsByPath __tests__/services/acpSocketIsolationContract.test.ts`
   - `cd app && PLAYWRIGHT_BASE_URL=http://127.0.0.1:4174 npm run test:e2e:agents-harness`
+- **13:12** Production deploy smoke passed via `./scripts/pm2-backend.sh prod`: mandatory PM2 runtimes came back online, `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production` returned HTTP 200, `/api/health` returned `status=ok`, and `https://copilot.stratospace.fun/agents` answered with HTTP 200 after rollout.
 
 ## 2026-03-28
 ### PROBLEM SOLVED
