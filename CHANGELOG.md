@@ -1,5 +1,50 @@
 # Changelog
 
+## 2026-03-30
+### PROBLEM SOLVED
+- **00:40** ACP follow-up verification still had a coverage gap between the deterministic harness and the real `/agents` host shell, so regressions in the auth-token -> ACP socket -> host-bridge lifecycle could slip past the eval baseline.
+- **00:45** The ACP socket layer could not be deterministically injected in browser/runtime tests, which made host-shell coverage harder to isolate and encouraged brittle live-only verification.
+- **00:52** Unavailable ACP agent selection could desynchronize frontend and backend state: the backend announced the rejected agent instead of preserving the last valid selection, so the settings dialog could drift away from the real connected session state.
+- **01:00** ACP review recovery notes were partially reconstructed from a previously frozen Codex session, but the checked-in handoff artifact did not yet explicitly record the recovery method and fully normalized issue frontier.
+
+### FEATURE IMPLEMENTED
+- **00:44** Added a dedicated ACP runtime contract lane for the real `/agents` shell, combining focused Jest coverage with a Playwright shell spec that runs against the actual `MainLayout` host surface instead of the harness-only route.
+- **00:47** Added an injectable ACP socket factory so browser/runtime tests can force deterministic ACP transport behavior without changing the production ACP-only transport contract.
+- **00:55** Preserved ACP agent-selection truth on the backend: rejected unavailable-agent switches now keep the current valid agent selected and re-emit the authoritative agent list instead of lying about a failed selection.
+- **01:02** Refreshed the checked-in ACP review resume artifact with recovered session-log evidence so the next execution pass no longer depends on tmux scrollback or partially lost subagent context.
+- **00:31** Rolled the ACP follow-up fixes to production and revalidated the live `/agents` route after PM2 restart, so the real public Copilot shell now serves the same ACP contract proven in the local harness/runtime lanes.
+
+### CHANGES
+- **00:44** Added real ACP shell verification surfaces:
+  - `app/__tests__/agents/agentsOpsRuntimeContract.test.tsx`
+  - `app/e2e/agents-shell.spec.ts`
+  - `app/package.json` (`test:agents:runtime`, `test:e2e:agents-shell`)
+- **00:47** Updated ACP host/runtime integration:
+  - `app/src/services/acpSocket.ts`
+  - `app/src/pages/AgentsHarnessPage.tsx`
+  - `app/__tests__/agents/agentsAcpSurfaceContract.test.ts`
+  - `app/e2e/agents-harness.spec.ts`
+- **00:55** Updated backend ACP namespace behavior and added focused coverage:
+  - `backend/src/api/socket/acp.ts`
+  - `backend/__tests__/services/acpSocketAgentSelection.test.ts`
+- **01:02** Refreshed the checked-in recovery handoff:
+  - `plan/acp-review-session-resume.md`
+- **00:31** Production deploy/smoke:
+  - `./scripts/pm2-backend.sh prod`
+  - `./scripts/pm2-runtime-readiness.sh prod`
+  - `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production`
+  - `curl -fsS http://127.0.0.1:3002/api/health`
+  - `curl -I -fsS https://copilot.stratospace.fun/agents`
+- **01:10** Verification:
+  - `cd app && npm run test:agents:runtime`
+  - `cd app && npm run build`
+  - `cd backend && npm run build`
+  - `cd backend && npm test -- --runTestsByPath __tests__/services/acpSocketIsolationContract.test.ts __tests__/services/acpSocketAgentSelection.test.ts`
+  - `cd app && npm run e2e:install`
+  - `cd app && npm run preview -- --host 127.0.0.1 --port 4173`
+  - `cd app && PLAYWRIGHT_BASE_URL=http://127.0.0.1:4174 npm run test:e2e:agents-harness`
+  - `cd app && PLAYWRIGHT_BASE_URL=http://127.0.0.1:4174 npm run test:e2e:agents-shell`
+
 ## 2026-03-29
 ### PROBLEM SOLVED
 - **11:30** ACP conversation surfaces still had no single reusable kernel: VS Code ACP UI lived in the `acp-plugin` repo, while `copilot /agents` had no package-backed ACP surface and would have required another host-specific reimplementation.

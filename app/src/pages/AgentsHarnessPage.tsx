@@ -6,6 +6,7 @@ import {
   seedAcpUiHarnessState,
   setAcpHostBridge,
 } from '@strato-space/acp-ui';
+import '@strato-space/acp-ui/styles.css';
 
 export default function AgentsHarnessPage(): ReactElement {
   useLayoutEffect(() => {

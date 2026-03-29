@@ -404,6 +404,13 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - `mcp_call`
   - `/mcp`
   - Voice runtime transport assumptions
+- Canonical ACP runtime verification commands:
+  - `cd app && npm run test:agents:runtime`
+  - `cd app && PLAYWRIGHT_BASE_URL=http://127.0.0.1:4174 npm run test:e2e:agents-shell`
+  - `cd app && PLAYWRIGHT_BASE_URL=http://127.0.0.1:4174 npm run test:e2e:agents-harness`
+- ACP review/session recovery handoffs live in checked-in plan artifacts:
+  - `plan/acp-review-session-resume.md`
+  - `plan/comfy-session-resume.md`
 - Voice session header action ownership is explicit: `Tasks` and `Summarize` belong to the right header action cluster before the custom-prompt action, not to the left recording-control strip.
 - If session-scoped Mongo task rows still fall outside the target task-status axis, they surface in a temporary `Unknown` subtab instead of disappearing; that subtab is rendered only when its count is greater than `0`.
 - The top-level `Задачи` badge must wait for live `session_tab_counts` before rendering a count, so the page does not flash a misleading `0` during initial load.

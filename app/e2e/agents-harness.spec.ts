@@ -24,6 +24,28 @@ test.describe('Agents harness @unauth', () => {
     await expect(page.getByRole('button', { name: 'Input · Explain ACP request' })).toBeVisible();
     await expect(page.getByText('Show 1 more tool')).toBeVisible();
 
+    const hasAcpUiStylesheetRules = await page.evaluate(() => {
+      for (const sheet of Array.from(document.styleSheets)) {
+        try {
+          for (const rule of Array.from(sheet.cssRules)) {
+            const cssText = rule.cssText || '';
+            if (
+              cssText.includes('#acp-root textarea:focus-visible') ||
+              cssText.includes('.bg-input') ||
+              cssText.includes('.text-input-foreground')
+            ) {
+              return true;
+            }
+          }
+        } catch {
+          // Ignore cross-origin stylesheets and continue checking local bundles.
+        }
+      }
+      return false;
+    });
+
+    expect(hasAcpUiStylesheetRules).toBe(true);
+
     await page.getByRole('button', { name: 'Open sidebar' }).click();
     await page.waitForTimeout(350);
     await expect(page.getByText('Ping', { exact: true })).toBeVisible();

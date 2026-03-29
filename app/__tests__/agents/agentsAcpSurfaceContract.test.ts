@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 const appSource = readFileSync(join(process.cwd(), 'src/App.tsx'), 'utf8');
 const pageSource = readFileSync(join(process.cwd(), 'src/pages/AgentsOpsPage.tsx'), 'utf8');
+const harnessSource = readFileSync(join(process.cwd(), 'src/pages/AgentsHarnessPage.tsx'), 'utf8');
 const socketSource = readFileSync(join(process.cwd(), 'src/services/acpSocket.ts'), 'utf8');
 
 describe('copilot /agents ACP surface contract', () => {
@@ -17,6 +18,9 @@ describe('copilot /agents ACP surface contract', () => {
     expect(pageSource).toContain("from '@strato-space/acp-ui'");
     expect(pageSource).toContain("import '@strato-space/acp-ui/styles.css';");
     expect(pageSource).toContain('<AcpUiApp />');
+    expect(harnessSource).toContain("from '@strato-space/acp-ui'");
+    expect(harnessSource).toContain("import '@strato-space/acp-ui/styles.css';");
+    expect(harnessSource).toContain('<AcpUiApp />');
   });
 
   it('keeps the /agents surface on ACP-only transport and out of the MCP runtime path', () => {

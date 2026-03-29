@@ -5,6 +5,12 @@ const ACP_NAMESPACE = '/agents-acp';
 let acpSocket: Socket | null = null;
 let lastToken: string | null = null;
 
+declare global {
+  interface Window {
+    __ACP_SOCKET_FACTORY__?: (authToken?: string | null) => Socket;
+  }
+}
+
 function resolveSocketOrigin(): string {
   const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
   if (baseUrl.startsWith('http')) {
@@ -17,25 +23,34 @@ export function getAcpSocket(authToken?: string | null): Socket {
   const nextToken = typeof authToken === 'string' && authToken.trim() ? authToken.trim() : null;
 
   if (!acpSocket) {
-    const namespaceUrl = `${resolveSocketOrigin().replace(/\/$/, '')}${ACP_NAMESPACE}`;
-    const options: Parameters<typeof io>[1] = {
-      withCredentials: true,
-      transports: ['websocket', 'polling'],
-      autoConnect: false,
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 250,
-      reconnectionDelayMax: 1500,
-      timeout: 5000,
-    };
-    if (nextToken) {
-      options.auth = { token: nextToken };
-    }
-    acpSocket = io(namespaceUrl, options);
+    const injectedFactory =
+      typeof window !== 'undefined' && typeof window.__ACP_SOCKET_FACTORY__ === 'function'
+        ? window.__ACP_SOCKET_FACTORY__
+        : null;
 
-    acpSocket.on('connect_error', (error) => {
-      console.error('[ACP Socket] Connection error:', error.message);
-    });
+    if (injectedFactory) {
+      acpSocket = injectedFactory(nextToken);
+    } else {
+      const namespaceUrl = `${resolveSocketOrigin().replace(/\/$/, '')}${ACP_NAMESPACE}`;
+      const options: Parameters<typeof io>[1] = {
+        withCredentials: true,
+        transports: ['websocket', 'polling'],
+        autoConnect: false,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 250,
+        reconnectionDelayMax: 1500,
+        timeout: 5000,
+      };
+      if (nextToken) {
+        options.auth = { token: nextToken };
+      }
+      acpSocket = io(namespaceUrl, options);
+
+      acpSocket.on('connect_error', (error) => {
+        console.error('[ACP Socket] Connection error:', error.message);
+      });
+    }
   }
 
   if (lastToken !== nextToken) {

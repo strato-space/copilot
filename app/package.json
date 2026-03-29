@@ -16,6 +16,8 @@
     "test:e2e": "playwright test",
     "test:e2e:non-voice": "playwright test e2e/auth.spec.ts e2e/crm-kanban.spec.ts e2e/operops.spec.ts e2e/task-create.spec.ts",
     "test:e2e:agents-harness": "playwright test e2e/agents-harness.spec.ts --project=chromium-unauth",
+    "test:e2e:agents-shell": "playwright test e2e/agents-shell.spec.ts --project=chromium-unauth",
+    "test:agents:runtime": "jest --runTestsByPath __tests__/agents/agentsOpsRuntimeContract.test.tsx __tests__/agents/agentsDeepLinkRestore.test.tsx __tests__/agents/acpHostBridge.test.ts",
     "test:e2e:shard:1of2": "playwright test e2e/auth.spec.ts e2e/crm-kanban.spec.ts e2e/operops.spec.ts e2e/task-create.spec.ts --shard=1/2",
     "test:e2e:shard:2of2": "playwright test e2e/auth.spec.ts e2e/crm-kanban.spec.ts e2e/operops.spec.ts e2e/task-create.spec.ts --shard=2/2",
     "test:e2e:voice:shard:1of2": "playwright test e2e/voice.spec.ts e2e/voice-fab-lifecycle.spec.ts e2e/voice-log.spec.ts --project=chromium-unauth --shard=1/2",

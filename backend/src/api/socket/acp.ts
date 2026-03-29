@@ -138,6 +138,19 @@ function sendReasoning(ctx: SocketContext): void {
   send(ctx.socket, { type: 'reasoningUpdate', reasoningId: ctx.reasoningId });
 }
 
+function sendAgentList(ctx: SocketContext, selected?: string | null): void {
+  send(ctx.socket, {
+    type: 'agents',
+    agents: getAgentsWithStatus().map((agent) => ({
+      id: agent.id,
+      name: agent.name,
+      available: agent.available,
+      source: agent.source,
+    })),
+    selected: selected ?? null,
+  });
+}
+
 function getEffectiveModelForSession(ctx: SocketContext, modelId: string): string {
   const agent = ctx.client.getAgentConfig();
   if (!isFastAgent(agent)) return modelId;
@@ -239,16 +252,7 @@ async function handleIncoming(ctx: SocketContext, message: IncomingMessage): Pro
         }
       }
 
-      send(ctx.socket, {
-        type: 'agents',
-        agents: agents.map((agent) => ({
-          id: agent.id,
-          name: agent.name,
-          available: agent.available,
-          source: agent.source,
-        })),
-        selected,
-      });
+      sendAgentList(ctx, selected);
       sendReasoning(ctx);
       send(ctx.socket, {
         type: 'appInfo',
@@ -304,9 +308,12 @@ async function handleIncoming(ctx: SocketContext, message: IncomingMessage): Pro
       }
       const status = getAgentsWithStatus().find((entry) => entry.id === nextAgentId);
       if (status && !status.available) {
-        send(ctx.socket, { type: 'connectionState', state: 'disconnected' satisfies ConnectionState });
+        send(ctx.socket, {
+          type: 'connectionState',
+          state: ctx.client.getState() satisfies ConnectionState,
+        });
         send(ctx.socket, { type: 'connectAlert', text: `Agent is not available: ${status.name}` });
-        send(ctx.socket, { type: 'agentChanged', agentId: nextAgentId });
+        sendAgentList(ctx, ctx.agentId);
         return;
       }
       ctx.agentId = nextAgentId;

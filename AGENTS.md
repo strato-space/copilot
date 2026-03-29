@@ -166,6 +166,7 @@ Preferred engineering principles for this repo:
 - Targeted verification can be delegated to subagents, but final integration verification and production deploy/smoke remain the responsibility of the parent thread after all patches are merged.
 - Browser-based acceptance is part of the canonical verification flow for UI work; restart `mcp@chrome-devtools.service` before each live browser test cycle so MCP/CDP state is fresh.
 - Browser-based acceptance for layout work must include screenshot-level overlap checks; DOM/CSS assertions alone are not enough when footer/status widgets or task panes can visually collide.
+- For ACP `/agents`, do not treat the deterministic harness route as a substitute for the real host shell: acceptance must include the actual `/agents` surface inside `MainLayout`, plus focused runtime-contract coverage for the auth-token -> ACP socket -> host-bridge lifecycle.
 
 ### Subagent Type Contract
 - `worker_*` — bounded implementation agent for one write surface.
