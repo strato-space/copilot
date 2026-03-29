@@ -2,17 +2,20 @@ import { useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { usePeriodicUserRefresh, useRefreshOnFocus } from './useUserRefresh';
 
-export const useAppInit = (): { initComplete: boolean } => {
+export const useAppInit = (disabled = false): { initComplete: boolean } => {
     const { isAuth, refreshUserData } = useAuthStore();
 
-    usePeriodicUserRefresh(5 * 60 * 1000);
+    usePeriodicUserRefresh(disabled ? 0 : 5 * 60 * 1000);
     useRefreshOnFocus();
 
     useEffect(() => {
-        if (isAuth) {
-            refreshUserData({ silent: true });
+        if (disabled) {
+            return;
         }
-    }, [isAuth, refreshUserData]);
+        if (isAuth) {
+            void refreshUserData({ silent: true });
+        }
+    }, [disabled, isAuth, refreshUserData]);
 
     return { initComplete: true };
 };

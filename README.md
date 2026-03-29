@@ -102,11 +102,11 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Voice-linked task payloads may include `discussion_sessions[]` / `discussion_count`; the OperOps task page renders those links as a `Discussed in Sessions` timeline.
 - Materialized Voice/OperOps task refs are normalized:
   - Mongo `_id` is the durable internal row identity,
-  - `external_ref` is the canonical source ref,
-  - `source_ref` is the canonical OperOps self URL,
+  - `external_ref` is the authoritative source reference and must be unique per bd issue when the source system exposes a durable source id,
+  - `source_ref` is the authoritative OperOps self URL,
   - `bd_external_ref` is a separate bd sync key used only for Codex issue creation.
 - Accepted Voice task reuse is lineage-based and preserves the original `created_at`; repeated materialization updates the existing row instead of creating a fresh duplicate.
-- Voice `Задачи` and `Codex` tabs now use a shared canonical source matcher with OperOps Kanban (`source_ref`/`external_ref`/`source_data.session_*` + canonical session URL parsing); voice-session linkage must prefer `external_ref` when `source_ref` is the materialized OperOps self-link, so Source->Voice navigation keeps task visibility consistent.
+- Voice `Задачи` and `Codex` tabs now use a shared authoritative source matcher with OperOps Kanban (`source_ref`/`external_ref`/`source_data.session_*` + canonical session URL parsing); voice-session linkage must prefer `external_ref` when `source_ref` is the materialized OperOps self-link, so Source->Voice navigation keeps task visibility consistent.
 - Shared `CodexIssuesTable` contract applies in both Voice and OperOps tabs, with strict status segmentation tabs (`Open` / `In Progress` / `Deferred` / `Blocked` / `Closed` / `All`) and per-tab counters.
 - Codex issue details rendering is shared between OperOps and Voice via `CodexIssueDetailsCard`; Voice inline details drawer uses wide layout (`min(1180px, calc(100vw - 48px))`) and preserves Description/Notes paragraph breaks (`whitespace-pre-wrap`) for parity with OperOps task page.
 - Voice Codex inline details now fetch the canonical `POST /api/crm/codex/issue` payload on drawer open, so comments and related metadata match the standalone OperOps Codex issue page.
@@ -163,7 +163,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - `cd backend && npm run voice:repair:softdeleted-materialized:dry -- --session <session_id>`
   - `cd backend && npm run voice:repair:softdeleted-materialized:apply -- --session <session_id>`
 - Legacy Voice/CRM status cleanup has now been applied directly in Mongo for the current status field only; the checked-in one-off migration helpers were removed after the live cleanup wave completed.
-- Voice/OperOps session task matching must also honor `source_data.voice_sessions[].session_id`, not only canonical session URLs in `source_ref` / `external_ref`, so accepted tasks remain visible after status migration and repair.
+- The same authoritative source-reference contract also applies to repaired/session-scoped task matching: reads must honor `source_data.voice_sessions[].session_id` in addition to session URLs carried in `source_ref` / `external_ref`, so accepted tasks remain visible after status migration and repair.
 - `POST /api/voicebot/save_summary` now reuses `summary_correlation_id` to reconcile a pending `summary_save` audit row to `done` instead of inserting a duplicate event when done-flow automation and manual save meet on the same session.
 - Transcribe worker now emits realtime `message_update` events for both success and failure branches, so pending/error rows appear in Transcription tab without manual refresh.
 - OpenAI recovery-retry semantics are unified across transcribe/categorize/processing loop repair: both `insufficient_quota` and `invalid_api_key` are treated as retryable states with canonical retry metadata and operator-facing diagnostics.
@@ -385,9 +385,24 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - browser opens Socket.IO to backend (`/socket.io`),
   - frontend emits `mcp_call`,
   - backend MCP proxy (`backend/src/services/mcp/*`) calls Fast-Agent MCP endpoint.
+- This MCP path is for Voice/legacy automation surfaces. It is not the transport contract for ACP chat UI.
 - Required tool name in active agent cards:
   - `create_tasks` (`agents/agent-cards/create_tasks.md`)
 - Historical web-upload audio recovery note: when old `source_type=web` voice messages still point to missing relative `uploads/audio/sessions/<session_id>/<file>.webm` files, first check `/home/strato-space/voicebot/uploads/audio/sessions/<session_id>/` on `p2` before declaring the source irrecoverable.
+
+### ACP /agents integration
+
+- `copilot /agents` is an ACP-only chat surface.
+- Shared UI/kernel comes from `@strato-space/acp-ui`.
+- `/agents` and `/agents/session/:id` consume the shared ACP package instead of copying ACP UI code into `copilot`.
+- ACP runtime transport is isolated from the Voice MCP proxy path:
+  - frontend uses `app/src/services/acpSocket.ts`
+  - frontend host bridge uses `app/src/services/acpHostBridge.ts`
+  - backend ACP namespace is `backend/src/api/socket/acp.ts`
+- `copilot /agents` must not depend on:
+  - `mcp_call`
+  - `/mcp`
+  - Voice runtime transport assumptions
 - Voice session header action ownership is explicit: `Tasks` and `Summarize` belong to the right header action cluster before the custom-prompt action, not to the left recording-control strip.
 - If session-scoped Mongo task rows still fall outside the target task-status axis, they surface in a temporary `Unknown` subtab instead of disappearing; that subtab is rendered only when its count is greater than `0`.
 - The top-level `Задачи` badge must wait for live `session_tab_counts` before rendering a count, so the page does not flash a misleading `0` during initial load.
@@ -486,7 +501,7 @@ See `AGENTS.md` for the full workflow (including `bd doctor` guidance).
   - `fix_*` for forensics-backed incidents,
   - `scholastic_*` for ontology-first spec review with `greek-scholastic`.
 - Bugfix and QA-first waves follow one order: digital forensics first, then implementation swarm, then independent review, then verification gates, then `bd` synchronization.
-- Every worker packet must start with the literal command `bd show <id> --json` so child execution reads the canonical issue payload before any repo edits.
+- Every worker packet must start with the literal command `bd show <id> --json` so child execution reads the full unfiltered issue payload before any repo edits.
 
 ## Telegram closeout messages
 - When sending executive updates through `tgbot__send_bot_message` with `parse_mode=MARKDOWNV2`, first materialize the payload as a fully escaped local string or temp-file draft, then inspect the final escaped text before the live send.
@@ -720,7 +735,7 @@ Rule for updates:
   - Voice `Codex` tab backed by `POST /api/voicebot/codex_tasks`,
   - OperOps `Codex` tab backed by `POST /api/crm/codex/issues` (latest 500 `bd` issues).
 - Added inline Codex task detail drawer in Voice session tab and expanded codex task payload mapping (`labels`, `dependencies`, `notes`, ownership metadata).
-- Added canonical Codex external reference contract (`https://copilot.stratospace.fun/voice/session/<id>#codex-task=<task-id>`) across voice-created tasks.
+- Added Codex per-task `external_ref` uniqueness contract for voice-created tasks (`https://copilot.stratospace.fun/voice/session/<id>#codex-task=<task-id>`).
 - Added transcribe trigger flow (`Codex`/`Кодекс`) and improved `@task` ingestion:
   - auto-create Codex session when no active session exists,
   - normalize and append canonical attachment links in created task descriptions.

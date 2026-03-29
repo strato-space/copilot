@@ -1,17 +1,19 @@
 import { useEffect, useRef } from 'react';
 import { useMCPRequestStore, setSocketInstance } from '../store/mcpRequestStore';
 import { useAuthStore } from '../store/authStore';
-import { getSocket, SOCKET_EVENTS } from '../services/socket';
+import { disconnectSocket, getSocket, SOCKET_EVENTS } from '../services/socket';
 
 const MCP_DISCONNECT_GRACE_MS = 5000;
 
-export const useMCPWebSocket = (): void => {
+export const useMCPWebSocket = (enabled = true): void => {
     const { setConnectionState, handleMCPChunk, handleMCPComplete, handleError } = useMCPRequestStore();
     const { isAuth, ready } = useAuthStore();
     const disconnectTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
-        if (!ready || !isAuth) {
+        if (!enabled || !ready || !isAuth) {
+            disconnectSocket();
+            setSocketInstance(null);
             setConnectionState('disconnected');
             return;
         }
@@ -124,5 +126,5 @@ export const useMCPWebSocket = (): void => {
             socket.off(SOCKET_EVENTS.MCP_ERROR);
             socket.off('error');
         };
-    }, [isAuth, ready, handleMCPChunk, handleMCPComplete, handleError, setConnectionState]);
+    }, [enabled, isAuth, ready, handleMCPChunk, handleMCPComplete, handleError, setConnectionState]);
 };

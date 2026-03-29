@@ -42,6 +42,7 @@ import {
 } from './pages/operops';
 import ChatopsPage from './pages/ChatopsPage';
 import AgentsOpsPage from './pages/AgentsOpsPage';
+import AgentsHarnessPage from './pages/AgentsHarnessPage';
 import DesopsPage from './pages/DesopsPage';
 import HhopsPage from './pages/HhopsPage';
 import LoginPage from './pages/LoginPage';
@@ -262,17 +263,27 @@ function MainLayout(): ReactElement {
 export default function App(): ReactElement {
   const checkAuth = useAuthStore((state) => state.checkAuth);
 
-  useAppInit();
-  useMCPWebSocket();
+  const location = useLocation();
+  const isHarnessRoute = location.pathname.startsWith('/__harness/agents');
+  const isAcpSurface =
+    location.pathname.startsWith('/agents') ||
+    isHarnessRoute;
+
+  useAppInit(isHarnessRoute);
+  useMCPWebSocket(!isAcpSurface);
 
   useEffect((): void => {
+    if (isHarnessRoute) {
+      return;
+    }
     void checkAuth();
-  }, [checkAuth]);
+  }, [checkAuth, isHarnessRoute]);
 
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/tg_auth" element={<TGAuthPage />} />
+      <Route path="/__harness/agents" element={<AgentsHarnessPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<MainLayout />}>
           <Route path="/" element={<Navigate to="/analytics" replace />} />
@@ -291,6 +302,7 @@ export default function App(): ReactElement {
           </Route>
           <Route path="/chatops" element={<ChatopsPage />} />
           <Route path="/agents" element={<AgentsOpsPage />} />
+          <Route path="/agents/session/:sessionId" element={<AgentsOpsPage />} />
           <Route path="/voice" element={<VoiceLayout />}>
             <Route index element={<SessionsListPage />} />
             <Route path="sessions" element={<SessionsListPage />} />

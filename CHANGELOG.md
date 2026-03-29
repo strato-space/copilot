@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-03-29
+### PROBLEM SOLVED
+- **11:30** ACP conversation surfaces still had no single reusable kernel: VS Code ACP UI lived in the `acp-plugin` repo, while `copilot /agents` had no package-backed ACP surface and would have required another host-specific reimplementation.
+- **11:35** ACP and MCP boundaries in `copilot` were still easy to blur at the planning/runtime level, which risked leaking MCP transport assumptions into `/agents` even though `/agents` is supposed to be an ACP-only interaction surface.
+- **11:45** Repo-level execution governance was duplicated and partially ambiguous: spec-driven subagent work did not yet encode a strict precedence rule for full `bd show --json`, local spec path lineage, and parent-packet overrides.
+
+### FEATURE IMPLEMENTED
+- **11:40** Materialized an ACP-only `/agents` surface in `copilot` that consumes the shared `@strato-space/acp-ui` package instead of reimplementing ACP UI logic locally.
+- **11:50** Split repo governance into a cleaner contract: `AGENTS.md` now carries repository execution policy, while `RUNTIME.md` carries deploy/runtime topology and smoke-check authority.
+- **12:10** Added deterministic ACP harness coverage so `copilot /agents` can be verified against the same shared UI/kernel contract used by ACP Plugin and browser `acp-chat`.
+- **12:25** Closed the ACP UI package wave (`copilot-o7g3`) with normalized BD decomposition, ACP-only host adapter boundaries, and checked-in verification lanes.
+
+### CHANGES
+- **11:40** Added ACP-only host/runtime files for `copilot /agents`:
+  - `app/src/pages/AgentsOpsPage.tsx`
+  - `app/src/pages/AgentsHarnessPage.tsx`
+  - `app/src/services/acpHostBridge.ts`
+  - `app/src/services/acpSocket.ts`
+  - `backend/src/api/socket/acp.ts`
+  - `backend/src/services/acp/`
+- **11:50** Updated governance/runtime docs:
+  - `AGENTS.md`
+  - `RUNTIME.md`
+  - `README.md`
+  - `plan/acp-ui-component-base-spec.md`
+  - `plan/index.md`
+- **12:10** Added ACP contract/eval coverage in:
+  - `app/__tests__/agents/acpHostBridge.test.ts`
+  - `app/__tests__/agents/agentsAcpSurfaceContract.test.ts`
+  - `app/e2e/agents-harness.spec.ts`
+  - `backend/__tests__/services/acpSocketIsolationContract.test.ts`
+- **12:25** Normalized BD execution metadata for the ACP UI wave and closed `copilot-o7g3` after synchronizing issue DAG, acceptance criteria, and spec/source linkage.
+- **12:30** Verification:
+  - `cd app && npm run build`
+  - `cd backend && npm run build`
+  - `cd app && npm test -- --runTestsByPath __tests__/agents/acpHostBridge.test.ts __tests__/agents/agentsAcpSurfaceContract.test.ts`
+  - `cd backend && npm test -- --runTestsByPath __tests__/services/acpSocketIsolationContract.test.ts`
+  - `cd app && PLAYWRIGHT_BASE_URL=http://127.0.0.1:4174 npm run test:e2e:agents-harness`
+
 ## 2026-03-28
 ### PROBLEM SOLVED
 - **00:40** Voice transcription error forensics still drifted in the `missing_transport` / `missing_file_path` branches: the worker stored `openai_key_present=false` even when a runtime key was configured, which made Telegram/media repair investigations point at the wrong root cause.

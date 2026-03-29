@@ -1,3 +1,4 @@
+import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -8,6 +9,14 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    resolve: {
+      alias: {
+        react: path.resolve(process.cwd(), 'node_modules/react'),
+        'react-dom': path.resolve(process.cwd(), 'node_modules/react-dom'),
+        'react/jsx-runtime': path.resolve(process.cwd(), 'node_modules/react/jsx-runtime.js'),
+      },
+      dedupe: ['react', 'react-dom'],
+    },
     server: {
       host: '127.0.0.1',
       port: 5173,

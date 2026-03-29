@@ -15,6 +15,7 @@
     "e2e:install": "playwright install --with-deps chromium",
     "test:e2e": "playwright test",
     "test:e2e:non-voice": "playwright test e2e/auth.spec.ts e2e/crm-kanban.spec.ts e2e/operops.spec.ts e2e/task-create.spec.ts",
+    "test:e2e:agents-harness": "playwright test e2e/agents-harness.spec.ts --project=chromium-unauth",
     "test:e2e:shard:1of2": "playwright test e2e/auth.spec.ts e2e/crm-kanban.spec.ts e2e/operops.spec.ts e2e/task-create.spec.ts --shard=1/2",
     "test:e2e:shard:2of2": "playwright test e2e/auth.spec.ts e2e/crm-kanban.spec.ts e2e/operops.spec.ts e2e/task-create.spec.ts --shard=2/2",
     "test:e2e:voice:shard:1of2": "playwright test e2e/voice.spec.ts e2e/voice-fab-lifecycle.spec.ts e2e/voice-log.spec.ts --project=chromium-unauth --shard=1/2",
@@ -25,6 +26,7 @@
     "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@strato-space/acp-ui": "file:../../../tools/acp/strato-space/acp-plugin/packages/acp-ui",
     "@types/classnames": "^2.3.0",
     "antd": "^6.2.1",
     "antd-mask-input": "^2.0.7",

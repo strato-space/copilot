@@ -1179,3 +1179,56 @@ h5 {
     flex-wrap: wrap;
   }
 }
+
+
+.copilot-acp-page {
+  display: flex;
+  min-width: 0;
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.copilot-acp-host {
+  flex: 1 1 auto;
+  height: 100vh;
+  min-height: 100vh;
+  min-width: 0;
+  overflow: hidden;
+  background: #f8fafc;
+  --vscode-editor-background: #f8fafc;
+  --vscode-editor-foreground: #0f172a;
+  --vscode-editorWidget-background: #ffffff;
+  --vscode-editorWidget-border: #d8e1f0;
+  --vscode-panel-border: #d8e1f0;
+  --vscode-sideBar-border: #d8e1f0;
+  --vscode-focusBorder: #4f46e5;
+  --vscode-button-background: #0f172a;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-secondaryBackground: #e2e8f0;
+  --vscode-button-secondaryForeground: #0f172a;
+  --vscode-list-hoverBackground: #eef2ff;
+  --vscode-descriptionForeground: #475569;
+  --vscode-errorForeground: #b91c1c;
+  --vscode-textLink-foreground: #4338ca;
+  --vscode-textPreformat-background: #eef2ff;
+  --vscode-textPreformat-foreground: #0f172a;
+  --vscode-scrollbarSlider-background: rgba(15, 23, 42, 0.18);
+  --vscode-scrollbarSlider-hoverBackground: rgba(15, 23, 42, 0.28);
+}
+
+.copilot-acp-host #acp-root {
+  background: transparent;
+  min-height: 0;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .copilot-acp-page {
+    min-height: 100dvh;
+  }
+
+  .copilot-acp-host {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+}

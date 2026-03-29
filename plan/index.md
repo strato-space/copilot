@@ -11,6 +11,7 @@ This index intentionally excludes non-normative reports and comparison/research 
 
 | Document | Kind | Document status | Epic issue ID | Issue count | Notes |
 | --- | --- | --- | --- | ---: | --- |
+| [acp-ui-component-base-spec.md](./acp-ui-component-base-spec.md) | spec | `✅Closed` | `copilot-o7g3` | 13 | Shared ACP UI package wave for `copilot /agents`; extraction, harness acceptance, tri-host verification, and rollout docs are implemented. External registry publication remains a release/operator action, not open implementation work. |
 | [2026-03-27-voice-media-attachment-transcription-spec.md](./2026-03-27-voice-media-attachment-transcription-spec.md) | spec | `✅Closed` | `copilot-qtcp` | 8 | Telemost `.webm` driver case; core correctness and optional backfill wave are closed and synced in `bd`. |
 | [2026-03-21-voice-task-surface-normalization-spec-2.md](./2026-03-21-voice-task-surface-normalization-spec-2.md) | spec | `⚪Open` | `—` | 4 | Follow-up contract; `copilot-3d7n` and `copilot-muzv` have landed evidence but remain open. |
 | [2026-03-18-voice-task-session-discussion-linking-spec.md](./2026-03-18-voice-task-session-discussion-linking-spec.md) | spec | `⚪Open` | `—` | 6 | Discussion-link/comment wave is still design-first; implementation tickets remain open. |

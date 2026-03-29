@@ -1,6 +1,7 @@
 import { type Server, type Socket } from 'socket.io';
 import { SOCKET_EVENTS } from '../constants.js';
 import { registerVoicebotSocketHandlers } from './socket/voicebot.js';
+import { registerAcpSocketHandlers } from './socket/acp.js';
 import { setupMCPProxy } from '../services/mcp/index.js';
 import { getLogger } from '../utils/logger.js';
 
@@ -31,6 +32,8 @@ export const registerSocketHandlers = (
   io.on('connection', onConnection);
 
   setupMCPProxy(io);
+
+  registerAcpSocketHandlers(io);
 
   // VoiceBot namespace (/voicebot)
   if (options?.queues) {
