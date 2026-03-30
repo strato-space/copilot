@@ -2,6 +2,8 @@
 
 ## 2026-03-30
 ### PROBLEM SOLVED
+- **14:46** Late/manual Voice uploads could still inherit the generic file-size fallback instead of the intended larger audio limit, so oversized-but-valid voice media hit a stricter threshold than the route contract expected.
+- **15:09** Canonical `upload_audio` calls could be rejected just because the target session had already become inactive, which broke late retry/manual upload recovery even when the session still existed and the caller had access.
 - **18:12** `copilot-mksr` waiting sessions with retryable transcription failures (`insufficient_quota`) could remain stuck forever after balance refill because the periodic processing loop skipped them before message-level recovery logic ran.
 - **18:12** `copilot-za9v` blocked the backend regression pack: the `/voicebot/upload_audio` oversized-file Jest test tried to allocate a production-scale payload, timed out after 10 seconds, and left a `TCPSERVERWRAP` open handle.
 - **00:40** ACP follow-up verification still had a coverage gap between the deterministic harness and the real `/agents` host shell, so regressions in the auth-token -> ACP socket -> host-bridge lifecycle could slip past the eval baseline.
@@ -10,6 +12,8 @@
 - **01:00** ACP review recovery notes were partially reconstructed from a previously frozen Codex session, but the checked-in handoff artifact did not yet explicitly record the recovery method and fully normalized issue frontier.
 
 ### FEATURE IMPLEMENTED
+- **14:46** Raised the canonical default Voice audio upload ceiling to 600MB so route/runtime behavior matches real voice-media expectations unless an explicit env override says otherwise.
+- **15:09** Kept `/api/voicebot/upload_audio` valid for existing accessible sessions even after they turn inactive, preserving late retry/manual upload recovery.
 - **18:12** Closed `copilot-mksr` by extending the TS processing loop so prioritized scans can requeue retryable waiting-session transcription rows after balance recovery, allowing stuck sessions to resume through the canonical worker path instead of manual DB edits.
 - **18:12** Closed `copilot-za9v` by replacing the pathological oversized-upload harness with a deterministic small-limit `/voicebot/upload_audio` integration test that still exercises the real Multer 413 contract and exits cleanly under Jest.
 - **00:44** Added a dedicated ACP runtime contract lane for the real `/agents` shell, combining focused Jest coverage with a Playwright shell spec that runs against the actual `MainLayout` host surface instead of the harness-only route.
@@ -19,6 +23,8 @@
 - **00:31** Rolled the ACP follow-up fixes to production and revalidated the live `/agents` route after PM2 restart, so the real public Copilot shell now serves the same ACP contract proven in the local harness/runtime lanes.
 
 ### CHANGES
+- **14:46** Updated `backend/src/constants.ts` so `VOICEBOT_FILE_STORAGE.maxAudioFileSize` now defaults to `600 * 1024 * 1024` bytes before falling back to the generic file limit.
+- **15:09** Updated `backend/src/api/routes/voicebot/uploads.ts` plus focused runtime tests `backend/__tests__/voicebot/runtime/{uploadAudioRoute,uploadAudioRoute.runtimeAnchors}.test.ts` so session existence/access remains the gating rule for `upload_audio`, not raw `is_active`.
 - **18:12** Updated quota-recovery worker/runtime coverage:
   - `backend/src/workers/voicebot/handlers/processingLoop.ts`
   - `backend/__tests__/voicebot/workers/workerProcessingLoopHandler.test.ts`

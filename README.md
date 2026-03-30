@@ -140,6 +140,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Telegram seed rollout/rollback contract lives in `ontology/plan/telegram-knowledge-seed-rollout.md`.
 - WebRTC FAB script should be loaded from same-origin static path (`/webrtc/webrtc-voicebot-lib.js`) via `VITE_WEBRTC_VOICEBOT_SCRIPT_URL`.
 - Upload route (`/api/voicebot/upload_audio`) immediately emits socket events `new_message` + `session_update` into `voicebot:session:<session_id>` so new chunks appear without waiting for polling.
+- Upload route defaults to a 600MB audio cap (`VOICEBOT_MAX_AUDIO_FILE_SIZE`, falling back to `VOICEBOT_MAX_FILE_SIZE` only when explicitly configured lower/higher); route-contract tests should override the limit locally instead of allocating production-scale payloads.
+- Upload route remains valid for canonical Voice sessions even after the session becomes inactive; late/manual retry uploads should be evaluated against session existence/access rules, not rejected solely because `is_active=false`.
 - Upload route returns structured oversize diagnostics (`413 file_too_large` with max-size metadata), and WebRTC upload client normalizes these payloads into concise UI-safe error messages.
 - Upload route propagates `request_id` in success/error payloads and logs (`X-Request-ID` passthrough or generated fallback), and WebRTC surfaces this id in upload diagnostics.
 - Upload route accepts audio-only recorder blobs mislabeled as `video/webm` and normalizes persisted/session-response MIME to `audio/webm`.
