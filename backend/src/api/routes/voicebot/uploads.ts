@@ -331,8 +331,8 @@ const streamTelegramAttachmentByFileId = async ({
     response.setHeader(
         'Content-Type',
         downloadResponse.headers.get('content-type')
-            || mimeType
-            || 'application/octet-stream'
+        || mimeType
+        || 'application/octet-stream'
     );
     response.setHeader('Content-Length', String(binary.length));
     response.status(200).send(binary);
@@ -364,8 +364,8 @@ const checkSessionAccess = async ({
 
     const session = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne({
         ...runtimeSessionQuery({
-        _id: new ObjectId(sessionId),
-        is_deleted: { $ne: true },
+            _id: new ObjectId(sessionId),
+            is_deleted: { $ne: true },
         }),
     }) as Record<string, unknown> | null;
 
@@ -410,43 +410,6 @@ const isSessionInactive = (session: Record<string, unknown>): boolean =>
     session.to_finalize === true ||
     Boolean(session.done_at);
 
-const loadSessionActivityState = async ({
-    db,
-    sessionId,
-}: {
-    db: ReturnType<typeof getDb>;
-    sessionId: string;
-}): Promise<Record<string, unknown> | null> => {
-    if (!ObjectId.isValid(sessionId)) return null;
-    return await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).findOne(
-        runtimeSessionQuery({
-            _id: new ObjectId(sessionId),
-            is_deleted: { $ne: true },
-        }),
-        {
-            projection: {
-                _id: 1,
-                is_active: 1,
-                to_finalize: 1,
-                done_at: 1,
-                runtime_tag: 1,
-            },
-        }
-    ) as Record<string, unknown> | null;
-};
-
-const isSessionWritableNow = async ({
-    db,
-    sessionId,
-}: {
-    db: ReturnType<typeof getDb>;
-    sessionId: string;
-}): Promise<boolean> => {
-    const state = await loadSessionActivityState({ db, sessionId });
-    if (!state) return false;
-    return !isSessionInactive(state);
-};
-
 const uploadAudioHandler = async (req: Request, res: Response) => {
     const ureq = req as UploadsRequest;
     const { performer } = ureq;
@@ -483,9 +446,6 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
             return res.status(sessionCheck.status).json({ error: sessionCheck.error, request_id: requestId });
         }
         const session = sessionCheck.session as Record<string, unknown>;
-        if (isSessionInactive(session)) {
-            return res.status(409).json({ error: 'session_inactive', request_id: requestId });
-        }
         const sessionTransitionId =
             getOptionalTrimmedString(session.transition_id) ||
             getOptionalTrimmedString(session.open_transition_id);
@@ -507,11 +467,6 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
         const results: Array<Record<string, unknown>> = [];
         const socketMessages: Array<Record<string, unknown>> = [];
         for (const file of filesArray) {
-            const writableBeforeInsert = await isSessionWritableNow({ db, sessionId: session_id });
-            if (!writableBeforeInsert) {
-                return res.status(409).json({ error: 'session_inactive', request_id: requestId });
-            }
-
             const createdAt = new Date();
             const absoluteFilePath = resolve(file.path);
             const fileHash = await getFileSha256FromPath(absoluteFilePath);
@@ -572,25 +527,6 @@ const uploadAudioHandler = async (req: Request, res: Response) => {
             }
 
             const op = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).insertOne(messageDoc);
-            const writableAfterInsert = await isSessionWritableNow({ db, sessionId: session_id });
-            if (!writableAfterInsert) {
-                await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
-                    runtimeMessageQuery({
-                        _id: op.insertedId,
-                        is_deleted: { $ne: true },
-                    }),
-                    {
-                        $set: {
-                            is_deleted: true,
-                            deleted_at: new Date(),
-                            updated_at: new Date(),
-                            dedup_reason: 'session_inactive_post_insert',
-                        },
-                    }
-                );
-                return res.status(409).json({ error: 'session_inactive', request_id: requestId });
-            }
-
             // Keep only the latest upload for identical content inside one session.
             // This deduplicates repeated WebRTC uploads/retries of the same blob.
             const duplicateDocs = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).find(
@@ -972,8 +908,8 @@ router.get(
 
             const messageDoc = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).findOne({
                 ...runtimeMessageQuery({
-                _id: new ObjectId(message_id),
-                is_deleted: { $ne: true },
+                    _id: new ObjectId(message_id),
+                    is_deleted: { $ne: true },
                 }),
             }) as Record<string, unknown> | null;
             if (!messageDoc) {

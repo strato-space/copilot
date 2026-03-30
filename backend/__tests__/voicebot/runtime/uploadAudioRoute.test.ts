@@ -295,10 +295,10 @@ describe('POST /voicebot/upload_audio', () => {
     expect((persisted.file_metadata as Record<string, unknown>)?.mime_type).toBe('audio/webm');
   });
 
-  it('rejects uploads for inactive/finalized sessions with session_inactive', async () => {
+  it('accepts uploads for inactive/finalized sessions', async () => {
     const sessionId = new ObjectId();
     const performerId = new ObjectId('507f1f77bcf86cd799439016');
-    const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
+    const insertedMessages: Array<Record<string, unknown>> = [];
     const sessionUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
 
     const dbStub = {
@@ -319,15 +319,7 @@ describe('POST /voicebot/upload_audio', () => {
           };
         }
         if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
-          return {
-            insertOne,
-            find: jest.fn(() => ({
-              project: jest.fn(() => ({
-                toArray: jest.fn(async () => []),
-              })),
-            })),
-            updateMany: jest.fn(async () => ({ matchedCount: 0, modifiedCount: 0 })),
-          };
+          return createMessagesCollection(insertedMessages);
         }
         return {
           findOne: jest.fn(async () => null),
@@ -365,18 +357,26 @@ describe('POST /voicebot/upload_audio', () => {
         contentType: 'audio/webm',
       });
 
-    expect(response.status).toBe(409);
-    expect(response.body.error).toBe('session_inactive');
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
     expect(response.body.request_id).toEqual(expect.any(String));
-    expect(insertOne).not.toHaveBeenCalled();
-    expect(sessionUpdateOne).not.toHaveBeenCalled();
+    expect(insertedMessages).toHaveLength(1);
+    expect(sessionUpdateOne).toHaveBeenCalledTimes(1);
+
+    const persisted = insertedMessages[0] ?? {};
+    const storedPath = typeof persisted.file_path === 'string' ? persisted.file_path : '';
+    if (storedPath) uploadedFilePaths.add(storedPath);
   });
 
-  it('drops post-insert chunk and returns session_inactive when session closes during upload flow', async () => {
+  it('keeps uploaded chunk when session closes during upload flow', async () => {
     const sessionId = new ObjectId();
     const performerId = new ObjectId('507f1f77bcf86cd799439017');
     const insertedId = new ObjectId('507f1f77bcf86cd7994390aa');
-    const insertOne = jest.fn(async () => ({ insertedId }));
+    const insertedMessages: Array<Record<string, unknown>> = [];
+    const insertOne = jest.fn(async (doc: Record<string, unknown>) => {
+      insertedMessages.push(doc);
+      return { insertedId };
+    });
     const messageUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
     const sessionUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
 
@@ -467,22 +467,17 @@ describe('POST /voicebot/upload_audio', () => {
         contentType: 'audio/webm',
       });
 
-    expect(response.status).toBe(409);
-    expect(response.body.error).toBe('session_inactive');
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
     expect(insertOne).toHaveBeenCalledTimes(1);
-    expect(messageUpdateOne).toHaveBeenCalledWith(
-      expect.objectContaining({
-        _id: insertedId,
-      }),
-      expect.objectContaining({
-        $set: expect.objectContaining({
-          is_deleted: true,
-          dedup_reason: 'session_inactive_post_insert',
-        }),
-      })
-    );
-    expect(voiceQueueAddMock).not.toHaveBeenCalled();
-    expect(sessionUpdateOne).not.toHaveBeenCalled();
+    expect(messageUpdateOne).not.toHaveBeenCalled();
+    expect(voiceQueueAddMock).toHaveBeenCalledTimes(1);
+    expect(sessionUpdateOne).toHaveBeenCalledTimes(1);
+    expect(insertedMessages).toHaveLength(1);
+
+    const persisted = insertedMessages[0] ?? {};
+    const storedPath = typeof persisted.file_path === 'string' ? persisted.file_path : '';
+    if (storedPath) uploadedFilePaths.add(storedPath);
   });
 
   it('enqueues transcribe job when voice queue is available', async () => {
