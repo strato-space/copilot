@@ -2,6 +2,8 @@
 
 ## 2026-03-30
 ### PROBLEM SOLVED
+- **22:46** `copilot-glsw` summary delivery could still start the notify pipeline and then lose durable outcome tracking when the detached hook died, leaving the chat attempt and audit rows out of sync.
+- **22:46** The default transcription reading flow could still render per-segment timeline/file/timestamp signatures inline, which polluted the operator view even when the transcript text itself was clean.
 - **14:46** Late/manual Voice uploads could still inherit the generic file-size fallback instead of the intended larger audio limit, so oversized-but-valid voice media hit a stricter threshold than the route contract expected.
 - **15:09** Canonical `upload_audio` calls could be rejected just because the target session had already become inactive, which broke late retry/manual upload recovery even when the session still existed and the caller had access.
 - **18:12** `copilot-mksr` waiting sessions with retryable transcription failures (`insufficient_quota`) could remain stuck forever after balance refill because the periodic processing loop skipped them before message-level recovery logic ran.
@@ -12,6 +14,8 @@
 - **01:00** ACP review recovery notes were partially reconstructed from a previously frozen Codex session, but the checked-in handoff artifact did not yet explicitly record the recovery method and fully normalized issue frontier.
 
 ### FEATURE IMPLEMENTED
+- **22:46** Added stable `correlation_id` / `idempotency_key` propagation through `trigger_session_ready_to_summarize`, `update_project` after `Done`, `done_multiprompt`, and notify worker audit writes so summary retries dedupe against existing status rows instead of downgrading them.
+- **22:46** Removed inline per-segment timeline signatures from the default transcription view while keeping fallback error signatures visible when transcript text is absent.
 - **14:46** Raised the canonical default Voice audio upload ceiling to 600MB so route/runtime behavior matches real voice-media expectations unless an explicit env override says otherwise.
 - **15:09** Kept `/api/voicebot/upload_audio` valid for existing accessible sessions even after they turn inactive, preserving late retry/manual upload recovery.
 - **18:12** Closed `copilot-mksr` by extending the TS processing loop so prioritized scans can requeue retryable waiting-session transcription rows after balance recovery, allowing stuck sessions to resume through the canonical worker path instead of manual DB edits.
@@ -23,6 +27,13 @@
 - **00:31** Rolled the ACP follow-up fixes to production and revalidated the live `/agents` route after PM2 restart, so the real public Copilot shell now serves the same ACP contract proven in the local harness/runtime lanes.
 
 ### CHANGES
+- **22:46** Updated `backend/src/api/routes/voicebot/sessions.ts`, `backend/src/services/voicebot/voicebotDoneNotify.ts`, `backend/src/workers/voicebot/handlers/{doneMultiprompt,notifyHandler}.ts`, `backend/__tests__/voicebot/notify/{doneNotifyService,notifyWorkerEventLog}.test.ts`, and `backend/__tests__/voicebot/runtime/{triggerSummarizeRoute,updateProjectRouteSummaryAudit}.test.ts`.
+- **22:46** Updated `app/src/components/voice/TranscriptionTableRow.tsx` plus transcript contract tests `app/__tests__/voice/{transcriptionFallbackErrorSignatureContract,transcriptionTimelineLabel}.test.ts`.
+- **22:46** Verification:
+  - `cd app && npx jest --runInBand __tests__/voice/transcriptionFallbackErrorSignatureContract.test.ts __tests__/voice/transcriptionTimelineLabel.test.ts`
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules' npx jest --runInBand __tests__/voicebot/notify/doneNotifyService.test.ts __tests__/voicebot/notify/notifyWorkerEventLog.test.ts __tests__/voicebot/runtime/triggerSummarizeRoute.test.ts __tests__/voicebot/runtime/updateProjectRouteSummaryAudit.test.ts __tests__/voicebot/workers/workerDoneMultipromptHandler.test.ts`
+  - `cd app && npm run build`
+  - `cd backend && npm run build`
 - **14:46** Updated `backend/src/constants.ts` so `VOICEBOT_FILE_STORAGE.maxAudioFileSize` now defaults to `600 * 1024 * 1024` bytes before falling back to the generic file limit.
 - **15:09** Updated `backend/src/api/routes/voicebot/uploads.ts` plus focused runtime tests `backend/__tests__/voicebot/runtime/{uploadAudioRoute,uploadAudioRoute.runtimeAnchors}.test.ts` so session existence/access remains the gating rule for `upload_audio`, not raw `is_active`.
 - **18:12** Updated quota-recovery worker/runtime coverage:

@@ -12,6 +12,7 @@ Use this as a fast guardrail before implementing anything:
 - Full-track chunks are intentionally non-uploading until diarization is introduced; do not re-enable implicit uploads.
 - Runtime isolation for Voice is deployment-scoped (separate DB/instance per environment); `runtime_tag` is transitional metadata and not an operational routing contract.
 - Realtime updates are required: uploads and workers must emit session/message events so Transcription/Categorization update without refresh.
+- Summary notify retries for `SESSION_READY_TO_SUMMARIZE` and `summary_save` must preserve stable `correlation_id` / `idempotency_key` values so audit rows dedupe instead of downgrading previous status rows.
 - Browser-based UI acceptance should restart `mcp@chrome-devtools.service` before each live verification cycle; stale MCP/CDP state is not an accepted explanation for skipped smoke checks.
 - Browser-based layout verification should include screenshot-level overlap checks when footer/status widgets or task panes change; CSS/DOM-only assertions are not sufficient for acceptance.
 - Shared selector parity is a product contract: project and operational task-type controls should reuse the same wrappers and option-source builders across Voice and OperOps so hierarchy/labels never degrade into flat lists or raw ids on one surface.
@@ -32,6 +33,7 @@ Use this as a fast guardrail before implementing anything:
   - stale `CREATE_TASKS` repair marker precedence is explicit: processor-level timestamps (`job_queued_timestamp`, request timestamps, finish timestamps) dominate stale-age evaluation; session `_id` timestamp is fallback-only when explicit markers are absent,
   - user-owned draft fields follow a `user wins` collision policy against concurrent `CREATE_TASKS` recompute writes; the machine-actionable contract lives in `plan/2026-03-21-voice-task-surface-normalization-spec-2.md`,
   - accepted session-task reads are served through `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Ready+' }`; this bucket is accepted-only and `DRAFT_10` rows there are a bug (`copilot-f6z4`), not an allowed fallback.
+- Default transcription rendering stays operator-first: per-segment timeline/file/timestamp signatures do not appear inline in the default reading flow, while fallback error signatures remain visible when the transcript body is missing.
 
 ## Minimal Delta To Remember (2026-02-26 / 2026-02-27)
 

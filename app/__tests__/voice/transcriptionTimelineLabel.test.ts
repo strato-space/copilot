@@ -13,17 +13,20 @@ describe('Transcription timeline label contract', () => {
     expect(transcriptionSource).toMatch(/sessionBaseTimestampMs=\{sessionBaseTimestampMs\}/);
   });
 
-  it('formats timeline label via metadata signature helper and uses ch_* segment ids for actions', () => {
-    expect(rowSource).toMatch(
-      /formatVoiceMetadataSignature\(\{\s*startSeconds:\s*relativeStartSeconds,\s*endSeconds:\s*relativeEndSeconds\s*\?\?\s*relativeStartSeconds,[\s\S]*?sourceFileName:\s*extract\w*SourceFileName\(row\),[\s\S]*?absoluteTimestampMs:\s*segmentAbsoluteStartMs/m
-    );
-
+  it('keeps fallback signature behavior while removing inline segment signatures and uses ch_* segment ids for actions', () => {
     // Segment ids are stable `ch_<oid>` strings (not raw ObjectIds).
     expect(rowSource).toMatch(/startsWith\('ch_'\)/);
 
-    // Timeline label is rendered below segment text.
-    expect(rowSource).toContain('const timelineLabel = formatSegmentTimeline(seg, row, sessionBaseTimestampMs);');
-    expect(rowSource).toMatch(/\{timelineLabel\s*\?\s*\(/);
-    expect(rowSource).toContain('{timelineLabel}');
+    // Timeline signature lines are not rendered inline per segment in the default reading flow.
+    expect(rowSource).not.toContain('formatSegmentTimeline');
+    expect(rowSource).not.toMatch(/sourceFileName:\s*extract\w*SourceFileName\(row\),[\s\S]*?absoluteTimestampMs:\s*segmentAbsoluteStartMs/m);
+
+    // Error fallback signature remains available when transcription body is missing.
+    expect(rowSource).toContain('const fallbackErrorSignature = resolveFallbackErrorSignature(row, sessionBaseTimestampMs);');
+    expect(rowSource).toMatch(
+      /formatVoiceMetadataSignature\(\{\s*startSeconds:\s*relativeStartSeconds,\s*endSeconds:\s*relativeStartSeconds,[\s\S]*?sourceFileName:\s*extract\w*SourceFileName\(row\),[\s\S]*?absoluteTimestampMs:\s*messageTimestampMs/m
+    );
+    expect(rowSource).toMatch(/\{fallbackErrorSignature\s*\?\s*\(/);
+    expect(rowSource).toContain('{fallbackErrorSignature}');
   });
 });

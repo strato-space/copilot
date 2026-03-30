@@ -165,7 +165,9 @@ describe('handleDoneMultipromptJob', () => {
         payload: expect.objectContaining({
           project_id: projectId.toHexString(),
           correlation_id: expect.any(String),
-          idempotency_key: expect.any(String),
+          idempotency_key: expect.stringMatching(
+            new RegExp(`^${sessionId.toString()}:summary_telegram_send:`)
+          ),
         }),
       }),
       expect.objectContaining({ attempts: 1 })
@@ -178,6 +180,9 @@ describe('handleDoneMultipromptJob', () => {
         event_name: 'summary_telegram_send',
         status: 'queued',
         correlation_id: expect.any(String),
+        idempotency_key: expect.stringMatching(
+          new RegExp(`^${sessionId.toString()}:summary_telegram_send:`)
+        ),
       })
     );
     expect(writeSummaryAuditLogMock).toHaveBeenNthCalledWith(

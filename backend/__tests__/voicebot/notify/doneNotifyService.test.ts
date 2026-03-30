@@ -228,4 +228,74 @@ describe('voicebotDoneNotify service', () => {
       })
     );
   });
+
+  it('does not downgrade existing failed summary_telegram_send audit to done for the same idempotency key', async () => {
+    const sessionId = new ObjectId();
+    const existingId = new ObjectId();
+    const findOne = jest.fn(async () => ({
+      _id: existingId,
+      status: 'failed',
+      metadata: { idempotency_key: 'idem-4', source: 'notify_worker', reason: 'notify_hook_exit_non_zero' },
+    }));
+    const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
+    const updateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const db = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSION_LOG) {
+          return { findOne, insertOne, updateOne };
+        }
+        return { findOne: async () => null };
+      },
+    } as any;
+
+    const result = await writeSummaryAuditLog({
+      db,
+      session_id: sessionId,
+      session: { _id: sessionId },
+      event_name: 'summary_telegram_send',
+      status: 'done',
+      correlation_id: 'corr-4',
+      idempotency_key: 'idem-4',
+      metadata: { source: 'notify_worker', semantic_ack_reason: 'json_ack' },
+    });
+
+    expect(result.status).toBe('failed');
+    expect(insertOne).not.toHaveBeenCalled();
+    expect(updateOne).not.toHaveBeenCalled();
+  });
+
+  it('does not downgrade existing done summary_save audit to pending for the same idempotency key', async () => {
+    const sessionId = new ObjectId();
+    const existingId = new ObjectId();
+    const findOne = jest.fn(async () => ({
+      _id: existingId,
+      status: 'done',
+      metadata: { idempotency_key: 'idem-5', source: 'voicebot_save_summary_route' },
+    }));
+    const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
+    const updateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const db = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSION_LOG) {
+          return { findOne, insertOne, updateOne };
+        }
+        return { findOne: async () => null };
+      },
+    } as any;
+
+    const result = await writeSummaryAuditLog({
+      db,
+      session_id: sessionId,
+      session: { _id: sessionId },
+      event_name: 'summary_save',
+      status: 'pending',
+      correlation_id: 'corr-5',
+      idempotency_key: 'idem-5',
+      metadata: { source: 'project_update_after_done' },
+    });
+
+    expect(result.status).toBe('done');
+    expect(insertOne).not.toHaveBeenCalled();
+    expect(updateOne).not.toHaveBeenCalled();
+  });
 });

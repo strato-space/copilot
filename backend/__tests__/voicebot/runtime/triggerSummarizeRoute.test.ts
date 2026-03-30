@@ -102,6 +102,8 @@ const buildDbStub = ({ withProject, withPmoProject = true }: { withProject: bool
   };
 
   const sessionLogCollection: StubCollection = {
+    findOne: jest.fn(async () => null),
+    updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
     insertOne: jest.fn(async (doc: Record<string, unknown>) => {
       insertedLogs.push(doc);
       return { insertedId: new ObjectId() };
@@ -191,20 +193,35 @@ describe('POST /voicebot/trigger_session_ready_to_summarize', () => {
     expect(response.body.project_id).toBe(fixture.pmoProjectId.toString());
     expect(response.body.notify_event).toBe(VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE);
     expect(response.body.notify_enqueued).toBe(true);
+    expect(typeof response.body.correlation_id).toBe('string');
+    expect(response.body.idempotency_key).toBe(
+      `${fixture.sessionId.toString()}:summary_telegram_send:${response.body.correlation_id}`
+    );
 
     expect(fixture.projectsCollection.findOne).toHaveBeenCalled();
     expect(fixture.sessionsCollection.updateOne).toHaveBeenCalled();
-    expect(fixture.sessionLogCollection.insertOne).toHaveBeenCalledTimes(1);
+    expect(fixture.sessionLogCollection.insertOne).toHaveBeenCalledTimes(2);
 
     expect(fixture.insertedLogs[0]?.event_name).toBe('notify_requested');
     const metadata = fixture.insertedLogs[0]?.metadata as Record<string, unknown>;
     expect(metadata.notify_event).toBe(VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE);
+    expect(metadata.notify_payload).toEqual({
+      project_id: fixture.pmoProjectId.toString(),
+      correlation_id: response.body.correlation_id,
+      idempotency_key: response.body.idempotency_key,
+    });
+    expect(fixture.insertedLogs[1]?.event_name).toBe('summary_telegram_send');
+    expect(fixture.insertedLogs[1]?.status).toBe('queued');
     expect(addNotifyJobMock).toHaveBeenCalledTimes(1);
     expect(addNotifyJobMock).toHaveBeenCalledWith(
       VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
       expect.objectContaining({
         session_id: fixture.sessionId.toString(),
-        payload: { project_id: fixture.pmoProjectId.toString() },
+        payload: {
+          project_id: fixture.pmoProjectId.toString(),
+          correlation_id: response.body.correlation_id,
+          idempotency_key: response.body.idempotency_key,
+        },
       }),
       expect.objectContaining({ attempts: 1 })
     );
@@ -225,13 +242,17 @@ describe('POST /voicebot/trigger_session_ready_to_summarize', () => {
     expect(response.body.project_assigned).toBe(false);
     expect(response.body.project_id).toBe(fixture.pmoProjectId.toString());
     expect(response.body.notify_enqueued).toBe(false);
+    expect(typeof response.body.correlation_id).toBe('string');
+    expect(response.body.idempotency_key).toBe(
+      `${fixture.sessionId.toString()}:summary_telegram_send:${response.body.correlation_id}`
+    );
 
     expect(fixture.projectsCollection.findOne).not.toHaveBeenCalled();
     expect(fixture.sessionsCollection.updateOne).not.toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ $set: expect.objectContaining({ project_id: expect.any(ObjectId) }) })
     );
-    expect(fixture.sessionLogCollection.insertOne).toHaveBeenCalledTimes(1);
+    expect(fixture.sessionLogCollection.insertOne).toHaveBeenCalledTimes(2);
   });
 
   it('does not fail when session has no project and default PMO project is missing', async () => {
@@ -255,19 +276,31 @@ describe('POST /voicebot/trigger_session_ready_to_summarize', () => {
     expect(response.body.project_assigned).toBe(false);
     expect(response.body.project_id).toBeNull();
     expect(response.body.notify_enqueued).toBe(true);
+    expect(typeof response.body.correlation_id).toBe('string');
+    expect(response.body.idempotency_key).toBe(
+      `${fixture.sessionId.toString()}:summary_telegram_send:${response.body.correlation_id}`
+    );
 
     expect(fixture.sessionsCollection.updateOne).not.toHaveBeenCalled();
     expect(addNotifyJobMock).toHaveBeenCalledWith(
       VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
       expect.objectContaining({
         session_id: fixture.sessionId.toString(),
-        payload: { project_id: null },
+        payload: {
+          project_id: null,
+          correlation_id: response.body.correlation_id,
+          idempotency_key: response.body.idempotency_key,
+        },
       }),
       expect.objectContaining({ attempts: 1 })
     );
 
     const metadata = fixture.insertedLogs[0]?.metadata as Record<string, unknown>;
-    expect(metadata.notify_payload).toEqual({ project_id: null });
+    expect(metadata.notify_payload).toEqual({
+      project_id: null,
+      correlation_id: response.body.correlation_id,
+      idempotency_key: response.body.idempotency_key,
+    });
   });
 
   it('returns 400 for missing session_id', async () => {

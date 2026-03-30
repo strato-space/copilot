@@ -414,50 +414,6 @@ const formatSegmentMeta = (seg: TranscriptionSegment, speakerDisplayMap: Map<str
 
 const isSegmentOid = (value: unknown): value is string => typeof value === 'string' && value.startsWith('ch_');
 
-const formatSegmentTimeline = (
-    segment: TranscriptionSegment,
-    row: VoiceBotMessage,
-    sessionBaseTimestampMs: number | null
-): string | null => {
-    const start = parseSecondsValue(segment?.start);
-    if (start == null) return null;
-    const end = getSegmentEndSeconds(segment, row, start);
-    const hasEnd = end != null && end > start;
-
-    const messageTimestampMs = toTimestampMs(row?.message_timestamp);
-    const segmentAbsoluteStartMs =
-        messageTimestampMs != null
-            ? messageTimestampMs + start * 1000
-            : toTimestampMs(segment?.absoluteTimestampMs);
-
-    let relativeStartSeconds = start;
-    let relativeEndSeconds: number | null = hasEnd ? end : null;
-
-    const sessionBaseMs =
-        typeof sessionBaseTimestampMs === 'number' && Number.isFinite(sessionBaseTimestampMs)
-            ? sessionBaseTimestampMs
-            : null;
-
-    if (sessionBaseMs != null) {
-        if (messageTimestampMs != null) {
-            const messageOffsetSeconds = Math.max(0, (messageTimestampMs - sessionBaseMs) / 1000);
-            relativeStartSeconds = messageOffsetSeconds + start;
-            if (hasEnd) relativeEndSeconds = messageOffsetSeconds + end;
-        } else if (segmentAbsoluteStartMs != null) {
-            const sessionStartSeconds = Math.max(0, (segmentAbsoluteStartMs - sessionBaseMs) / 1000);
-            relativeStartSeconds = sessionStartSeconds;
-            if (hasEnd) relativeEndSeconds = sessionStartSeconds + (end - start);
-        }
-    }
-
-    return formatVoiceMetadataSignature({
-        startSeconds: relativeStartSeconds,
-        endSeconds: relativeEndSeconds ?? relativeStartSeconds,
-        sourceFileName: extractVoiceSourceFileName(row),
-        absoluteTimestampMs: segmentAbsoluteStartMs,
-    });
-};
-
 const copyTextToClipboard = async (text: string): Promise<boolean> => {
     const trimmed = text.trim();
     if (!trimmed) return false;
@@ -668,7 +624,6 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                         visibleSegments.map((seg, segIdx) => {
                             const segmentKey = seg?.id || `${row?._id || row?.message_id || 'msg'}:${segIdx}`;
                             const segmentMeta = formatSegmentMeta(seg, speakerDisplayMap);
-                            const timelineLabel = formatSegmentTimeline(seg, row, sessionBaseTimestampMs);
                             const showActions = isSegmentOid(seg?.id);
                             const isEditing = editingOid === seg?.id;
 
@@ -754,11 +709,6 @@ export default function TranscriptionTableRow({ row, isLast, sessionBaseTimestam
                                                 <div className="self-stretch text-black/90 text-[12px] font-normal leading-5 whitespace-pre-wrap break-words">
                                                     {seg?.text}
                                                 </div>
-                                                {timelineLabel ? (
-                                                    <div className="mt-1 text-black/55 text-[10px] font-normal leading-4">
-                                                        {timelineLabel}
-                                                    </div>
-                                                ) : null}
                                                 {imageAttachment && segIdx === 0 ? (
                                                     <a
                                                         href={imageAttachment.url}

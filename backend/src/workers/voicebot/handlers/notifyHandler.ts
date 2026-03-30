@@ -5,6 +5,7 @@ import { ObjectId } from 'mongodb';
 import { VOICEBOT_COLLECTIONS, VOICEBOT_JOBS } from '../../../constants.js';
 import { getDb } from '../../../services/db.js';
 import { insertSessionLogEvent } from '../../../services/voicebotSessionLog.js';
+import { writeSummaryAuditLog } from '../../../services/voicebot/voicebotDoneNotify.js';
 import { mergeWithRuntimeFilter } from '../../../services/runtimeScope.js';
 import {
   buildHookLogPath,
@@ -185,6 +186,61 @@ const writeNotifyLog = async ({
   }
 };
 
+const writeSummarizeAuditOutcome = async ({
+  context,
+  status,
+  sourceTransport,
+  metadata,
+}: {
+  context: SessionLogContext;
+  status: 'queued' | 'pending' | 'done' | 'failed' | 'blocked';
+  sourceTransport: 'http' | 'local_hook';
+  metadata: Record<string, unknown>;
+}): Promise<void> => {
+  if (context.event !== VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE) return;
+  if (!context.sessionObjectId) return;
+
+  const correlationId = String(context.payload.correlation_id || '').trim();
+  const idempotencyKey = String(context.payload.idempotency_key || '').trim();
+  if (!correlationId || !idempotencyKey) return;
+
+  try {
+    await writeSummaryAuditLog({
+      db: getDb(),
+      session_id: context.sessionObjectId,
+      session: { project_id: context.projectObjectId },
+      event_name: 'summary_telegram_send',
+      status,
+      actor: {
+        kind: 'worker',
+        id: 'voicebot-workers.notify',
+      },
+      source: {
+        channel: 'system',
+        transport: sourceTransport,
+        origin_ref: 'voicebot-workers.notify',
+      },
+      action: { available: true, type: 'retry' },
+      correlation_id: correlationId,
+      idempotency_key: idempotencyKey,
+      metadata: {
+        source: 'notify_worker',
+        notify_event: context.event,
+        notify_payload: context.payload,
+        ...metadata,
+      },
+    });
+  } catch (error) {
+    logger.warn('[voicebot-worker] summary audit write failed', {
+      event: context.event,
+      session_id: context.session_id,
+      status,
+      source_transport: sourceTransport,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
 const runNotifyHooks = async ({
   event,
   session_id,
@@ -276,6 +332,80 @@ const runNotifyHooks = async ({
             args,
             log_path: logPath,
             error: String(spawnErr),
+            hooks_config_path: loaded.resolvedPath,
+          },
+        });
+        void writeSummarizeAuditOutcome({
+          context: logContext,
+          status: 'failed',
+          sourceTransport: 'local_hook',
+          metadata: {
+            reason: 'notify_hook_spawn_failed',
+            cmd,
+            args,
+            log_path: logPath,
+            error: String(spawnErr),
+            hooks_config_path: loaded.resolvedPath,
+          },
+        });
+      });
+
+      child.on('exit', (code, signal) => {
+        const failedByCode = typeof code === 'number' && code !== 0;
+        const failedBySignal = typeof signal === 'string' && signal.length > 0;
+        if (!failedByCode && !failedBySignal) {
+          void writeSummarizeAuditOutcome({
+            context: logContext,
+            status: 'done',
+            sourceTransport: 'local_hook',
+            metadata: {
+              reason: 'notify_hook_exit_zero',
+              cmd,
+              args,
+              log_path: logPath,
+              exit_code: typeof code === 'number' ? code : 0,
+              exit_signal: signal || null,
+              hooks_config_path: loaded.resolvedPath,
+            },
+          });
+          return;
+        }
+
+        logger.error('[voicebot-worker] notify hook exited with failure', {
+          event,
+          session_id: session_id || null,
+          cmd,
+          args,
+          log_path: logPath,
+          exit_code: typeof code === 'number' ? code : null,
+          exit_signal: signal || null,
+        });
+        void writeNotifyLog({
+          context: logContext,
+          eventName: 'notify_hook_failed',
+          status: 'error',
+          sourceTransport: 'local_hook',
+          metadata: {
+            reason: 'notify_hook_exit_non_zero',
+            cmd,
+            args,
+            log_path: logPath,
+            exit_code: typeof code === 'number' ? code : null,
+            exit_signal: signal || null,
+            hooks_config_path: loaded.resolvedPath,
+          },
+        });
+        void writeSummarizeAuditOutcome({
+          context: logContext,
+          status: 'failed',
+          sourceTransport: 'local_hook',
+          metadata: {
+            reason: 'notify_hook_exit_non_zero',
+            cmd,
+            args,
+            log_path: logPath,
+            exit_code: typeof code === 'number' ? code : null,
+            exit_signal: signal || null,
             hooks_config_path: loaded.resolvedPath,
           },
         });
@@ -373,6 +503,16 @@ export const handleNotifyJob = async (
         reason: 'notify_url_or_token_not_configured',
       },
     });
+    if (requiresSemanticAck(event) && (hooksResult.hooks_started || 0) === 0) {
+      await writeSummarizeAuditOutcome({
+        context: logContext,
+        status: 'failed',
+        sourceTransport: 'http',
+        metadata: {
+          reason: 'notify_url_or_token_not_configured',
+        },
+      });
+    }
     return {
       ok: true,
       skipped: true,
@@ -405,6 +545,16 @@ export const handleNotifyJob = async (
         status: 'error',
         sourceTransport: 'http',
         metadata: {
+          status: response.status,
+          body: bodyText || null,
+        },
+      });
+      await writeSummarizeAuditOutcome({
+        context: logContext,
+        status: 'failed',
+        sourceTransport: 'http',
+        metadata: {
+          reason: 'notify_http_failed',
           status: response.status,
           body: bodyText || null,
         },
@@ -446,6 +596,17 @@ export const handleNotifyJob = async (
             body: bodyText || null,
           },
         });
+        await writeSummarizeAuditOutcome({
+          context: logContext,
+          status: 'failed',
+          sourceTransport: 'http',
+          metadata: {
+            reason: 'notify_http_semantic_ack_failed',
+            semantic_ack_reason: ackResult.reason,
+            status: response.status,
+            body: bodyText || null,
+          },
+        });
         return {
           ok: false,
           error: 'notify_http_semantic_ack_failed',
@@ -470,6 +631,16 @@ export const handleNotifyJob = async (
         semantic_ack_reason: semanticAckReason,
       },
     });
+    await writeSummarizeAuditOutcome({
+      context: logContext,
+      status: 'pending',
+      sourceTransport: 'http',
+      metadata: {
+        reason: 'notify_http_semantic_ack_accepted',
+        status: response.status,
+        semantic_ack_reason: semanticAckReason,
+      },
+    });
     return {
       ok: true,
       status: response.status,
@@ -487,6 +658,15 @@ export const handleNotifyJob = async (
       status: 'error',
       sourceTransport: 'http',
       metadata: {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
+    await writeSummarizeAuditOutcome({
+      context: logContext,
+      status: 'failed',
+      sourceTransport: 'http',
+      metadata: {
+        reason: 'notify_http_failed',
         error: error instanceof Error ? error.message : String(error),
       },
     });

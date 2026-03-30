@@ -7,6 +7,7 @@ import { ObjectId } from 'mongodb';
 const spawnMock = jest.fn();
 const getDbMock = jest.fn();
 const insertSessionLogEventMock = jest.fn();
+const writeSummaryAuditLogMock = jest.fn();
 
 jest.unstable_mockModule('node:child_process', () => ({
   spawn: spawnMock,
@@ -18,6 +19,10 @@ jest.unstable_mockModule('../../../src/services/db.js', () => ({
 
 jest.unstable_mockModule('../../../src/services/voicebotSessionLog.js', () => ({
   insertSessionLogEvent: insertSessionLogEventMock,
+}));
+
+jest.unstable_mockModule('../../../src/services/voicebot/voicebotDoneNotify.js', () => ({
+  writeSummaryAuditLog: writeSummaryAuditLogMock,
 }));
 
 const {
@@ -38,6 +43,7 @@ describe('voicebot notify worker session-log events', () => {
     spawnMock.mockReset();
     getDbMock.mockReset();
     insertSessionLogEventMock.mockReset();
+    writeSummaryAuditLogMock.mockReset();
     jest.restoreAllMocks();
 
     const projectId = new ObjectId('699f70000000000000000001');
@@ -57,6 +63,7 @@ describe('voicebot notify worker session-log events', () => {
     spawnMock.mockReset();
     getDbMock.mockReset();
     insertSessionLogEventMock.mockReset();
+    writeSummaryAuditLogMock.mockReset();
     jest.restoreAllMocks();
   });
 
@@ -130,7 +137,11 @@ describe('voicebot notify worker session-log events', () => {
     const result = await handleNotifyJob({
       event: 'session_ready_to_summarize',
       session_id: '699f70000000000000000013',
-      payload: { project_id: '699f70000000000000000001' },
+      payload: {
+        project_id: '699f70000000000000000001',
+        correlation_id: 'corr-empty-ack',
+        idempotency_key: '699f70000000000000000013:summary_telegram_send:corr-empty-ack',
+      },
     });
 
     expect(result).toEqual(
@@ -147,5 +158,140 @@ describe('voicebot notify worker session-log events', () => {
     expect(failedCall).toBeDefined();
     expect(failedCall?.[0]?.metadata?.reason).toBe('notify_http_semantic_ack_failed');
     expect(failedCall?.[0]?.metadata?.semantic_ack_reason).toBe('empty_body');
+    expect(writeSummaryAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: 'summary_telegram_send',
+        status: 'failed',
+        correlation_id: 'corr-empty-ack',
+        idempotency_key: '699f70000000000000000013:summary_telegram_send:corr-empty-ack',
+      })
+    );
+  });
+
+  it('writes durable hook failure when detached summarize hook exits with non-zero code', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copilot-notify-log-'));
+    const hooksPath = path.join(tempDir, 'notifies.hooks.yaml');
+    fs.writeFileSync(hooksPath, ['session_ready_to_summarize:', '  - cmd: /bin/echo', '    args: ["run"]'].join('\n'));
+    process.env.VOICE_BOT_NOTIFY_HOOKS_CONFIG = hooksPath;
+    process.env.VOICE_BOT_NOTIFIES_URL = 'https://call-actions.stratospace.fun/notify';
+    process.env.VOICE_BOT_NOTIFIES_BEARER_TOKEN = 'token';
+
+    const handlers = new Map<string, (...args: unknown[]) => void>();
+    const childStub = {
+      pid: 5002,
+      on: jest.fn((eventName: string, handler: (...args: unknown[]) => void) => {
+        handlers.set(eventName, handler);
+      }),
+      unref: jest.fn(),
+    };
+    spawnMock.mockReturnValue(childStub);
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ accepted: true }),
+    } as Response);
+
+    const result = await handleNotifyJob({
+      event: 'session_ready_to_summarize',
+      session_id: '699f70000000000000000014',
+      payload: {
+        project_id: '699f70000000000000000001',
+        correlation_id: 'corr-hook-exit',
+        idempotency_key: '699f70000000000000000014:summary_telegram_send:corr-hook-exit',
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(writeSummaryAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: 'summary_telegram_send',
+        status: 'pending',
+        correlation_id: 'corr-hook-exit',
+        idempotency_key: '699f70000000000000000014:summary_telegram_send:corr-hook-exit',
+      })
+    );
+
+    const exitHandler = handlers.get('exit');
+    expect(exitHandler).toBeDefined();
+    exitHandler?.(130, null);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const hookFailedCall = insertSessionLogEventMock.mock.calls.find(
+      (call) =>
+        call[0]?.event_name === 'notify_hook_failed'
+        && call[0]?.metadata?.reason === 'notify_hook_exit_non_zero'
+    );
+    expect(hookFailedCall).toBeDefined();
+    expect(writeSummaryAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: 'summary_telegram_send',
+        status: 'failed',
+        correlation_id: 'corr-hook-exit',
+        idempotency_key: '699f70000000000000000014:summary_telegram_send:corr-hook-exit',
+      })
+    );
+  });
+
+  it('marks summarize audit done only after detached hook exits successfully', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copilot-notify-log-'));
+    const hooksPath = path.join(tempDir, 'notifies.hooks.yaml');
+    fs.writeFileSync(hooksPath, ['session_ready_to_summarize:', '  - cmd: /bin/echo', '    args: ["run"]'].join('\n'));
+    process.env.VOICE_BOT_NOTIFY_HOOKS_CONFIG = hooksPath;
+    process.env.VOICE_BOT_NOTIFIES_URL = 'https://call-actions.stratospace.fun/notify';
+    process.env.VOICE_BOT_NOTIFIES_BEARER_TOKEN = 'token';
+
+    const handlers = new Map<string, (...args: unknown[]) => void>();
+    const childStub = {
+      pid: 5003,
+      on: jest.fn((eventName: string, handler: (...args: unknown[]) => void) => {
+        handlers.set(eventName, handler);
+      }),
+      unref: jest.fn(),
+    };
+    spawnMock.mockReturnValue(childStub);
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ accepted: true }),
+    } as Response);
+
+    const result = await handleNotifyJob({
+      event: 'session_ready_to_summarize',
+      session_id: '699f70000000000000000015',
+      payload: {
+        project_id: '699f70000000000000000001',
+        correlation_id: 'corr-hook-success',
+        idempotency_key: '699f70000000000000000015:summary_telegram_send:corr-hook-success',
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(writeSummaryAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: 'summary_telegram_send',
+        status: 'pending',
+        correlation_id: 'corr-hook-success',
+        idempotency_key: '699f70000000000000000015:summary_telegram_send:corr-hook-success',
+      })
+    );
+    expect(writeSummaryAuditLogMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: 'summary_telegram_send',
+        status: 'done',
+        correlation_id: 'corr-hook-success',
+      })
+    );
+
+    const exitHandler = handlers.get('exit');
+    expect(exitHandler).toBeDefined();
+    exitHandler?.(0, null);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(writeSummaryAuditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: 'summary_telegram_send',
+        status: 'done',
+        correlation_id: 'corr-hook-success',
+        idempotency_key: '699f70000000000000000015:summary_telegram_send:corr-hook-success',
+      })
+    );
   });
 });

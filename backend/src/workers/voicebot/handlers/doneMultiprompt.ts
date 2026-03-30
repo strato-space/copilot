@@ -132,7 +132,7 @@ const queueReadyToSummarizeNotify = async ({
     return { enqueued: false, reason: 'notifies_queue_unavailable' };
   }
 
-  const idempotencyKey = `${session_id}-SUMMARY-${correlation_id}`;
+  const idempotencyKey = `${session_id}:summary_telegram_send:${correlation_id}`;
   await notifiesQueue.add(
     VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
     {

@@ -273,6 +273,48 @@ describe('Transcription fallback error signature contract', () => {
     }
   });
 
+  it('does not render per-segment signature lines inline while keeping transcript text visible', () => {
+    const messageTimestampMs = 1710000300000;
+    const sessionBaseTimestampMs = 1710000000000;
+    const row = asVoiceMessage({
+      file_name: 'Запись встречи 30.03.2026 15-08-25 - запись.webm',
+      message_timestamp: messageTimestampMs,
+      transcription: {
+        segments: [
+          {
+            id: 'ch_1',
+            start: 0,
+            end: 47,
+            text: 'Первый абзац транскрипта без шумной подписи.',
+            is_deleted: false,
+          },
+        ],
+      } as VoiceBotMessage['transcription'],
+    });
+
+    const expectedInlineSignature = formatVoiceMetadataSignature({
+      startSeconds: (messageTimestampMs - sessionBaseTimestampMs) / 1000,
+      endSeconds: (messageTimestampMs - sessionBaseTimestampMs) / 1000 + 47,
+      sourceFileName: 'Запись встречи 30.03.2026 15-08-25 - запись.webm',
+      absoluteTimestampMs: messageTimestampMs,
+    });
+
+    const view = renderIntoDom(
+      React.createElement(TranscriptionTableRow, {
+        row,
+        isLast: false,
+        sessionBaseTimestampMs,
+      })
+    );
+
+    try {
+      expect(view.container.textContent).toContain('Первый абзац транскрипта без шумной подписи.');
+      expect(view.container.textContent).not.toContain(expectedInlineSignature);
+    } finally {
+      view.unmount();
+    }
+  });
+
   it('keeps actionable skip/error information visible when present', () => {
     const row = asVoiceMessage({
       transcription: {

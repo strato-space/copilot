@@ -51,6 +51,7 @@ These decisions are part of the current platform contract and must be preserved 
 - Realtime UX is mandatory for voice:
   - upload must emit `new_message` + `session_update`,
   - processing must emit `message_update` for transcription/categorization progress.
+  - summary notify flows for `SESSION_READY_TO_SUMMARIZE` and `summary_save` must preserve stable `correlation_id` / `idempotency_key` values through route, worker, and audit-log writes so retries dedupe against existing status rows.
 - Retryable transcription failures must remain recoverable even for waiting sessions:
   - `is_waiting` is not a valid reason to skip message-level retry scans when rows carry canonical OpenAI recovery retry markers (for example `insufficient_quota` or `invalid_api_key`),
   - after balance/key recovery, the periodic processing loop must be able to requeue those rows without manual DB repair.
@@ -69,7 +70,7 @@ These decisions are part of the current platform contract and must be preserved 
   - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate,
   - user-owned Draft fields follow a `user wins` collision policy against concurrent `CREATE_TASKS` recompute writes until the user explicitly releases the override,
   - stale `CREATE_TASKS` repair marker precedence is explicit: processor-level timestamps (`job_queued_timestamp`, request timestamps, finish timestamps) dominate stale-age evaluation; session `_id` timestamp is fallback-only when explicit markers are absent.
-  - the default Transcription table is operator-first: raw attachment projection/debug metadata does not belong in the normal row body; only actionable skip/error state may surface inline with the transcript/fallback body.
+  - the default Transcription table is operator-first: raw attachment projection/debug metadata does not belong in the normal row body; per-segment timeline/file/timestamp signatures stay out of the default reading flow, and only actionable skip/error state may surface inline with the transcript/fallback body.
 
 ## Critical Interfaces To Preserve [RULE]
 

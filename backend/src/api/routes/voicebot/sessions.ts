@@ -4061,10 +4061,25 @@ router.post('/update_project', async (req: Request, res: Response) => {
 
         const oldProjectId = session.project_id ? String(session.project_id) : null;
         const projectChanged = oldProjectId !== projectId;
+        const existingSummaryCorrelationId =
+            getOptionalTrimmedString((session as Record<string, unknown>).summary_correlation_id) ||
+            getOptionalTrimmedString((session as Record<string, unknown>).summary_flow_correlation_id);
+        let summaryCorrelationId: string | null = null;
+
+        const sessionSetPayload: Record<string, unknown> = {
+            project_id: new ObjectId(projectId),
+            updated_at: new Date(),
+        };
+        if (projectChanged && session.is_active === false) {
+            summaryCorrelationId = existingSummaryCorrelationId || randomUUID();
+        }
+        if (projectChanged && session.is_active === false && summaryCorrelationId && !existingSummaryCorrelationId) {
+            sessionSetPayload.summary_correlation_id = summaryCorrelationId;
+        }
 
         const result = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
             runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
-            { $set: { project_id: new ObjectId(projectId), updated_at: new Date() } }
+            { $set: sessionSetPayload }
         );
 
         if (result.matchedCount === 0) {
@@ -4101,13 +4116,77 @@ router.post('/update_project', async (req: Request, res: Response) => {
             });
 
             if (session.is_active === false) {
-                const summarizePayload: Record<string, unknown> = { project_id: projectId };
+                const summarizeCorrelationId = summaryCorrelationId || randomUUID();
+                const summarizeIdempotencyKey = `${sessionId}:summary_telegram_send:${summarizeCorrelationId}`;
+                const summarizePayload: Record<string, unknown> = {
+                    project_id: projectId,
+                    correlation_id: summarizeCorrelationId,
+                    idempotency_key: summarizeIdempotencyKey,
+                };
+                const summarizeSessionContext = {
+                    ...(session as Record<string, unknown>),
+                    project_id: new ObjectId(projectId),
+                    ...(summaryCorrelationId ? { summary_correlation_id: summarizeCorrelationId } : {}),
+                };
+                const existingSummaryMarkdown = (session as Record<string, unknown>)[VOICE_SESSION_SUMMARY_FIELD];
+                const existingSummarySavedAt = (session as Record<string, unknown>).summary_saved_at;
+                const hasPersistedSummary =
+                    (typeof existingSummaryMarkdown === 'string' && existingSummaryMarkdown.trim().length > 0)
+                    || existingSummarySavedAt instanceof Date
+                    || (typeof existingSummarySavedAt === 'string' && existingSummarySavedAt.trim().length > 0);
+                const summarizeNotifyEnqueued = await enqueueVoicebotNotify({
+                    sessionId,
+                    event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+                    payload: summarizePayload,
+                });
+                const summaryNotifyStatus = summarizeNotifyEnqueued ? 'queued' : 'failed';
+                await writeSummaryAuditLog({
+                    db,
+                    session_id: new ObjectId(sessionId),
+                    session: summarizeSessionContext,
+                    event_name: 'summary_telegram_send',
+                    status: summaryNotifyStatus,
+                    actor,
+                    source,
+                    action: { available: true, type: 'retry' },
+                    correlation_id: summarizeCorrelationId,
+                    idempotency_key: summarizeIdempotencyKey,
+                    metadata: {
+                        notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+                        notify_payload: summarizePayload,
+                        source: 'project_update_after_done',
+                        queue_status: summaryNotifyStatus,
+                    },
+                });
+                const summarySaveStatus = hasPersistedSummary
+                    ? 'done'
+                    : (summarizeNotifyEnqueued ? 'pending' : 'blocked');
+                await writeSummaryAuditLog({
+                    db,
+                    session_id: new ObjectId(sessionId),
+                    session: summarizeSessionContext,
+                    event_name: 'summary_save',
+                    status: summarySaveStatus,
+                    actor,
+                    source,
+                    action: { available: true, type: 'retry' },
+                    correlation_id: summarizeCorrelationId,
+                    idempotency_key: `${sessionId}:summary_save:${summarizeCorrelationId}`,
+                    metadata: {
+                        source: 'project_update_after_done',
+                        save_transport: 'mcp_voice',
+                        queue_status: summarySaveStatus,
+                        depends_on: 'summary_telegram_send',
+                        persisted_summary_present: hasPersistedSummary,
+                    },
+                });
                 await insertSessionLogEvent({
                     db,
                     session_id: new ObjectId(sessionId),
                     project_id: new ObjectId(projectId),
                     event_name: 'notify_requested',
                     status: 'done',
+                    correlation_id: summarizeCorrelationId,
                     actor,
                     source,
                     action: { available: true, type: 'resend' },
@@ -4116,11 +4195,6 @@ router.post('/update_project', async (req: Request, res: Response) => {
                         notify_payload: summarizePayload,
                         source: 'project_update_after_done',
                     },
-                });
-                await enqueueVoicebotNotify({
-                    sessionId,
-                    event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
-                    payload: summarizePayload,
                 });
             }
         }
@@ -7614,6 +7688,10 @@ router.post('/trigger_session_ready_to_summarize', async (req: Request, res: Res
 
         let projectIdToUse = session.project_id ? String(session.project_id) : '';
         let projectAssigned = false;
+        const existingSummaryCorrelationId =
+            getOptionalTrimmedString((session as Record<string, unknown>).summary_correlation_id) ||
+            getOptionalTrimmedString((session as Record<string, unknown>).summary_flow_correlation_id);
+        const summarizeCorrelationId = existingSummaryCorrelationId || randomUUID();
         if (!projectIdToUse) {
             let pmoProject = await db.collection(VOICEBOT_COLLECTIONS.PROJECTS).findOne({
                 is_deleted: { $ne: true },
@@ -7634,9 +7712,13 @@ router.post('/trigger_session_ready_to_summarize', async (req: Request, res: Res
                 });
             }
             if (pmoProject?._id) {
+                const setPayload: Record<string, unknown> = { project_id: pmoProject._id, updated_at: new Date() };
+                if (!existingSummaryCorrelationId) {
+                    setPayload.summary_correlation_id = summarizeCorrelationId;
+                }
                 await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
                     runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
-                    { $set: { project_id: pmoProject._id, updated_at: new Date() } }
+                    { $set: setPayload }
                 );
                 projectIdToUse = String(pmoProject._id);
                 projectAssigned = true;
@@ -7646,9 +7728,26 @@ router.post('/trigger_session_ready_to_summarize', async (req: Request, res: Res
                 });
             }
         }
+        if (projectIdToUse && !existingSummaryCorrelationId) {
+            await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
+                runtimeSessionQuery({ _id: new ObjectId(sessionId) }),
+                {
+                    $set: {
+                        summary_correlation_id: summarizeCorrelationId,
+                        updated_at: new Date(),
+                    },
+                }
+            );
+        }
 
         const actor = buildActorFromPerformer(performer);
         const source = buildWebSource(req);
+        const summarizeIdempotencyKey = `${sessionId}:summary_telegram_send:${summarizeCorrelationId}`;
+        const summarizePayload = {
+            project_id: projectIdToUse || null,
+            correlation_id: summarizeCorrelationId,
+            idempotency_key: summarizeIdempotencyKey,
+        };
         const logEvent = await insertSessionLogEvent({
             db,
             session_id: new ObjectId(sessionId),
@@ -7660,14 +7759,36 @@ router.post('/trigger_session_ready_to_summarize', async (req: Request, res: Res
             action: { available: true, type: 'resend' },
             metadata: {
                 notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
-                notify_payload: { project_id: projectIdToUse || null },
+                notify_payload: summarizePayload,
                 source: 'manual_trigger',
+            },
+        });
+        await writeSummaryAuditLog({
+            db,
+            session_id: new ObjectId(sessionId),
+            session: {
+                ...(session as Record<string, unknown>),
+                ...(projectIdToUse ? { project_id: new ObjectId(projectIdToUse) } : {}),
+                summary_correlation_id: summarizeCorrelationId,
+            },
+            event_name: 'summary_telegram_send',
+            status: 'queued',
+            actor,
+            source,
+            action: { available: true, type: 'retry' },
+            correlation_id: summarizeCorrelationId,
+            idempotency_key: summarizeIdempotencyKey,
+            metadata: {
+                notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
+                notify_payload: summarizePayload,
+                source: 'manual_trigger',
+                queue_status: 'queued',
             },
         });
         const notifyEnqueued = await enqueueVoicebotNotify({
             sessionId,
             event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
-            payload: { project_id: projectIdToUse || null },
+            payload: summarizePayload,
         });
 
         return res.status(200).json({
@@ -7677,6 +7798,8 @@ router.post('/trigger_session_ready_to_summarize', async (req: Request, res: Res
             event_oid: logEvent?._id ? formatOid('evt', logEvent._id as ObjectId) : null,
             notify_event: VOICEBOT_JOBS.notifies.SESSION_READY_TO_SUMMARIZE,
             notify_enqueued: notifyEnqueued,
+            correlation_id: summarizeCorrelationId,
+            idempotency_key: summarizeIdempotencyKey,
         });
     } catch (error) {
         logger.error('Error in trigger_session_ready_to_summarize:', error);

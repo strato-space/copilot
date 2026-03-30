@@ -67,6 +67,35 @@ const findExistingSummaryAuditLog = async ({
   ) as Promise<Record<string, unknown> | null>;
 };
 
+const shouldSkipSummaryAuditStatusUpdate = ({
+  event_name,
+  existingStatus,
+  nextStatus,
+}: {
+  event_name: SummaryAuditEventName;
+  existingStatus: string;
+  nextStatus: SummaryAuditStatus;
+}): boolean => {
+  if (!existingStatus) return false;
+  if (existingStatus === nextStatus) return true;
+
+  if (event_name === 'summary_telegram_send') {
+    if (existingStatus === 'failed' && nextStatus !== 'failed') return true;
+    if (existingStatus === 'done' && nextStatus !== 'failed') return true;
+    if (existingStatus === 'pending' && nextStatus === 'queued') return true;
+    return false;
+  }
+
+  if (event_name === 'summary_save') {
+    if (existingStatus === 'done' && nextStatus !== 'done') return true;
+    if ((existingStatus === 'done' || existingStatus === 'failed') && (nextStatus === 'pending' || nextStatus === 'blocked')) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 export const writeSummaryAuditLog = async ({
   db,
   session_id,
@@ -98,7 +127,9 @@ export const writeSummaryAuditLog = async ({
   });
   if (existing) {
     const existingStatus = typeof existing.status === 'string' ? existing.status.trim() : '';
-    if (existingStatus === status) return existing;
+    if (shouldSkipSummaryAuditStatusUpdate({ event_name, existingStatus, nextStatus: status })) {
+      return existing;
+    }
 
     const existingMetadata =
       existing.metadata && typeof existing.metadata === 'object'
