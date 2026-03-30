@@ -2,12 +2,16 @@
 
 ## 2026-03-30
 ### PROBLEM SOLVED
+- **18:12** `copilot-mksr` waiting sessions with retryable transcription failures (`insufficient_quota`) could remain stuck forever after balance refill because the periodic processing loop skipped them before message-level recovery logic ran.
+- **18:12** `copilot-za9v` blocked the backend regression pack: the `/voicebot/upload_audio` oversized-file Jest test tried to allocate a production-scale payload, timed out after 10 seconds, and left a `TCPSERVERWRAP` open handle.
 - **00:40** ACP follow-up verification still had a coverage gap between the deterministic harness and the real `/agents` host shell, so regressions in the auth-token -> ACP socket -> host-bridge lifecycle could slip past the eval baseline.
 - **00:45** The ACP socket layer could not be deterministically injected in browser/runtime tests, which made host-shell coverage harder to isolate and encouraged brittle live-only verification.
 - **00:52** Unavailable ACP agent selection could desynchronize frontend and backend state: the backend announced the rejected agent instead of preserving the last valid selection, so the settings dialog could drift away from the real connected session state.
 - **01:00** ACP review recovery notes were partially reconstructed from a previously frozen Codex session, but the checked-in handoff artifact did not yet explicitly record the recovery method and fully normalized issue frontier.
 
 ### FEATURE IMPLEMENTED
+- **18:12** Closed `copilot-mksr` by extending the TS processing loop so prioritized scans can requeue retryable waiting-session transcription rows after balance recovery, allowing stuck sessions to resume through the canonical worker path instead of manual DB edits.
+- **18:12** Closed `copilot-za9v` by replacing the pathological oversized-upload harness with a deterministic small-limit `/voicebot/upload_audio` integration test that still exercises the real Multer 413 contract and exits cleanly under Jest.
 - **00:44** Added a dedicated ACP runtime contract lane for the real `/agents` shell, combining focused Jest coverage with a Playwright shell spec that runs against the actual `MainLayout` host surface instead of the harness-only route.
 - **00:47** Added an injectable ACP socket factory so browser/runtime tests can force deterministic ACP transport behavior without changing the production ACP-only transport contract.
 - **00:55** Preserved ACP agent-selection truth on the backend: rejected unavailable-agent switches now keep the current valid agent selected and re-emit the authoritative agent list instead of lying about a failed selection.
@@ -15,6 +19,17 @@
 - **00:31** Rolled the ACP follow-up fixes to production and revalidated the live `/agents` route after PM2 restart, so the real public Copilot shell now serves the same ACP contract proven in the local harness/runtime lanes.
 
 ### CHANGES
+- **18:12** Updated quota-recovery worker/runtime coverage:
+  - `backend/src/workers/voicebot/handlers/processingLoop.ts`
+  - `backend/__tests__/voicebot/workers/workerProcessingLoopHandler.test.ts`
+  - added focused waiting-session regressions for generic pending transcriptions and `insufficient_quota` recovery
+- **18:12** Updated backend upload-limit test harness:
+  - `backend/__tests__/voicebot/attachment/uploadAudioFileSizeLimitRoute.test.ts`
+  - switched to an isolated `VOICEBOT_MAX_AUDIO_FILE_SIZE=16` import path, exact 413 payload assertions, and clean `--detectOpenHandles` execution
+- **18:12** Verification:
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules --disable-warning=ExperimentalWarning --disable-warning=DEP0040' npx jest __tests__/voicebot/workers/workerProcessingLoopHandler.test.ts __tests__/voicebot/workers/workerProcessingLoopHandler.finalizationAndDeferred.test.ts __tests__/voicebot/runtime/processingLoop.pendingClassification.test.ts`
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules --disable-warning=ExperimentalWarning --disable-warning=DEP0040' npx jest __tests__/voicebot/attachment/uploadAudioFileSizeLimitRoute.test.ts --runInBand --detectOpenHandles`
+  - `cd backend && npm run test:parallel-safe`
 - **00:44** Added real ACP shell verification surfaces:
   - `app/__tests__/agents/agentsOpsRuntimeContract.test.tsx`
   - `app/e2e/agents-shell.spec.ts`

@@ -51,6 +51,9 @@ These decisions are part of the current platform contract and must be preserved 
 - Realtime UX is mandatory for voice:
   - upload must emit `new_message` + `session_update`,
   - processing must emit `message_update` for transcription/categorization progress.
+- Retryable transcription failures must remain recoverable even for waiting sessions:
+  - `is_waiting` is not a valid reason to skip message-level retry scans when rows carry canonical OpenAI recovery retry markers (for example `insufficient_quota` or `invalid_api_key`),
+  - after balance/key recovery, the periodic processing loop must be able to requeue those rows without manual DB repair.
 - Session list behavior is contract-bound:
   - quick filters: `Все`, `Без проекта`, `Активные`, `Мои`,
   - deleted mode toggle (`Показывать удаленные`) is part of persisted filter state,

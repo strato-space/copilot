@@ -308,6 +308,222 @@ describe('handleProcessingLoopJob', () => {
     );
   });
 
+  it('requeues pending transcriptions for prioritized waiting sessions', async () => {
+    const waitingSessionId = new ObjectId();
+    const waitingMessageId = new ObjectId();
+
+    const sessionsFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: waitingSessionId,
+            is_messages_processed: false,
+            is_waiting: true,
+          },
+        ])
+      )
+      .mockImplementationOnce(() => makeFindCursor([]));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            session_id: waitingSessionId,
+            to_transcribe: true,
+          },
+        ])
+      )
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: waitingMessageId,
+            session_id: waitingSessionId,
+            chat_id: 3045664,
+            message_id: 42,
+            message_timestamp: 1770000000,
+            is_transcribed: false,
+            to_transcribe: true,
+            transcribe_attempts: 0,
+            created_at: 0,
+            transcribe_timestamp: null,
+          },
+        ])
+      );
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            find: sessionsFind,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: messagesFind,
+            updateOne: messagesUpdateOne,
+            countDocuments: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+          };
+        }
+        return {};
+      },
+    });
+
+    const voiceQueueAdd = jest.fn(async () => ({ id: 'voice-job-waiting-retry' }));
+
+    const result = await handleProcessingLoopJob(
+      {},
+      {
+        queues: {
+          [VOICEBOT_QUEUES.VOICE]: {
+            add: voiceQueueAdd,
+          },
+        },
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.requeued_transcriptions).toBe(1);
+    expect(voiceQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.voice.TRANSCRIBE,
+      expect.objectContaining({
+        message_id: waitingMessageId.toString(),
+        message_db_id: waitingMessageId.toString(),
+        session_id: waitingSessionId.toString(),
+      }),
+      expect.objectContaining({ deduplication: expect.any(Object) })
+    );
+
+    const sessionsFilter = sessionsFind.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect((sessionsFilter._id as { $in: ObjectId[] }).$in.map((entry) => entry.toHexString())).toEqual([
+      waitingSessionId.toHexString(),
+    ]);
+    expect(JSON.stringify(sessionsFilter)).not.toContain('\"is_waiting\":{\"$ne\":true}');
+  });
+
+  it('requeues waiting insufficient_quota messages after balance recovery scan', async () => {
+    const waitingSessionId = new ObjectId();
+    const waitingMessageId = new ObjectId();
+
+    const sessionsFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: waitingSessionId,
+            is_messages_processed: false,
+            is_waiting: true,
+            is_corrupted: true,
+            error_source: 'transcription',
+            transcription_error: 'insufficient_quota',
+          },
+        ])
+      )
+      .mockImplementationOnce(() => makeFindCursor([]));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    const messagesFind = jest
+      .fn()
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            session_id: waitingSessionId,
+            transcription_retry_reason: 'insufficient_quota',
+            is_transcribed: false,
+            to_transcribe: false,
+          },
+        ])
+      )
+      .mockImplementationOnce(() =>
+        makeFindCursor([
+          {
+            _id: waitingMessageId,
+            session_id: waitingSessionId,
+            chat_id: 3045664,
+            message_id: 43,
+            message_timestamp: 1770000001,
+            is_transcribed: false,
+            to_transcribe: false,
+            transcription_retry_reason: 'insufficient_quota',
+            transcription_error: 'insufficient_quota',
+            transcription_processing_state: 'pending_transcription',
+            transcribe_attempts: 1,
+            created_at: 0,
+            transcribe_timestamp: null,
+          },
+        ])
+      );
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            find: sessionsFind,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: messagesFind,
+            updateOne: messagesUpdateOne,
+            countDocuments: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+          };
+        }
+        return {};
+      },
+    });
+
+    const voiceQueueAdd = jest.fn(async () => ({ id: 'voice-job-waiting-insufficient-quota' }));
+
+    const result = await handleProcessingLoopJob(
+      {},
+      {
+        queues: {
+          [VOICEBOT_QUEUES.VOICE]: {
+            add: voiceQueueAdd,
+          },
+        },
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.requeued_transcriptions).toBe(1);
+    expect(voiceQueueAdd).toHaveBeenCalledWith(
+      VOICEBOT_JOBS.voice.TRANSCRIBE,
+      expect.objectContaining({
+        message_id: waitingMessageId.toString(),
+        message_db_id: waitingMessageId.toString(),
+        session_id: waitingSessionId.toString(),
+      }),
+      expect.objectContaining({ deduplication: expect.any(Object) })
+    );
+
+    const resetWaitingQuotaSession = sessionsUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload.is_corrupted === false;
+    });
+    expect(resetWaitingQuotaSession).toBeTruthy();
+
+    const markRetryCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload.to_transcribe === true;
+    });
+    expect(markRetryCall).toBeTruthy();
+
+    const sessionsFilter = sessionsFind.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect((sessionsFilter._id as { $in: ObjectId[] }).$in.map((entry) => entry.toHexString())).toEqual([
+      waitingSessionId.toHexString(),
+    ]);
+    expect(JSON.stringify(sessionsFilter)).not.toContain('\"is_waiting\":{\"$ne\":true}');
+  });
+
   it('does not requeue before transcription_next_attempt_at', async () => {
     const sessionId = new ObjectId();
     const messageId = new ObjectId();

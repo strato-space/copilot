@@ -200,8 +200,8 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - WebRTC close path no longer emits `session_done` from browser Socket.IO; FAB/page/yesterday close flows use the same REST close endpoint for deterministic behavior across host/path variants.
 - WebRTC unload persistence now stores any non-recording state as `paused` to avoid stale auto-resume after refresh/unload races.
 - Full-track recording segments are represented as `full_track` in Monitor/UI with duration and timestamp metadata, but upload to backend is intentionally disabled until diarization workflow is enabled.
-- Voice workers schedule periodic `PROCESSING` scans in TS runtime; pending-session filtering uses `is_waiting: { $ne: true }` to include legacy rows without explicit flag.
-- TS `processingLoop` now also prioritizes sessions inferred from pending message backlog (including rows with `is_messages_processed=true`) and requeues categorization after quota cooldown via processors queue.
+- Voice workers schedule periodic `PROCESSING` scans in TS runtime; default background scans still skip ordinary waiting sessions, but prioritized scans must include waiting sessions when message rows carry retryable transcription/categorization work.
+- TS `processingLoop` now also prioritizes sessions inferred from pending message backlog (including rows with `is_messages_processed=true`), requeues categorization after quota cooldown via processors queue, and restores waiting-session transcription rows after balance recovery when they are marked with canonical retry reasons such as `insufficient_quota`.
 - TS transcribe handler deduplicates repeated uploads by file hash (`file_hash` / `file_unique_id` / `hash_sha256`) and reuses existing session transcription before new OpenAI requests.
 - Historical WebRTC duplicates can be collapsed by filename per session via backend script:
   - dry run: `cd backend && DOTENV_CONFIG_PATH=.env.production npm run voice:dedupe:webm:dry`
@@ -543,6 +543,7 @@ The Finance Ops SPA is served by Nginx, and `/api` is proxied to the backend. Fo
 - Default worker strategy:
   - `app`/`miniapp` unit tests use `--maxWorkers=${JEST_MAX_WORKERS:-50%}`
   - `backend` unit tests are split into parallel-safe + serialized groups (`BACKEND_JEST_MAX_WORKERS` controls parallel-safe group)
+- Backend upload-size route coverage should use a tiny route-local test limit instead of allocating production-scale payloads; the canonical `/voicebot/upload_audio` size-limit contract test now verifies the real Multer path with an isolated `VOICEBOT_MAX_AUDIO_FILE_SIZE` override and `--detectOpenHandles`.
 - `full` suite now executes app e2e and voice e2e as explicit shard jobs declared in `platforms.json`.
 - Current caveat: `scripts/run-test-suite.sh` does not yet honor `resource_lock`, so the two `app-voice-e2e` shard jobs may conflict when `full` runs them in parallel. If `full` fails with `ERR_EMPTY_RESPONSE` on `/voice`, rerun `npm run test:e2e:voice:shard:1of2` and `npm run test:e2e:voice:shard:2of2` separately; both currently pass in isolation.
 - `app` E2E requires explicit target URL via `PLAYWRIGHT_BASE_URL` (default config uses `http://127.0.0.1:3002`).

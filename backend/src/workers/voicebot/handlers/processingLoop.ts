@@ -308,7 +308,6 @@ export const handleProcessingLoopJob = async (
 
   const sessionsScanBaseFilter: Record<string, unknown> = {
     is_deleted: { $ne: true },
-    is_waiting: { $ne: true },
     $or: [
       { is_corrupted: { $ne: true } },
       {
@@ -346,6 +345,10 @@ export const handleProcessingLoopJob = async (
               transcription_processing_state: 'pending_classification',
             },
             {
+              is_transcribed: { $ne: true },
+              transcription_retry_reason: { $in: [...OPENAI_RECOVERY_RETRY_CODES] },
+            },
+            {
               categorization_retry_reason: { $in: [...OPENAI_RECOVERY_RETRY_CODES] },
             },
             uncategorizedRecoveryPrioritizationPredicate(),
@@ -375,6 +378,7 @@ export const handleProcessingLoopJob = async (
       const key = asObjectId.toString();
       if (seenSessionIds.has(key)) continue;
       seenSessionIds.add(key);
+
       prioritizedSessionIds.push(asObjectId);
       if (prioritizedSessionIds.length >= sessionLimit) break;
     }
@@ -382,9 +386,9 @@ export const handleProcessingLoopJob = async (
 
   const sessionsFilter: Record<string, unknown> = {
     ...sessionsScanBaseFilter,
-    ...(prioritizedSessionIds.length > 0
+    ...(rawSessionId || prioritizedSessionIds.length > 0
       ? { _id: { $in: prioritizedSessionIds } }
-      : { is_messages_processed: false }),
+      : { is_messages_processed: false, is_waiting: { $ne: true } }),
   };
 
   const sessions = (await db

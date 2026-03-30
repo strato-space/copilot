@@ -3,7 +3,6 @@ import request from 'supertest';
 import { ObjectId } from 'mongodb';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
-import { VOICEBOT_COLLECTIONS, VOICEBOT_FILE_STORAGE } from '../../../src/constants.js';
 import { PERMISSIONS } from '../../../src/permissions/permissions-config.js';
 
 const getDbMock = jest.fn();
@@ -12,25 +11,49 @@ const getUserPermissionsMock = jest.fn();
 const requirePermissionMock = jest.fn(() => (_req: express.Request, _res: express.Response, next: express.NextFunction) => next());
 const getAudioDurationFromFileMock = jest.fn();
 const getFileSha256FromPathMock = jest.fn(async () => 'sha256-upload-test');
+const TEST_MAX_AUDIO_FILE_SIZE = 16;
 
-jest.unstable_mockModule('../../../src/services/db.js', () => ({
-  getDb: getDbMock,
-  getRawDb: getRawDbMock,
-}));
+const registerRouteMocks = () => {
+  jest.unstable_mockModule('../../../src/services/db.js', () => ({
+    getDb: getDbMock,
+    getRawDb: getRawDbMock,
+  }));
 
-jest.unstable_mockModule('../../../src/permissions/permission-manager.js', () => ({
-  PermissionManager: {
-    getUserPermissions: getUserPermissionsMock,
-    requirePermission: requirePermissionMock,
-  },
-}));
+  jest.unstable_mockModule('../../../src/permissions/permission-manager.js', () => ({
+    PermissionManager: {
+      getUserPermissions: getUserPermissionsMock,
+      requirePermission: requirePermissionMock,
+    },
+  }));
 
-jest.unstable_mockModule('../../../src/utils/audioUtils.js', () => ({
-  getAudioDurationFromFile: getAudioDurationFromFileMock,
-  getFileSha256FromPath: getFileSha256FromPathMock,
-}));
+  jest.unstable_mockModule('../../../src/utils/audioUtils.js', () => ({
+    getAudioDurationFromFile: getAudioDurationFromFileMock,
+    getFileSha256FromPath: getFileSha256FromPathMock,
+  }));
+};
 
-const { default: uploadsRouter } = await import('../../../src/api/routes/voicebot/uploads.js');
+const loadRouteUnderTest = async () => {
+  const originalMaxAudioFileSizeEnv = process.env.VOICEBOT_MAX_AUDIO_FILE_SIZE;
+  process.env.VOICEBOT_MAX_AUDIO_FILE_SIZE = String(TEST_MAX_AUDIO_FILE_SIZE);
+  jest.resetModules();
+  registerRouteMocks();
+
+  try {
+    const constantsModule = await import('../../../src/constants.js');
+    const uploadsModule = await import('../../../src/api/routes/voicebot/uploads.js');
+    return {
+      VOICEBOT_COLLECTIONS: constantsModule.VOICEBOT_COLLECTIONS,
+      VOICEBOT_FILE_STORAGE: constantsModule.VOICEBOT_FILE_STORAGE,
+      uploadsRouter: uploadsModule.default,
+    };
+  } finally {
+    if (originalMaxAudioFileSizeEnv === undefined) {
+      delete process.env.VOICEBOT_MAX_AUDIO_FILE_SIZE;
+    } else {
+      process.env.VOICEBOT_MAX_AUDIO_FILE_SIZE = originalMaxAudioFileSizeEnv;
+    }
+  }
+};
 
 describe('POST /voicebot/upload_audio file size limit handling', () => {
   beforeEach(() => {
@@ -42,6 +65,14 @@ describe('POST /voicebot/upload_audio file size limit handling', () => {
     getFileSha256FromPathMock.mockReset();
 
     getUserPermissionsMock.mockResolvedValue([PERMISSIONS.VOICEBOT_SESSIONS.READ_ALL]);
+  });
+
+  it('returns 413 with structured payload when file exceeds configured max size', async () => {
+    const {
+      VOICEBOT_COLLECTIONS,
+      VOICEBOT_FILE_STORAGE,
+      uploadsRouter,
+    } = await loadRouteUnderTest();
 
     const sessionId = new ObjectId('507f1f77bcf86cd799439040');
     const performerId = new ObjectId('507f1f77bcf86cd799439041');
@@ -81,9 +112,6 @@ describe('POST /voicebot/upload_audio file size limit handling', () => {
 
     getDbMock.mockReturnValue(dbStub);
     getRawDbMock.mockReturnValue(dbStub);
-  });
-
-  it('returns 413 with structured payload when file exceeds configured max size', async () => {
     const app = express();
     app.use(express.json());
     app.use((req, _res, next) => {
@@ -101,7 +129,7 @@ describe('POST /voicebot/upload_audio file size limit handling', () => {
     });
     app.use('/voicebot', uploadsRouter);
 
-    const payload = Buffer.alloc(VOICEBOT_FILE_STORAGE.maxAudioFileSize + 1, 7);
+    const payload = Buffer.from('small-audio-payload');
     const response = await request(app)
       .post('/voicebot/upload_audio')
       .field('session_id', '507f1f77bcf86cd799439040')
@@ -111,10 +139,12 @@ describe('POST /voicebot/upload_audio file size limit handling', () => {
       });
 
     expect(response.status).toBe(413);
-    expect(response.body).toMatchObject({
+    expect(response.body).toEqual({
       error: 'file_too_large',
       message: 'File too large',
+      max_size_bytes: VOICEBOT_FILE_STORAGE.maxAudioFileSize,
+      max_size_mb: Number((VOICEBOT_FILE_STORAGE.maxAudioFileSize / (1024 * 1024)).toFixed(1)),
+      request_id: expect.any(String),
     });
-    expect(Number(response.body.max_size_bytes)).toBeGreaterThan(0);
   });
 });
