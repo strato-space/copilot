@@ -66,4 +66,148 @@ describe('transcriptionGarbageDetector', () => {
     expect(result.is_garbage).toBe(true);
     expect(result.code).toBe('noise_or_garbage');
   });
+
+  it('classifies repeated ordinal counter hallucination locally before model call', async () => {
+    const create = jest.fn(async () => ({
+      output_text: '{"is_garbage":false,"code":"ok","reason":"model_clean"}',
+    }));
+    const result = await detectGarbageTranscription({
+      openaiClient: {
+        responses: { create },
+      },
+      transcriptionText:
+        '1st. 2nd. 3rd. 4th. 5th. 6th. 7th. 8th. 9th. 10th. 11th. 12th. 1st. 2nd. 3rd. 4th. 5th. 6th. 7th. 8th. 9th. 10th. 11th. 12th. 1st. 2nd. 3rd. 4th. 5th. 6th. 7th. 8th. 9th. 10th. 11th. 12th.',
+      timeoutMs: 1000,
+    });
+
+    expect(create).not.toHaveBeenCalled();
+    expect(result.is_garbage).toBe(true);
+    expect(result.code).toBe('repeated_ngram_loop');
+  });
+
+  it('keeps single-pass ordinal list on model path', async () => {
+    const create = jest.fn(async () => ({
+      output_text: '{"is_garbage":false,"code":"ok","reason":"clear_speech"}',
+    }));
+    const result = await detectGarbageTranscription({
+      openaiClient: {
+        responses: { create },
+      },
+      transcriptionText:
+        '1st item is onboarding, 2nd is metrics, 3rd is QA, 4th is rollout, 5th is monitoring, 6th is handoff.',
+      timeoutMs: 1000,
+    });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(result.is_garbage).toBe(false);
+    expect(result.code).toBe('ok');
+  });
+
+  it('classifies repeated recipe filler hallucination locally before model call', async () => {
+    const create = jest.fn(async () => ({
+      output_text: '{"is_garbage":false,"code":"ok","reason":"model_clean"}',
+    }));
+    const result = await detectGarbageTranscription({
+      openaiClient: {
+        responses: { create },
+      },
+      transcriptionText:
+        '1TBSP Sesame Oil 1TBSP Sesame Oil 1TBSP Sesame Oil 1TBSP Sesame Oil 1TBSP Sesame Oil',
+      timeoutMs: 1000,
+    });
+
+    expect(create).not.toHaveBeenCalled();
+    expect(result.is_garbage).toBe(true);
+    expect(result.code).toBe('repeated_ngram_loop');
+  });
+
+  it('classifies repeated Ukrainian CTA hallucination locally before model call', async () => {
+    const create = jest.fn(async () => ({
+      output_text: '{"is_garbage":false,"code":"ok","reason":"model_clean"}',
+    }));
+    const result = await detectGarbageTranscription({
+      openaiClient: {
+        responses: { create },
+      },
+      transcriptionText:
+        'Якщо вам подобається їжа, підписуйтесь. Якщо вам подобається їжа, ставте лайк. Якщо вам подобається їжа, тисніть дзвіночок.',
+      timeoutMs: 1000,
+    });
+
+    expect(create).not.toHaveBeenCalled();
+    expect(result.is_garbage).toBe(true);
+    expect(result.code).toBe('repeated_ngram_loop');
+  });
+
+  it('keeps repeated CTA in normal speech on model path when it appears only twice', async () => {
+    const create = jest.fn(async () => ({
+      output_text: '{"is_garbage":false,"code":"ok","reason":"clear_speech"}',
+    }));
+    const result = await detectGarbageTranscription({
+      openaiClient: {
+        responses: { create },
+      },
+      transcriptionText:
+        'Якщо вам подобається їжа, не забудьте поставити лайк. І ще раз: якщо вам подобається їжа, напишіть, що приготувати наступним.',
+      timeoutMs: 1000,
+    });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(result.is_garbage).toBe(false);
+    expect(result.code).toBe('ok');
+  });
+
+  it('keeps a structured ordinal list with one back-reference on model path', async () => {
+    const create = jest.fn(async () => ({
+      output_text: '{"is_garbage":false,"code":"ok","reason":"clear_speech"}',
+    }));
+    const result = await detectGarbageTranscription({
+      openaiClient: {
+        responses: { create },
+      },
+      transcriptionText:
+        '1st is onboarding, 2nd is support, 3rd is rollout, 4th is monitoring, 5th is QA, 6th is handoff, then back to 1st for recap.',
+      timeoutMs: 1000,
+    });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(result.is_garbage).toBe(false);
+    expect(result.code).toBe('ok');
+  });
+
+  it('keeps short repeated recipe guidance on model path', async () => {
+    const create = jest.fn(async () => ({
+      output_text: '{"is_garbage":false,"code":"ok","reason":"clear_speech"}',
+    }));
+    const result = await detectGarbageTranscription({
+      openaiClient: {
+        responses: { create },
+      },
+      transcriptionText:
+        'Добавь 1TBSP Sesame Oil в соус, а потом еще 1TBSP Sesame Oil в заправку для второго блюда.',
+      timeoutMs: 1000,
+    });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(result.is_garbage).toBe(false);
+    expect(result.code).toBe('ok');
+  });
+
+  it('keeps normal speech on model path', async () => {
+    const create = jest.fn(async () => ({
+      output_text: '{"is_garbage":false,"code":"ok","reason":"clear_speech"}',
+    }));
+    const result = await detectGarbageTranscription({
+      openaiClient: {
+        responses: { create },
+      },
+      transcriptionText:
+        'Давай синхронизируем статус по задаче: сегодня закрываем детектор и запускаем регрессионные тесты.',
+      timeoutMs: 1000,
+    });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(result.is_garbage).toBe(false);
+    expect(result.code).toBe('ok');
+  });
 });

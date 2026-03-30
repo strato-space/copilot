@@ -2883,3 +2883,42 @@
 - **22:47** Added regression coverage for ingress classification, projection normalization/repair, pending-classification orchestration, retry/stale-job guards, and smoke-path validation (`backend/__tests__/voicebot/runtime/*`, `backend/__tests__/voicebot/workers/*`, `backend/__tests__/smoke/voicebotTranscriptionRetrySmoke.test.ts`).
 - **22:47** Closed `copilot-qtcp` in the media-attachment spec, kept `copilot-8h9u` follow-up explicitly in progress, moved closed planning docs into canonical dated/`plan/closed` locations, synced repo references, and refreshed the plan index (`plan/{2026-03-27-voice-media-attachment-transcription-spec.md,2026-03-27-test-noise.md,index.md,closed/*}`, `README.md`, `AGENTS.md`).
 - **22:47** Captured refreshed forensic bundles for the Telemost driver incident under `tmp/voice-investigation-artifacts/*`.
+
+## 2026-03-28
+### PROBLEM SOLVED
+- **08:18** Phase I/II voice stabilization changes were still only in the local tree and needed a full closeout with deploy and production smoke evidence.
+
+### FEATURE IMPLEMENTED
+- **08:18** Closed and deployed the voice stabilization Phase I/II wave after green app/backend regression packs.
+
+### CHANGES
+- **08:18** Refreshed root docs, pushed `main`, deployed via `./scripts/pm2-backend.sh prod`, and verified production readiness for the voice stabilization closeout (`e6a903a`).
+
+## 2026-03-29
+### PROBLEM SOLVED
+- **13:10** ACP `/agents` still relied on split route/runtime assumptions, which weakened deploy smoke coverage and deep-link recovery.
+
+### FEATURE IMPLEMENTED
+- **13:10** Added a shared ACP-only `/agents` surface with production smoke evidence and restored deep-link/session handoff behavior.
+
+### CHANGES
+- **13:10** Added the ACP-only `/agents` surface backed by the shared ACP UI package (`ab3107d`).
+- **13:15** Recorded production deploy smoke for ACP `/agents` (`ccb20f1`).
+- **22:48** Restored ACP deep links and preserved ACP session handoff behavior (`335008a`).
+
+## 2026-03-30
+### PROBLEM SOLVED
+- **00:35** ACP `/agents` still lacked a hardened shell-verification and recovery-handoff contract.
+- **13:07** Voice operator surfaces still exposed non-actionable transcription projection noise, draft tasks still implied a manual `Save` action, and silence hallucinations needed a deterministic local filter before LLM garbage classification.
+
+### FEATURE IMPLEMENTED
+- **00:35** Hardened ACP shell verification and recovery handoff.
+- **13:07** Tightened voice garbage detection, simplified transcription operator UX, switched draft task materialization to autosave-first `Run`, and formalized `user wins` collision semantics for Draft rows.
+
+### CHANGES
+- **00:35** Hardened ACP shell verification and recovery handoff (`4f89ac6`).
+- **13:07** Added a repeated-ngram local short-circuit to `backend/src/services/voicebot/transcriptionGarbageDetector.ts` and regression coverage in `backend/__tests__/services/voicebot/transcriptionGarbageDetector.test.ts`.
+- **13:07** Simplified `app/src/components/voice/TranscriptionTableRow.tsx` to show actionable skip/error metadata only and removed raw attachment projection clutter from the default operator view.
+- **13:07** Replaced the Possible Tasks primary `Save` action with autosave-first `Run` semantics in `app/src/components/voice/PossibleTasks.tsx`, including a hard stop when manual autosave fails before materialization.
+- **13:07** Extended `plan/2026-03-21-voice-task-surface-normalization-spec-2.md` with machine-actionable row/field versioning and explicit `user wins` merge rules for user edits vs `CREATE_TASKS` recompute collisions.
+- **13:07** Opened and claimed forensic bug `copilot-dzl7` for session `69ca2f47ac286716c761773e`: upload succeeded, async transcription failed with `insufficient_quota`, and the operator-visible error is currently misreported as an upload/server failure.

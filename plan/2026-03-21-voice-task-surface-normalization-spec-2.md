@@ -135,6 +135,13 @@ Compatibility/provenance fields may remain:
 
 But they are not the semantic discriminator of draftness.
 
+Concurrency metadata (write-contract level) must be present for machine-actionable collision handling:
+- `row_version` (monotonic per-row CAS token)
+- `last_user_edit_version` (monotonic per-row user-write marker)
+- `last_recompute_version` (last applied recompute marker for this row/session)
+- `user_owned_overrides[]` (set of user-owned fields currently locked to user intent)
+- `field_versions{}` (monotonic per-field versions for user-owned fields; used for machine-readable conflict reporting)
+
 ## Canonical Draft Criterion
 Canonical lifecycle key: `DRAFT_10`.
 Compatibility label during transition: `Draft`.
@@ -196,10 +203,101 @@ This is the canonical draft reconcile.
 
 Behavior:
 1. upsert desired `DRAFT_10` rows by `row_id/id`,
-2. preserve session/project linkage,
+2. preserve session linkage and immutable row identity,
 3. merge/refresh session linkage so normalized reads expose `discussion_sessions[]`,
-4. remove absent rows from the live baseline,
-5. keep lifecycle status orthogonal to discussion linkage.
+4. apply field ownership merge policy (below) before writing user-editable fields,
+5. reconcile absent rows under the omission policy below; user-owned rows are not silently dropped,
+6. keep lifecycle status orthogonal to discussion linkage.
+
+### Draft Collision Resolution: User Edits vs `CREATE_TASKS` Recompute
+
+This section is normative for collisions between:
+- explicit user writes (UI/API draft edits),
+- backend desired-set recompute writes (`create_tasks` -> `persistPossibleTasksForSession`).
+
+#### Ownership classes
+
+System-owned fields (recompute is authoritative):
+- `row_id`
+- `id`
+- `task_status`
+- `discussion_sessions[]`
+- `source_ref`
+- `external_ref`
+- `source_data`
+- `source_kind`
+- `accepted_from_possible_task`
+- `accepted_from_row_id`
+- `task_id_from_ai`
+- `dialogue_reference`
+
+User-owned fields (user intent is authoritative):
+- `name`
+- `description`
+- `priority`
+- `priority_reason`
+- `performer_id`
+- `project_id`
+- `task_type_id`
+- `dialogue_tag`
+- `dependencies_from_ai[]`
+
+Derived/read-only projection fields:
+- `discussion_count`
+
+`discussion_count` is computed from normalized linkage and is not an authoritative mutable storage field.
+
+Classification rule for future fields:
+- if a field is user-editable in draft UI/API, it defaults to user-owned unless this spec (or its direct successor) explicitly lists it as system-owned.
+
+#### Merge policy (machine-actionable)
+
+For every recompute attempt on an existing draft row:
+1. load current row by `row_id/id` together with `row_version` and `user_owned_overrides[]`;
+2. for each system-owned field present in desired recompute payload, write desired value;
+3. for each user-owned field:
+- if field is in `user_owned_overrides[]`, keep current stored value (user-wins);
+- if field is not in `user_owned_overrides[]` and field is present in desired recompute payload, write desired recompute value;
+- if field is not present in desired recompute payload, preserve current stored value;
+4. if desired recompute payload omits the entire row:
+- backend MUST NOT hard-delete, archive, or unlink the row when `user_owned_overrides[]` is non-empty;
+- backend MUST NOT hard-delete, archive, or unlink the row when `last_user_edit_version > last_recompute_version`;
+- such a row remains in the live draft baseline until an explicit user delete/archive action or a later recompute re-includes and reconciles it;
+- every retain-on-omission pass still counts as a recompute pass for convergence purposes: backend MUST advance `last_recompute_version` on the retained row, and MAY mark an operational flag such as `recompute_omitted=true`;
+- backend MAY remove/archive an omitted row only when `user_owned_overrides[]` is empty and `last_user_edit_version <= last_recompute_version`;
+5. increment `row_version` and set `last_recompute_version` on successful write.
+
+For explicit user draft edits:
+1. request MUST include `expected_row_version`;
+2. request MUST include `expected_field_versions{}` for every user-owned field present in the patch;
+3. write only user-owned fields from the user patch;
+4. add patched keys to `user_owned_overrides[]`, unless the same request explicitly lists them in `clear_user_owned_overrides[]`;
+5. increment `field_versions[field]` for every patched user-owned field;
+6. increment `row_version` and `last_user_edit_version`.
+
+Override-release semantics:
+- recompute MUST NEVER remove keys from `user_owned_overrides[]`;
+- only an explicit user write may release an override lock;
+- release is machine-actionable via `clear_user_owned_overrides[]`, and only for fields also present in the same explicit user write request.
+
+#### Stale-write behavior
+
+User writes:
+- if `expected_row_version` does not match current `row_version`, backend MUST reject with `409 stale_write`;
+- backend MUST compare user-supplied `expected_field_versions{}` against current stored `field_versions{}` for patched user-owned fields;
+- `conflicting_fields[]` MUST contain exactly those patched fields whose stored `field_versions[field]` no longer match the user-supplied expectation;
+- if `row_version` changed but none of the patched user-owned fields changed, backend MUST return `conflicting_fields=[]` together with the latest row snapshot.
+
+Recompute writes:
+- recompute MUST use CAS on `row_version`;
+- on CAS miss, recompute MUST re-read latest row, re-run merge policy, and retry;
+- recompute MUST NOT clear or overwrite values for fields present in `user_owned_overrides[]`;
+- recompute MUST NOT remove a row from the live draft baseline when omission collides with retained user ownership, as defined above.
+
+Linkage preservation note:
+- “preserve session linkage” means preserving `discussion_sessions[]` / normalized session attachment and immutable row identity;
+- it does not make `project_id` system-owned;
+- `project_id` remains user-owned and may change only through explicit user write paths that pass normal validation.
 
 ## Allowed Task-Plane Actions
 Within this spec, only these action kinds are valid:
@@ -210,7 +308,7 @@ Within this spec, only these action kinds are valid:
 
 Semantics:
 - `create`: new `DRAFT_10` task row
-- `update`: reformulate an existing `DRAFT_10` task row in place
+- `update`: reformulate an existing `DRAFT_10` task row in place; may be authored by recompute or by explicit user edit, with precedence defined by Draft Collision Resolution
 - `link_session`: attach current session to an existing `DRAFT_10` row reused from another session
 - `archive`: remove a row from the current live draft baseline
 
@@ -242,7 +340,7 @@ Already implemented/runtime-smoked:
 - payload-to-draft migration wave has already removed `.data` from active runtime semantics; remaining payload residue exists only on `78` non-active / historical sessions.
 
 ## Open Decisions (Task-plane only)
-1. When a desired-set recompute drops a draft row, should storage policy be soft-delete only or allow harder cleanup later?
+1. After a row has already been validly removed/archived by the normative omission policy above, should long-tail storage policy remain soft-delete only or allow harder physical cleanup later?
 2. Should project context for draft recompute continue to include draft rows from other sessions, or be narrowed later?
 3. When exact `row_id` reuse is absent, what conservative identity rule should govern cross-session draft reuse?
 

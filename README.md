@@ -23,11 +23,14 @@ Use this as a fast guardrail before implementing anything:
   - canonical payload shape `id/name/description/priority/...`,
   - `task_type_id` stays optional,
   - master store is `automation_tasks` with draft status `DRAFT_10`,
+  - draft editing is autosave-first across both inline table edits and the right-hand detail editor,
+  - the primary manual action is `Run`; it materializes the row to `READY_10` only after autosave succeeds, and there is no separate canonical `Save` action,
   - `process_possible_tasks` now materializes selected rows into `READY_10`,
   - accepted rows must not be soft-deleted by possible-task cleanup,
   - session `processors_data.CREATE_TASKS` is legacy historical payload only and must not be used as the source of truth for Draft reads,
   - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate,
   - stale `CREATE_TASKS` repair marker precedence is explicit: processor-level timestamps (`job_queued_timestamp`, request timestamps, finish timestamps) dominate stale-age evaluation; session `_id` timestamp is fallback-only when explicit markers are absent,
+  - user-owned draft fields follow a `user wins` collision policy against concurrent `CREATE_TASKS` recompute writes; the machine-actionable contract lives in `plan/2026-03-21-voice-task-surface-normalization-spec-2.md`,
   - accepted session-task reads are served through `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Ready+' }`; this bucket is accepted-only and `DRAFT_10` rows there are a bug (`copilot-f6z4`), not an allowed fallback.
 
 ## Minimal Delta To Remember (2026-02-26 / 2026-02-27)
@@ -169,8 +172,10 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - OpenAI recovery-retry semantics are unified across transcribe/categorize/processing loop repair: both `insufficient_quota` and `invalid_api_key` are treated as retryable states with canonical retry metadata and operator-facing diagnostics.
 - `POST /api/voicebot/transcription/retry` is message-driven: it re-arms session messages for transcription (`to_transcribe=true`, attempts reset, retry delay cleared), clears session-level transcription error markers, and returns processing-loop mode diagnostics (`processing_mode`, `messages_marked_for_retry`).
 - Post-transcribe garbage detection now runs in worker flow (`backend/src/services/voicebot/transcriptionGarbageDetector.ts`, default `gpt-5.4-nano`): garbage chunks are marked via `garbage_detection`, categorization/`CREATE_TASKS` enqueue is skipped, and a `transcription_garbage_detected` session-log event is emitted.
+- The garbage detector now has a local repeated-ngram shortcut for obvious silence hallucinations before it falls back to the LLM classifier; this path should remain precision-first and covered by regression tests.
 - Transcription fallback rows with `transcription_error` render metadata signature footer (`mm:ss - mm:ss, file.webm, HH:mm:ss`) and are replaced in place when realtime `message_update` brings transcript text.
 - Transcription metadata signatures and fallback footers normalize UTF-8-as-Latin1 mojibake filenames from message/attachment metadata before rendering file labels.
+- The default Transcription table view intentionally hides raw attachment projection/debug metadata; only actionable skip/error state belongs inline with the operator-facing body text.
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
 - Voice websocket must use the `/voicebot` namespace (`getVoicebotSocket`), not the root namespace (`/`), otherwise session subscriptions (`subscribe_on_session`) are ignored.
 - `subscribe_on_session` must replay a `session_update.taskflow_refresh.possible_tasks` hint so reconnecting session pages refetch canonical possible-task state even if an earlier realtime hint was missed.

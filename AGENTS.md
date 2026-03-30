@@ -59,11 +59,14 @@ These decisions are part of the current platform contract and must be preserved 
   - `CREATE_TASKS` payload shape is `id/name/description/priority/...`,
   - `task_type_id` is optional in Possible Tasks UI,
   - possible tasks are master records in `automation_tasks` with `task_status=DRAFT_10`,
+  - Draft task editing is autosave-first across both inline row edits and the right-hand detail card; the primary manual action is `Run`, not `Save`, and `Run` must not materialize a row to `READY_10` if autosave failed,
   - `process_possible_tasks` now materializes selected rows into `READY_10`,
   - accepted materialized rows must not be soft-deleted by possible-task cleanup,
   - session `processors_data.CREATE_TASKS` is legacy historical payload only and must not be used as the source of truth for Draft reads,
-  - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate.
+  - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate,
+  - user-owned Draft fields follow a `user wins` collision policy against concurrent `CREATE_TASKS` recompute writes until the user explicitly releases the override,
   - stale `CREATE_TASKS` repair marker precedence is explicit: processor-level timestamps (`job_queued_timestamp`, request timestamps, finish timestamps) dominate stale-age evaluation; session `_id` timestamp is fallback-only when explicit markers are absent.
+  - the default Transcription table is operator-first: raw attachment projection/debug metadata does not belong in the normal row body; only actionable skip/error state may surface inline with the transcript/fallback body.
 
 ## Critical Interfaces To Preserve [RULE]
 

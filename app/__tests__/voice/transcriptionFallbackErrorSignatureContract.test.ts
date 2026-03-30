@@ -225,4 +225,133 @@ describe('Transcription fallback error signature contract', () => {
       view.unmount();
     }
   });
+
+  it('keeps operator-visible rows free from projection/debug metadata clutter', () => {
+    const row = asVoiceMessage({
+      transcription: {
+        segments: [{ id: 'ch_1', text: 'Основной текст транскрипта', is_deleted: false }],
+      } as VoiceBotMessage['transcription'],
+      transcription_processing_state: 'transcribed',
+      primary_payload_media_kind: 'binary_document',
+      classification_resolution_state: 'classified_skip',
+      transcription_eligibility: 'eligible',
+      transcription_eligibility_basis: 'legacy_transport_presence',
+      classification_rule_ref: 'rule://test',
+      source_note_text: 'debug-note',
+      primary_transcription_attachment_index: 0,
+      attachments: [
+        {
+          attachment_index: 0,
+          payload_media_kind: 'binary_document',
+          transcription_processing_state: 'transcribed',
+          classification_resolution_state: 'classified_skip',
+          transcription_eligibility: 'eligible',
+        },
+      ],
+    });
+
+    const view = renderIntoDom(
+      React.createElement(TranscriptionTableRow, {
+        row,
+        isLast: false,
+        sessionBaseTimestampMs: null,
+      })
+    );
+
+    try {
+      expect(view.container.textContent).toContain('Основной текст транскрипта');
+      expect(view.container.textContent).not.toContain('State:');
+      expect(view.container.textContent).not.toContain('classification:');
+      expect(view.container.textContent).not.toContain('primary attachment:');
+      expect(view.container.textContent).not.toContain('Eligibility basis:');
+      expect(view.container.textContent).not.toContain('Rule ref:');
+      expect(view.container.textContent).not.toContain('Source note:');
+      expect(view.container.textContent).not.toContain('Attachments (');
+      expect(view.container.textContent).not.toContain('legacy_transport_presence');
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it('keeps actionable skip/error information visible when present', () => {
+    const row = asVoiceMessage({
+      transcription: {
+        segments: [{ id: 'ch_1', text: 'Текст с проблемой', is_deleted: false }],
+      } as VoiceBotMessage['transcription'],
+      transcription_skip_reason: 'unsupported_payload_class',
+      transcription_error: 'insufficient_quota',
+    });
+
+    const view = renderIntoDom(
+      React.createElement(TranscriptionTableRow, {
+        row,
+        isLast: false,
+        sessionBaseTimestampMs: null,
+      })
+    );
+
+    try {
+      expect(view.container.textContent).toContain('Skip reason:');
+      expect(view.container.textContent).toContain('Unsupported payload class');
+      expect(view.container.textContent).toContain('Error:');
+      expect(view.container.textContent).toContain('Недостаточно квоты OpenAI');
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it('keeps attachment-only transcription errors visible when transcript body is otherwise empty', () => {
+    const row = asVoiceMessage({
+      transcription: { segments: [] } as VoiceBotMessage['transcription'],
+      attachments: [
+        {
+          attachment_index: 0,
+          transcription_error: 'invalid_api_key',
+        },
+      ],
+    });
+
+    const view = renderIntoDom(
+      React.createElement(TranscriptionTableRow, {
+        row,
+        isLast: false,
+        sessionBaseTimestampMs: null,
+      })
+    );
+
+    try {
+      expect(view.container.textContent).toContain('Неверный OpenAI API key');
+      expect(view.container.textContent).not.toContain('State:');
+      expect(view.container.textContent).not.toContain('Eligibility basis:');
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it('keeps attachment-only skip reasons visible when transcript body is otherwise empty', () => {
+    const row = asVoiceMessage({
+      transcription: { segments: [] } as VoiceBotMessage['transcription'],
+      attachments: [
+        {
+          attachment_index: 0,
+          transcription_skip_reason: 'unsupported_payload_class',
+        },
+      ],
+    });
+
+    const view = renderIntoDom(
+      React.createElement(TranscriptionTableRow, {
+        row,
+        isLast: false,
+        sessionBaseTimestampMs: null,
+      })
+    );
+
+    try {
+      expect(view.container.textContent).toContain('Skip reason:');
+      expect(view.container.textContent).toContain('Unsupported payload class');
+    } finally {
+      view.unmount();
+    }
+  });
 });

@@ -179,6 +179,9 @@ const createTask = (patch: Partial<VoicePossibleTask>): VoicePossibleTask =>
 describe('PossibleTasks post-create contract', () => {
   const initialVoiceState = useVoiceBotStore.getState();
   let infoSpy: jest.SpyInstance;
+  let errorSpy: jest.SpyInstance;
+  let consoleErrorSpy: jest.SpyInstance;
+  let consoleWarnSpy: jest.SpyInstance;
 
   beforeAll(() => {
     Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', {
@@ -215,6 +218,9 @@ describe('PossibleTasks post-create contract', () => {
   beforeEach(() => {
     mockHasPermission.mockReturnValue(true);
     infoSpy = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+    errorSpy = jest.spyOn(message, 'error').mockImplementation(() => undefined);
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -285,7 +291,7 @@ describe('PossibleTasks post-create contract', () => {
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
-  it('exposes a user-invokable Save affordance that materializes only the active row', async () => {
+  it('exposes a user-invokable Run affordance that materializes only the active row', async () => {
     const confirmSelectedTickets = jest.fn(async () => ({
       createdTaskIds: ['row-1'],
       removedRowIds: ['row-1'],
@@ -300,7 +306,7 @@ describe('PossibleTasks post-create contract', () => {
           row_id: 'row-1',
           id: 'row-1',
           name: 'Materialize me',
-          description: 'Row-level save contract',
+          description: 'Row-level run contract',
           performer_id: 'perf-1',
           project_id: 'proj-1',
           priority: 'P2',
@@ -320,11 +326,13 @@ describe('PossibleTasks post-create contract', () => {
     const view = renderIntoDom(React.createElement(PossibleTasks));
 
     try {
-      const saveButton = view.container.querySelector('button[aria-label="Сохранить"]');
-      expect(saveButton).not.toBeNull();
+      const runButton = view.container.querySelector('button[aria-label="Run"]');
+      const saveButton = view.container.querySelector('button[aria-label="Save"], button[aria-label="Сохранить"]');
+      expect(runButton).not.toBeNull();
+      expect(saveButton).toBeNull();
 
       await act(async () => {
-        saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        runButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
 
       expect(confirmSelectedTickets).toHaveBeenCalledTimes(1);
@@ -340,7 +348,7 @@ describe('PossibleTasks post-create contract', () => {
         ]
       );
       expect(infoSpy).toHaveBeenCalledWith(
-        '[voice.possible_tasks] save.submit',
+        '[voice.possible_tasks] run.submit',
         expect.objectContaining({
           sessionId: 'session-1',
           rowId: 'row-1',
@@ -349,12 +357,85 @@ describe('PossibleTasks post-create contract', () => {
         })
       );
       expect(infoSpy).toHaveBeenCalledWith(
-        '[voice.possible_tasks] save.result',
+        '[voice.possible_tasks] run.result',
         expect.objectContaining({
           sessionId: 'session-1',
           rowId: 'row-1',
           routing: 'human',
         })
+      );
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it('does not run a row when manual autosave fails for pending draft edits', async () => {
+    const confirmSelectedTickets = jest.fn(async () => ({
+      createdTaskIds: ['row-1'],
+      removedRowIds: ['row-1'],
+      rowErrors: [],
+    }));
+    const saveSessionPossibleTasks = jest.fn(async () => {
+      throw new Error('autosave failed');
+    });
+
+    useVoiceBotStore.setState((state) => ({
+      ...state,
+      voiceBotSession: { _id: 'session-1', project_id: 'proj-1' } as any,
+      possibleTasks: [
+        createTask({
+          row_id: 'row-1',
+          id: 'row-1',
+          name: 'Materialize me',
+          description: 'Row-level run contract',
+          performer_id: 'perf-1',
+          project_id: 'proj-1',
+          priority: 'P2',
+        }),
+      ],
+      performers_for_tasks_list: [{ _id: 'perf-1', full_name: 'Исполнитель 1', is_active: true }],
+      prepared_projects: [{ _id: 'proj-1', name: 'Project One' }],
+      task_types: [],
+      fetchPerformersForTasksList: jest.fn(async () => []),
+      fetchPreparedProjects: jest.fn(async () => undefined),
+      fetchTaskTypes: jest.fn(async () => []),
+      saveSessionPossibleTasks,
+      confirmSelectedTickets,
+      deleteTaskFromSession: jest.fn(async () => undefined),
+    }));
+
+    const view = renderIntoDom(React.createElement(PossibleTasks));
+
+    try {
+      const nameField = view.container.querySelector('input[value="Materialize me"]');
+      expect(nameField).not.toBeNull();
+
+      await act(async () => {
+        nameField?.dispatchEvent(new FocusEvent('focus', { bubbles: true }));
+        if (nameField instanceof HTMLInputElement) {
+          const valueSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype,
+            'value'
+          )?.set;
+          valueSetter?.call(nameField, 'Updated draft name');
+        }
+        nameField?.dispatchEvent(new Event('input', { bubbles: true }));
+        nameField?.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+
+      const runButton = view.container.querySelector('button[aria-label="Run"]');
+      expect(runButton).not.toBeNull();
+
+      await act(async () => {
+        runButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      expect(saveSessionPossibleTasks).toHaveBeenCalledTimes(1);
+      expect(confirmSelectedTickets).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith('Не удалось сохранить черновик');
+      expect(infoSpy).not.toHaveBeenCalledWith(
+        '[voice.possible_tasks] run.submit',
+        expect.anything()
       );
     } finally {
       view.unmount();

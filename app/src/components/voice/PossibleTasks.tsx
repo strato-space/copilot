@@ -12,7 +12,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
-import { CopyOutlined, DeleteOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
+import { CaretRightOutlined, CopyOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { useShallow } from 'zustand/react/shallow';
 
 import OperationalTaskTypeSelect from '../shared/OperationalTaskTypeSelect';
@@ -287,7 +287,7 @@ function PossibleTasksSessionScope() {
   const [drafts, setDrafts] = useState<Record<string, Partial<TaskRow>>>({});
   const [isAutosaving, setIsAutosaving] = useState(false);
   const [lastAutosavedAt, setLastAutosavedAt] = useState<number | null>(null);
-  const [saveInProgressRowId, setSaveInProgressRowId] = useState<string | null>(null);
+  const [runInProgressRowId, setRunInProgressRowId] = useState<string | null>(null);
   const [cloneInProgressRowId, setCloneInProgressRowId] = useState<string | null>(null);
   const [deleteInProgressRowId, setDeleteInProgressRowId] = useState<string | null>(null);
   const [rowCreationErrors, setRowCreationErrors] = useState<Record<string, TaskRowCreationErrors>>({});
@@ -576,7 +576,7 @@ function PossibleTasksSessionScope() {
   const flushAutosave = useCallback(
     async (reason: 'blur' | 'manual') => {
       clearAutosaveTimer();
-      await persistDrafts(reason);
+      return persistDrafts(reason);
     },
     [clearAutosaveTimer, persistDrafts]
   );
@@ -733,7 +733,7 @@ function PossibleTasksSessionScope() {
     }
   };
 
-  const handleSaveRow = async (row: TaskRowView) => {
+  const handleRunRow = async (row: TaskRowView) => {
     const missing = getMissingFields(row);
     if (missing.length > 0) {
       message.error(`Заполните поля: ${missing.map((field) => REQUIRED_FIELD_LABELS[field]).join(', ')}`);
@@ -742,12 +742,22 @@ function PossibleTasksSessionScope() {
     if (!sessionId) return;
 
     const payload = toPersistencePayload(row);
-    setSaveInProgressRowId(row.row_id);
+    setRunInProgressRowId(row.row_id);
     clearRowError(row.row_id);
 
     try {
-      await flushAutosave('manual');
-      console.info('[voice.possible_tasks] save.submit', {
+      const hasPendingDraftEdits = Object.keys(draftsRef.current).length > 0;
+      if (hasPendingDraftEdits) {
+        const autosaveOk = await flushAutosave('manual');
+        if (!autosaveOk) {
+          console.warn('[voice.possible_tasks] run.aborted_autosave_failed', {
+            sessionId,
+            rowId: row.row_id,
+          });
+          return;
+        }
+      }
+      console.info('[voice.possible_tasks] run.submit', {
         sessionId,
         rowId: row.row_id,
         performer_id: row.performer_id,
@@ -761,7 +771,7 @@ function PossibleTasksSessionScope() {
         delete next[row.row_id];
         return next;
       });
-      console.info('[voice.possible_tasks] save.result', {
+      console.info('[voice.possible_tasks] run.result', {
         sessionId,
         rowId: row.row_id,
         routing: toText(row.performer_id) === CODEX_PERFORMER_ID ? 'codex' : 'human',
@@ -801,11 +811,11 @@ function PossibleTasksSessionScope() {
           );
         }
       } else {
-        console.error('[voice.possible_tasks] save.failed', { sessionId, rowId: row.row_id, error });
-        message.error('Не удалось materialize задачу');
+        console.error('[voice.possible_tasks] run.failed', { sessionId, rowId: row.row_id, error });
+        message.error('Не удалось запустить задачу');
       }
     } finally {
-      setSaveInProgressRowId(null);
+      setRunInProgressRowId(null);
     }
   };
 
@@ -815,7 +825,7 @@ function PossibleTasksSessionScope() {
         type="warning"
         showIcon
         message="Доступ ограничен"
-        description="Недостаточно прав для редактирования и materialize задач."
+        description="Недостаточно прав для редактирования и запуска задач."
       />
     );
   }
@@ -1069,14 +1079,14 @@ function PossibleTasksSessionScope() {
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-start justify-end gap-2">
                 <Space size={8} wrap>
-                  <Tooltip title="Сохранить">
+                  <Tooltip title="Run">
                     <Button
                       type="primary"
                       shape="circle"
-                      aria-label="Сохранить"
-                      icon={<SaveOutlined />}
-                      loading={saveInProgressRowId === activeRow.row_id}
-                      onClick={() => void handleSaveRow(activeRow)}
+                      aria-label="Run"
+                      icon={<CaretRightOutlined />}
+                      loading={runInProgressRowId === activeRow.row_id}
+                      onClick={() => void handleRunRow(activeRow)}
                     />
                   </Tooltip>
                   <Tooltip title="Клонировать">
