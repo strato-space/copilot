@@ -619,5 +619,5 @@ export const VOICEBOT_FILE_STORAGE = {
   maxAudioFileSize:
     Number.parseInt(process.env.VOICEBOT_MAX_AUDIO_FILE_SIZE ?? '', 10) ||
     Number.parseInt(process.env.VOICEBOT_MAX_FILE_SIZE ?? '', 10) ||
-    128 * 1024 * 1024, // 128MB default
+    600 * 1024 * 1024, // 600MB default
 } as const;
