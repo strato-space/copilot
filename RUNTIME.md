@@ -26,6 +26,9 @@ These constraints are derived from origin/main + CHANGELOG.md. They describe cur
   - do not reintroduce legacy noisy red-dot semantics.
 - Voice processing robustness:
   - TS transcribe supports Telegram transport recovery (`getFile` + download + persisted `file_path`);
+  - media-bearing video inputs are staged to extracted audio before ASR, not transcribed from the raw video container;
+  - ASR runs in single-file-first mode, attempts low-bitrate re-encode before segmented fallback when chunk fan-out would exceed the hard cap, and fails safely instead of truncating tails when split output still exceeds `8` chunks;
+  - transcribe persistence now records `source_media_type`, `audio_extracted`, `asr_chunk_count`, `chunk_policy`, and `chunk_cap_applied` on both success and deterministic oversize failure paths;
   - `processingLoop` and done-flow rely on shared orchestration and common queue kick.
 - Ontology tooling path contract:
   - canonical scripts are under `ontology/typedb/scripts/*`;

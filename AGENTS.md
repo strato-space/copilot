@@ -44,6 +44,11 @@ These decisions are part of the current platform contract and must be preserved 
   - browser must not be the source of `session_done` socket emits.
 - Voice controls contract is fixed to `New / Rec / Cut / Pause / Done` with unified behavior between page toolbar and FAB.
 - Full-track archive chunks are visible in monitor/runtime metadata but must not auto-upload until diarization rollout is enabled.
+- ASR media handling is contract-bound:
+  - video inputs must be staged to extracted audio before transcription,
+  - transcription is single-file-first, with segmented fallback only after provider-limit checks,
+  - segmentation must not exceed the hard `8`-chunk cap; low-bitrate re-encode is required before capped segmented fallback,
+  - forensic fields `source_media_type`, `audio_extracted`, `asr_chunk_count`, `chunk_policy`, and `chunk_cap_applied` must persist on both success and deterministic failure paths.
 - Runtime isolation is mandatory for operational data:
   - use deployment/database separation (dedicated DB/instance per environment),
   - `runtime_tag` is deprecated as an isolation mechanism and must not be treated as source-of-truth routing input,

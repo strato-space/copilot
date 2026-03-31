@@ -2976,3 +2976,18 @@
 - **13:07** Replaced the Possible Tasks primary `Save` action with autosave-first `Run` semantics in `app/src/components/voice/PossibleTasks.tsx`, including a hard stop when manual autosave fails before materialization.
 - **13:07** Extended `plan/2026-03-21-voice-task-surface-normalization-spec-2.md` with machine-actionable row/field versioning and explicit `user wins` merge rules for user edits vs `CREATE_TASKS` recompute collisions.
 - **13:07** Opened and claimed forensic bug `copilot-dzl7` for session `69ca2f47ac286716c761773e`: upload succeeded, async transcription failed with `insufficient_quota`, and the operator-visible error is currently misreported as an upload/server failure.
+
+## 2026-03-31
+### PROBLEM SOLVED
+- **09:28** Voice metadata signatures had drifted across tabs, and summarize notify hooks could acknowledge upstream delivery without writing a deterministic timeout failure outcome.
+- **22:46** Media-bearing video inputs could explode into dozens of ASR chunks, increasing latency/cost and risking silent tail loss when oversized splits exceeded the practical processing budget.
+
+### FEATURE IMPLEMENTED
+- **09:28** Restored post-text metadata signatures across Transcription/Categorization and finalized bounded notify-hook timeout handling.
+- **22:46** Enforced video-to-audio staging, single-file-first ASR, low-bitrate re-encode before capped segmentation, and persisted forensic ASR fields for staging/cap outcomes.
+
+### CHANGES
+- **09:28** Landed `beced31` (`voice: restore post-text metadata signatures and notify hook timeout finalization`) covering the voice metadata-signature UI contract, notify timeout finalization, and synced root docs.
+- **22:46** Updated `backend/src/workers/voicebot/handlers/transcribeHandler.ts` to stage video inputs to extracted audio, add hard chunk-cap enforcement with re-encode fallback, and persist `source_media_type` / `audio_extracted` / `asr_chunk_count` / `chunk_policy` / `chunk_cap_applied`.
+- **22:46** Extended `backend/__tests__/voicebot/workers/workerTranscribeHandler.test.ts` with regression coverage for video staging and safe failure when split output exceeds the hard chunk cap.
+- **22:46** Added the focused ASR contract spec in `plan/2026-03-31D-videoparser-video-input-efficiency-plan.md` and synced root/runtime docs (`AGENTS.md`, `README.md`, `RUNTIME.md`) to the new media-handling contract.

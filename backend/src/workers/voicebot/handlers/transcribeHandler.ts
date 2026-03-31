@@ -152,6 +152,8 @@ const OPENAI_KEY_ENV_NAMES = ['OPENAI_API_KEY'] as const;
 const OPENAI_TRANSCRIBE_MAX_BYTES = 25 * 1024 * 1024;
 const OPENAI_TRANSCRIBE_SEGMENT_TARGET_BYTES = 8 * 1024 * 1024;
 const OPENAI_TRANSCRIBE_MIN_SEGMENT_SECONDS = 45;
+const OPENAI_TRANSCRIBE_REENCODE_BITRATE = '24k';
+const MAX_ASR_CHUNKS = 8;
 const TELEGRAM_BOT_API_BASE_URL = 'https://api.telegram.org';
 const CODEX_VOICE_TRIGGER_PATTERN = /^\s*(codex|кодекс)(?=\s|$|[,:;.!?-])/iu;
 const CODEX_VOICE_TRIGGER_STRIP_PATTERN = /^\s*(?:codex|кодекс)(?:\s+|[,:;.!?-]\s*)?/iu;
@@ -587,6 +589,9 @@ const getFileSizeBytes = (filePath: string): number => {
   return Math.max(0, Number(stats.size) || 0);
 };
 
+const estimateAsrSegmentCount = (fileSizeBytes: number): number =>
+  Math.max(2, Math.ceil(Math.max(0, fileSizeBytes) / OPENAI_TRANSCRIBE_SEGMENT_TARGET_BYTES));
+
 const normalizeMimeType = (value: unknown): string | null => {
   const normalized = String(value || '').trim().toLowerCase();
   return normalized || null;
@@ -729,6 +734,59 @@ const stageVideoToAudioForAsr = ({
     throw new Error('ffmpeg_audio_extract_empty_output');
   }
   return { stagedFilePath, cleanupDir: stageDir };
+};
+
+const reencodeAudioForChunkCap = ({
+  sourcePath,
+  message_id,
+}: {
+  sourcePath: string;
+  message_id: string;
+}): { reencodedFilePath: string; cleanupDir: string } => {
+  const stageDir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-reencode-'));
+  try {
+    const safeMessageId = message_id.replace(/[^a-zA-Z0-9_-]/g, '').slice(-24) || 'message';
+    const reencodedFilePath = join(stageDir, `reencode_${safeMessageId}.ogg`);
+    const reencode = spawnSync(
+      'ffmpeg',
+      [
+        '-y',
+        '-v',
+        'error',
+        '-i',
+        sourcePath,
+        '-ac',
+        '1',
+        '-ar',
+        '16000',
+        '-c:a',
+        'libopus',
+        '-b:a',
+        OPENAI_TRANSCRIBE_REENCODE_BITRATE,
+        reencodedFilePath,
+      ],
+      { encoding: 'utf8' }
+    );
+
+    if (reencode.error) {
+      throw new Error(`ffmpeg_audio_reencode_failed:${reencode.error.message}`);
+    }
+    if (reencode.status !== 0) {
+      const stderr = String(reencode.stderr || '').trim();
+      throw new Error(stderr || `ffmpeg_audio_reencode_exit_${reencode.status}`);
+    }
+    if (!existsSync(reencodedFilePath)) {
+      throw new Error('ffmpeg_audio_reencode_missing_output');
+    }
+    const reencodedSize = getFileSizeBytes(reencodedFilePath);
+    if (reencodedSize <= 0) {
+      throw new Error('ffmpeg_audio_reencode_empty_output');
+    }
+    return { reencodedFilePath, cleanupDir: stageDir };
+  } catch (error) {
+    rmSync(stageDir, { recursive: true, force: true });
+    throw error;
+  }
 };
 
 const resolveTelegramBotToken = (): string | null => {
@@ -1856,25 +1914,28 @@ export const handleTranscribeJob = async (
 
   const attachmentResultSlotKey = toAttachmentResultSlotKey(projection);
   const asrMediaKind = resolveAsrMediaKind({ message, projection });
-  let stagedCleanupDir: string | null = null;
+  const stagedCleanupDirs: string[] = [];
   let processingFilePath = filePath;
+  let audioExtracted = false;
+  let chunkPolicy = 'single_file_first';
+  let chunkCapApplied = false;
+  let asrChunkCount = 0;
 
   try {
     let asrFilePath = filePath;
-    let stagedFromVideo = false;
     if (asrMediaKind === 'video') {
       const staged = stageVideoToAudioForAsr({
         sourcePath: filePath,
         message_id,
       });
       asrFilePath = staged.stagedFilePath;
-      stagedCleanupDir = staged.cleanupDir;
-      stagedFromVideo = true;
+      stagedCleanupDirs.push(staged.cleanupDir);
+      audioExtracted = true;
     }
     processingFilePath = asrFilePath;
 
-    const sourceFileSizeBytes = getFileSizeBytes(asrFilePath);
-    const sourceExtension = String(extname(asrFilePath) || '.webm').trim() || '.webm';
+    let sourceFileSizeBytes = getFileSizeBytes(asrFilePath);
+    let sourceExtension = String(extname(asrFilePath) || '.webm').trim() || '.webm';
     const fallbackTimestampMs = Number(message.message_timestamp)
       ? Number(message.message_timestamp) * 1000
       : Date.now();
@@ -1900,11 +1961,38 @@ export const handleTranscribeJob = async (
     const transcriptionChunks: Array<Record<string, unknown>> = [];
     const transcriptionTextParts: string[] = [];
     let transcriptionMethod = 'direct';
-    if (stagedFromVideo) transcriptionMethod = 'video_audio_staged';
+    if (audioExtracted) transcriptionMethod = 'video_audio_staged';
+    let reencodedForChunkCap = false;
     let transcriptionRaw: unknown = null;
     let aggregatedDurationSeconds = durationSeconds || 0;
 
+    if (sourceFileSizeBytes > OPENAI_TRANSCRIBE_MAX_BYTES) {
+      const initialEstimatedChunkCount = estimateAsrSegmentCount(sourceFileSizeBytes);
+      if (initialEstimatedChunkCount > MAX_ASR_CHUNKS) {
+        chunkCapApplied = true;
+        try {
+          const reencoded = reencodeAudioForChunkCap({
+            sourcePath: asrFilePath,
+            message_id,
+          });
+          asrFilePath = reencoded.reencodedFilePath;
+          stagedCleanupDirs.push(reencoded.cleanupDir);
+          processingFilePath = asrFilePath;
+          sourceFileSizeBytes = getFileSizeBytes(asrFilePath);
+          sourceExtension = String(extname(asrFilePath) || '.webm').trim() || '.webm';
+          reencodedForChunkCap = true;
+        } catch (reencodeError) {
+          logger.warn('[voicebot-worker] low-bitrate re-encode before segmentation failed', {
+            message_id,
+            session_id,
+            error: getErrorMessage(reencodeError),
+          });
+        }
+      }
+    }
+
     if (sourceFileSizeBytes <= OPENAI_TRANSCRIBE_MAX_BYTES) {
+      chunkPolicy = reencodedForChunkCap ? 'reencode_to_single_file' : 'single_file_first';
       const transcription = await client.audio.transcriptions.create({
         file: createReadStream(asrFilePath),
         model: 'whisper-1',
@@ -1921,24 +2009,41 @@ export const handleTranscribeJob = async (
       });
     } else {
       transcriptionMethod = 'segmented_by_size';
-      const segmentCount = Math.max(
-        2,
-        Math.ceil(sourceFileSizeBytes / OPENAI_TRANSCRIBE_SEGMENT_TARGET_BYTES)
-      );
+      const estimatedSegmentCount = estimateAsrSegmentCount(sourceFileSizeBytes);
+      if (estimatedSegmentCount > MAX_ASR_CHUNKS) {
+        chunkCapApplied = true;
+      }
+      const plannedSegmentCount = Math.min(MAX_ASR_CHUNKS, estimatedSegmentCount);
+      if (chunkCapApplied) {
+        chunkPolicy = reencodedForChunkCap ? 'reencode_then_cap_segmented' : 'cap_segmented';
+      } else {
+        chunkPolicy = reencodedForChunkCap ? 'reencode_then_segmented' : 'segmented_by_size';
+      }
       const segmentDurationSeconds =
         durationSeconds && durationSeconds > 0
-          ? Math.max(OPENAI_TRANSCRIBE_MIN_SEGMENT_SECONDS, durationSeconds / segmentCount)
+          ? Math.max(OPENAI_TRANSCRIBE_MIN_SEGMENT_SECONDS, durationSeconds / plannedSegmentCount)
           : 180;
 
       const tempDir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-split-'));
       try {
-        const segmentFiles = await splitAudioFileByDuration({
+        const segmentFilesRaw = await splitAudioFileByDuration({
           filePath: asrFilePath,
           segmentDurationSeconds,
           outputDir: tempDir,
           outputPrefix: 'part_',
           outputExtension: sourceExtension,
         });
+        if (segmentFilesRaw.length > MAX_ASR_CHUNKS) {
+          chunkCapApplied = true;
+          logger.warn('[voicebot-worker] split output exceeded hard chunk cap, failing safely to avoid tail loss', {
+            message_id,
+            session_id,
+            split_count: segmentFilesRaw.length,
+            max_chunks: MAX_ASR_CHUNKS,
+          });
+          throw new Error(`asr_chunk_cap_exceeded:split_count=${segmentFilesRaw.length}:max_chunks=${MAX_ASR_CHUNKS}`);
+        }
+        const segmentFiles = segmentFilesRaw;
 
         let currentOffsetSeconds = 0;
         for (let index = 0; index < segmentFiles.length; index += 1) {
@@ -1999,7 +2104,12 @@ export const handleTranscribeJob = async (
           mode: 'segmented_by_size',
           source_file_size_bytes: sourceFileSizeBytes,
           source_duration_seconds: durationSeconds,
+          estimated_segment_count: estimatedSegmentCount,
+          planned_segment_count: plannedSegmentCount,
+          split_segment_count: segmentFilesRaw.length,
           segment_count: transcriptionChunks.length,
+          chunk_cap: MAX_ASR_CHUNKS,
+          chunk_cap_applied: chunkCapApplied,
         };
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
@@ -2011,6 +2121,7 @@ export const handleTranscribeJob = async (
       .filter((value) => Boolean(value))
       .join('\n\n')
       .trim();
+    asrChunkCount = transcriptionChunks.length;
 
     if (!transcription_text) {
       const errorCode = 'empty_result';
@@ -2186,6 +2297,11 @@ export const handleTranscribeJob = async (
       transcription_chunks: transcriptionChunks,
       is_transcribed: true,
       transcription_method: transcriptionMethod,
+      source_media_type: asrMediaKind,
+      audio_extracted: audioExtracted,
+      asr_chunk_count: asrChunkCount,
+      chunk_policy: chunkPolicy,
+      chunk_cap_applied: chunkCapApplied,
       transcription_job_key: transcriptionJobKey,
       transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIBED,
       transcribe_attempts: 0,
@@ -2376,6 +2492,8 @@ export const handleTranscribeJob = async (
       method: transcriptionMethod,
       source_file_size_bytes: sourceFileSizeBytes,
       chunks: transcriptionChunks.length,
+      chunk_policy: chunkPolicy,
+      chunk_cap_applied: chunkCapApplied,
     });
 
     return {
@@ -2389,12 +2507,13 @@ export const handleTranscribeJob = async (
     const quotaRetryable = Boolean(recoveryErrorCode);
     const payloadTooLarge = isPayloadTooLargeError(error);
     const splitFailedBySize = /oversized_segment_after_split/i.test(errorMessage);
+    const splitFailedByChunkCap = /asr_chunk_cap_exceeded/i.test(errorMessage);
     const mediaStagingFailed = /ffmpeg_audio_extract|media_staging_failed|staging/i.test(errorMessage);
     const normalizedCode = quotaRetryable
       ? recoveryErrorCode || normalizeErrorCode(error) || INSUFFICIENT_QUOTA_RETRY
       : mediaStagingFailed
         ? 'media_staging_failed'
-        : payloadTooLarge || splitFailedBySize
+        : payloadTooLarge || splitFailedBySize || splitFailedByChunkCap
           ? 'audio_too_large'
           : normalizeErrorCode(error) || 'transcription_failed';
     const nextAttemptAt = new Date(Date.now() + getRetryDelayMs(attempts));
@@ -2409,6 +2528,11 @@ export const handleTranscribeJob = async (
         transcribe_attempts: attempts,
         transcription_job_key: transcriptionJobKey,
         transcription_processing_state: TRANSCRIPTION_STATE.TRANSCRIPTION_ERROR,
+        source_media_type: asrMediaKind,
+        audio_extracted: audioExtracted,
+        asr_chunk_count: asrChunkCount,
+        chunk_policy: chunkPolicy,
+        chunk_cap_applied: chunkCapApplied,
         transcription_error_context: getTranscriptionErrorContext({
           apiKey,
           filePath: processingFilePath,
@@ -2485,8 +2609,8 @@ export const handleTranscribeJob = async (
       session_id,
     };
   } finally {
-    if (stagedCleanupDir) {
-      rmSync(stagedCleanupDir, { recursive: true, force: true });
+    for (const cleanupDir of new Set(stagedCleanupDirs)) {
+      rmSync(cleanupDir, { recursive: true, force: true });
     }
   }
 };

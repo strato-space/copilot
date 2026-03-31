@@ -26,6 +26,7 @@ const createTranscriptionMock = jest.fn();
 const getVoicebotQueuesMock = jest.fn();
 const detectGarbageTranscriptionMock = jest.fn();
 const insertSessionLogEventMock = jest.fn(async () => ({ _id: new ObjectId() }));
+const spawnSyncMock = jest.fn();
 const openAiCtorMock = jest.fn(() => ({
   audio: {
     transcriptions: {
@@ -56,6 +57,10 @@ jest.unstable_mockModule('../../../src/services/voicebotSessionLog.js', () => ({
   insertSessionLogEvent: insertSessionLogEventMock,
 }));
 
+jest.unstable_mockModule('node:child_process', () => ({
+  spawnSync: spawnSyncMock,
+}));
+
 jest.unstable_mockModule('openai', () => ({
   default: openAiCtorMock,
 }));
@@ -73,11 +78,23 @@ describe('handleTranscribeJob', () => {
     getVoicebotQueuesMock.mockReset();
     detectGarbageTranscriptionMock.mockReset();
     insertSessionLogEventMock.mockReset();
+    spawnSyncMock.mockReset();
     openAiCtorMock.mockClear();
     process.env.OPENAI_API_KEY = 'sk-test1234567890abcd';
     delete process.env.TG_VOICE_BOT_TOKEN;
     delete process.env.TG_VOICE_BOT_BETA_TOKEN;
     delete process.env.VOICE_WEB_INTERFACE_URL;
+    spawnSyncMock.mockImplementation((_command: string, args: string[]) => {
+      const outputPath = Array.isArray(args) ? args[args.length - 1] : null;
+      if (typeof outputPath === 'string' && outputPath) {
+        writeFileSync(outputPath, 'ffmpeg-output');
+      }
+      return {
+        status: 0,
+        stdout: '',
+        stderr: '',
+      };
+    });
     getFileSha256FromPathMock.mockResolvedValue('sha256-transcribe-test');
     getVoicebotQueuesMock.mockReturnValue(null);
     detectGarbageTranscriptionMock.mockResolvedValue({
@@ -170,6 +187,11 @@ describe('handleTranscribeJob', () => {
     expect(setPayload.to_transcribe).toBe(false);
     expect(setPayload.transcription_text).toBe('hello world');
     expect((setPayload.transcription as Record<string, unknown>).provider).toBe('openai');
+    expect(setPayload.source_media_type).toBe('audio');
+    expect(setPayload.audio_extracted).toBe(false);
+    expect(setPayload.asr_chunk_count).toBe(1);
+    expect(setPayload.chunk_policy).toBe('single_file_first');
+    expect(setPayload.chunk_cap_applied).toBe(false);
     expect(processorsQueueAdd).toHaveBeenCalledWith(
       VOICEBOT_JOBS.voice.CATEGORIZE,
       expect.objectContaining({
@@ -196,6 +218,99 @@ describe('handleTranscribeJob', () => {
         }),
       })
     );
+  });
+
+  it('extracts audio for video inputs before ASR and persists forensic fields', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-video-'));
+    const filePath = join(dir, 'input.webm');
+    writeFileSync(filePath, 'fake-video');
+
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: filePath,
+      mime_type: 'video/webm',
+      message_timestamp: 1770489126,
+      duration: 9,
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const processorsQueueAdd = jest.fn(async () => ({ id: 'processors-job-video' }));
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.PROCESSORS]: {
+        add: processorsQueueAdd,
+      },
+    });
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    createTranscriptionMock.mockImplementation(async ({ file }: { file?: { once?: (...args: unknown[]) => unknown; destroy?: () => void } }) => {
+      if (file && typeof file.once === 'function') {
+        await new Promise<void>((resolve) => {
+          let settled = false;
+          const settle = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+          };
+          file.once?.('error', settle);
+          file.once?.('open', () => {
+            file.destroy?.();
+            settle();
+          });
+        });
+      }
+      return { text: 'video speech' };
+    });
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: true,
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+
+    expect(spawnSyncMock).toHaveBeenCalled();
+    expect(spawnSyncMock.mock.calls[0]?.[1]).toEqual(expect.arrayContaining(['-vn']));
+
+    const transcriptionInput = createTranscriptionMock.mock.calls[0]?.[0] as { file?: { path?: string } };
+    expect(typeof transcriptionInput.file?.path).toBe('string');
+    expect(String(transcriptionInput.file?.path || '')).toContain('copilot-transcribe-stage-');
+    expect(String(transcriptionInput.file?.path || '')).not.toBe(filePath);
+
+    const transcriptionUpdateCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload.is_transcribed === true;
+    });
+    expect(transcriptionUpdateCall).toBeTruthy();
+    const setPayload = (((transcriptionUpdateCall?.[1] as Record<string, unknown>)?.$set || {}) as Record<string, unknown>);
+    expect(setPayload.source_media_type).toBe('video');
+    expect(setPayload.audio_extracted).toBe(true);
+    expect(setPayload.asr_chunk_count).toBe(1);
+    expect(setPayload.chunk_policy).toBe('single_file_first');
+    expect(setPayload.chunk_cap_applied).toBe(false);
+    expect(processorsQueueAdd).toHaveBeenCalledTimes(1);
   });
 
   it('demotes stale completion when in-flight key was revoked after operator reclassification', async () => {
@@ -1467,5 +1582,113 @@ describe('handleTranscribeJob', () => {
     expect(splitAudioFileByDurationMock).toHaveBeenCalledTimes(1);
     expect(createTranscriptionMock).toHaveBeenCalledTimes(2);
     expect(processorsQueueAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails safely when split output exceeds hard ASR chunk cap to avoid tail loss', async () => {
+    const messageId = new ObjectId();
+    const sessionId = new ObjectId();
+    const dir = mkdtempSync(join(tmpdir(), 'copilot-transcribe-hard-cap-'));
+    const filePath = join(dir, 'oversized.webm');
+    writeFileSync(filePath, Buffer.alloc(65 * 1024 * 1024, 0));
+
+    const partPaths: string[] = [];
+    for (let idx = 0; idx < 10; idx += 1) {
+      const partPath = join(dir, `part_${String(idx).padStart(3, '0')}.webm`);
+      writeFileSync(partPath, `part-${idx}`);
+      partPaths.push(partPath);
+    }
+
+    const messagesFindOne = jest.fn(async () => ({
+      _id: messageId,
+      session_id: sessionId,
+      is_transcribed: false,
+      transcribe_attempts: 0,
+      file_path: filePath,
+      mime_type: 'audio/webm',
+      message_timestamp: 1770489126,
+      duration: 800,
+    }));
+    const messagesUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const sessionsFindOne = jest.fn(async () => ({ _id: sessionId }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const processorsQueueAdd = jest.fn(async () => ({ id: 'processors-job-hard-cap' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: messagesFindOne,
+            updateOne: messagesUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.PROCESSORS]: {
+        add: processorsQueueAdd,
+      },
+    });
+
+    spawnSyncMock.mockImplementation((_command: string, args: string[]) => {
+      const outputPath = Array.isArray(args) ? args[args.length - 1] : null;
+      if (typeof outputPath === 'string' && outputPath) {
+        const isReencode = args.includes('-b:a');
+        writeFileSync(outputPath, isReencode ? Buffer.alloc(26 * 1024 * 1024, 0) : 'ffmpeg-output');
+      }
+      return {
+        status: 0,
+        stdout: '',
+        stderr: '',
+      };
+    });
+
+    splitAudioFileByDurationMock.mockResolvedValue(partPaths);
+    getAudioDurationFromFileMock.mockResolvedValue(80);
+    createTranscriptionMock.mockImplementation(async () => ({
+      text: `part-${createTranscriptionMock.mock.calls.length}`,
+    }));
+
+    const result = await handleTranscribeJob({ message_id: messageId.toString() });
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'audio_too_large',
+      message_id: messageId.toString(),
+      session_id: sessionId.toString(),
+    });
+    expect(splitAudioFileByDurationMock).toHaveBeenCalledTimes(1);
+    expect(createTranscriptionMock).not.toHaveBeenCalled();
+
+    const transcriptionUpdateCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const setPayload = (update?.$set || {}) as Record<string, unknown>;
+      return setPayload.transcription_error === 'audio_too_large';
+    });
+    expect(transcriptionUpdateCall).toBeTruthy();
+    const setPayload = (((transcriptionUpdateCall?.[1] as Record<string, unknown>)?.$set || {}) as Record<string, unknown>);
+    expect(setPayload.is_transcribed).toBe(false);
+    expect(setPayload.transcription_error).toBe('audio_too_large');
+    expect(setPayload.to_transcribe).toBe(false);
+    expect(setPayload.transcription_processing_state).toBe('transcription_error');
+    expect(setPayload.source_media_type).toBe('audio');
+    expect(setPayload.audio_extracted).toBe(false);
+    expect(setPayload.asr_chunk_count).toBe(0);
+    expect(setPayload.chunk_policy).toBe('reencode_then_cap_segmented');
+    expect(setPayload.chunk_cap_applied).toBe(true);
+
+    const successCommitCall = messagesUpdateOne.mock.calls.find((call) => {
+      const update = call?.[1] as Record<string, unknown> | undefined;
+      const payload = (update?.$set || {}) as Record<string, unknown>;
+      return payload.is_transcribed === true;
+    });
+    expect(successCommitCall).toBeUndefined();
+    expect(processorsQueueAdd).not.toHaveBeenCalled();
   });
 });
