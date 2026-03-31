@@ -165,11 +165,6 @@ export default function Categorization() {
                                         typeof material.imageUrl === 'string' && material.imageUrl.trim().length > 0
                                     )
                                     : [];
-                                const metadataSignature = buildCategorizationBlockMetadataSignature({
-                                    rows: sortedRows,
-                                    materials,
-                                    messageTimestamp: group.message_timestamp,
-                                });
                                 const rowsToRender = sortedRows.length > 0
                                     ? sortedRows
                                     : materials.length > 0
@@ -185,6 +180,11 @@ export default function Categorization() {
                                             },
                                         ]
                                         : [];
+                                const metadataSignature = buildCategorizationBlockMetadataSignature({
+                                    rows: sortedRows,
+                                    materials,
+                                    messageTimestamp: group.message_timestamp,
+                                });
 
                                 return (
                                     <tr key={group.message_id || idx} className="align-top border-b border-black/20">
@@ -202,7 +202,7 @@ export default function Categorization() {
                                                 );
                                             })}
                                             {metadataSignature ? (
-                                                <div className="px-1 pb-1 text-black/45 text-[9px] font-normal leading-3">
+                                                <div className="px-3 pt-1 pb-2 text-black/45 text-[10px] leading-4 select-none">
                                                     {metadataSignature}
                                                 </div>
                                             ) : null}

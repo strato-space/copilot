@@ -70,7 +70,7 @@ These decisions are part of the current platform contract and must be preserved 
   - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate,
   - user-owned Draft fields follow a `user wins` collision policy against concurrent `CREATE_TASKS` recompute writes until the user explicitly releases the override,
   - stale `CREATE_TASKS` repair marker precedence is explicit: processor-level timestamps (`job_queued_timestamp`, request timestamps, finish timestamps) dominate stale-age evaluation; session `_id` timestamp is fallback-only when explicit markers are absent.
-  - the default Transcription table is operator-first: raw attachment projection/debug metadata does not belong in the normal row body; per-segment timeline/file/timestamp signatures stay out of the default reading flow, and only actionable skip/error state may surface inline with the transcript/fallback body.
+  - the default Transcription/Categorization reading flow is operator-first: raw attachment projection/debug metadata does not belong in the normal row body; metadata signatures must render after the corresponding text block (never before it), and only actionable skip/error state may surface inline with the transcript/fallback body.
 
 ## Critical Interfaces To Preserve [RULE]
 

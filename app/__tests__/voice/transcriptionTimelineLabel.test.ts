@@ -13,13 +13,16 @@ describe('Transcription timeline label contract', () => {
     expect(transcriptionSource).toMatch(/sessionBaseTimestampMs=\{sessionBaseTimestampMs\}/);
   });
 
-  it('keeps fallback signature behavior while removing inline segment signatures and uses ch_* segment ids for actions', () => {
+  it('keeps signatures after text blocks (per-segment for transcribed rows) and uses ch_* segment ids for actions', () => {
     // Segment ids are stable `ch_<oid>` strings (not raw ObjectIds).
     expect(rowSource).toMatch(/startsWith\('ch_'\)/);
 
-    // Timeline signature lines are not rendered inline per segment in the default reading flow.
-    expect(rowSource).not.toContain('formatSegmentTimeline');
-    expect(rowSource).not.toMatch(/sourceFileName:\s*extract\w*SourceFileName\(row\),[\s\S]*?absoluteTimestampMs:\s*segmentAbsoluteStartMs/m);
+    // Segment timeline signature is rendered under segment text.
+    expect(rowSource).toContain('const timelineLabel = formatSegmentTimeline(seg, row, sessionBaseTimestampMs);');
+    expect(rowSource).toContain('sourceFileName: extractVoiceSourceFileName(row),');
+    expect(rowSource).toContain('absoluteTimestampMs: segmentAbsoluteStartMs,');
+    expect(rowSource).toContain('{timelineLabel ? (');
+    expect(rowSource).toContain('{timelineLabel}');
 
     // Error fallback signature remains available when transcription body is missing.
     expect(rowSource).toContain('const fallbackErrorSignature = resolveFallbackErrorSignature(row, sessionBaseTimestampMs);');

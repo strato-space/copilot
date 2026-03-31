@@ -33,7 +33,7 @@ Use this as a fast guardrail before implementing anything:
   - stale `CREATE_TASKS` repair marker precedence is explicit: processor-level timestamps (`job_queued_timestamp`, request timestamps, finish timestamps) dominate stale-age evaluation; session `_id` timestamp is fallback-only when explicit markers are absent,
   - user-owned draft fields follow a `user wins` collision policy against concurrent `CREATE_TASKS` recompute writes; the machine-actionable contract lives in `plan/2026-03-21-voice-task-surface-normalization-spec-2.md`,
   - accepted session-task reads are served through `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Ready+' }`; this bucket is accepted-only and `DRAFT_10` rows there are a bug (`copilot-f6z4`), not an allowed fallback.
-- Default transcription rendering stays operator-first: per-segment timeline/file/timestamp signatures do not appear inline in the default reading flow, while fallback error signatures remain visible when the transcript body is missing.
+- Default transcription/categorization rendering stays operator-first: metadata signatures are rendered after the corresponding text block (never before it), while fallback error signatures remain visible when the transcript body is missing.
 
 ## Minimal Delta To Remember (2026-02-26 / 2026-02-27)
 
@@ -179,7 +179,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - The garbage detector now has a local repeated-ngram shortcut for obvious silence hallucinations before it falls back to the LLM classifier; this path should remain precision-first and covered by regression tests.
 - Transcription fallback rows with `transcription_error` render metadata signature footer (`mm:ss - mm:ss, file.webm, HH:mm:ss`) and are replaced in place when realtime `message_update` brings transcript text.
 - Transcription metadata signatures and fallback footers normalize UTF-8-as-Latin1 mojibake filenames from message/attachment metadata before rendering file labels.
-- The default Transcription table view intentionally hides raw attachment projection/debug metadata; only actionable skip/error state belongs inline with the operator-facing body text.
+- The default Transcription table view intentionally hides raw attachment projection/debug metadata; metadata signatures stay below the text block and only actionable skip/error state belongs inline with the operator-facing body text.
 - Voice socket reconnect now performs session rehydrate and ordered upsert (`new_message`/`message_update`) to prevent live-state drift after transient disconnects.
 - Voice websocket must use the `/voicebot` namespace (`getVoicebotSocket`), not the root namespace (`/`), otherwise session subscriptions (`subscribe_on_session`) are ignored.
 - `subscribe_on_session` must replay a `session_update.taskflow_refresh.possible_tasks` hint so reconnecting session pages refetch canonical possible-task state even if an earlier realtime hint was missed.
@@ -275,7 +275,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Manual `POST /api/voicebot/generate_possible_tasks` and background `CREATE_TASKS` worker refresh now share one composite side-effect contract: session `summary_md_text` / `review_md_text` / generated `session_name` / `project_id`, Ready+ enrichment comments, Codex note enrichment, processor success markers, and `session_update.taskflow_refresh.summary` when summary text exists.
 - Taskflow row-locator priority is canonical `row_id -> id -> task_id_from_ai`; `task_id_from_ai` remains a legacy fallback for mutation compatibility, not the primary row identity.
 - Historical CREATE_TASKS legacy payload migration runbook is archived in `docs/archive/VOICEBOT_CREATE_TASKS_MIGRATION.legacy.md` (verify/apply/post-check + rollback).
-- Categorization metadata signature is rendered once per message block footer (`source_file_name + HH:mm:ss`) instead of repeating per row; row focus uses blue selection only.
+- Categorization metadata signature is rendered once per message block footer (`mm:ss - mm:ss, source_file_name, HH:mm:ss`) instead of repeating per row; row focus uses blue selection only.
 - Categorization readability contract now uses larger typography in `Time/Audio/Text/Materials` columns for dense session review.
 - Session summary now has a canonical persistence path:
   - backend route `POST /api/voicebot/save_summary` validates `{ session_id, md_text }` and writes `summary_md_text` + `summary_saved_at`,

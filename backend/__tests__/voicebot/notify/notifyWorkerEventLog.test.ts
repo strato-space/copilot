@@ -231,6 +231,67 @@ describe('voicebot notify worker session-log events', () => {
     );
   });
 
+  it('marks summarize audit as failed when detached hook exceeds timeout after HTTP ack', async () => {
+    jest.useFakeTimers();
+    try {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copilot-notify-log-'));
+      const hooksPath = path.join(tempDir, 'notifies.hooks.yaml');
+      fs.writeFileSync(hooksPath, ['session_ready_to_summarize:', '  - cmd: /bin/echo', '    args: ["run"]'].join('\n'));
+      process.env.VOICE_BOT_NOTIFY_HOOKS_CONFIG = hooksPath;
+      process.env.VOICE_BOT_NOTIFIES_URL = 'https://call-actions.stratospace.fun/notify';
+      process.env.VOICE_BOT_NOTIFIES_BEARER_TOKEN = 'token';
+      process.env.VOICE_BOT_NOTIFY_HOOK_TIMEOUT_MS = '1000';
+
+      const childStub = {
+        pid: 5004,
+        on: jest.fn(),
+        kill: jest.fn(),
+        unref: jest.fn(),
+      };
+      spawnMock.mockReturnValue(childStub);
+      jest.spyOn(process, 'kill').mockImplementation(() => true);
+      jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ accepted: true }),
+      } as Response);
+
+      const result = await handleNotifyJob({
+        event: 'session_ready_to_summarize',
+        session_id: '699f70000000000000000016',
+        payload: {
+          project_id: '699f70000000000000000001',
+          correlation_id: 'corr-hook-timeout',
+          idempotency_key: '699f70000000000000000016:summary_telegram_send:corr-hook-timeout',
+        },
+      });
+      expect(result.ok).toBe(true);
+
+      jest.advanceTimersByTime(1100);
+      await Promise.resolve();
+
+      const failedAuditCall = writeSummaryAuditLogMock.mock.calls.find(
+        (call) =>
+          call[0]?.event_name === 'summary_telegram_send'
+          && call[0]?.status === 'failed'
+          && call[0]?.correlation_id === 'corr-hook-timeout'
+      );
+      expect(failedAuditCall).toBeDefined();
+      expect(failedAuditCall?.[0]?.metadata?.reason).toBe('notify_hook_timeout');
+      expect(failedAuditCall?.[0]?.metadata?.hook_timeout_ms).toBe(1000);
+
+      const hookFailedCall = insertSessionLogEventMock.mock.calls.find(
+        (call) =>
+          call[0]?.event_name === 'notify_hook_failed'
+          && call[0]?.metadata?.reason === 'notify_hook_timeout'
+      );
+      expect(hookFailedCall).toBeDefined();
+    } finally {
+      jest.useRealTimers();
+      delete process.env.VOICE_BOT_NOTIFY_HOOK_TIMEOUT_MS;
+    }
+  });
+
   it('marks summarize audit done only after detached hook exits successfully', async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copilot-notify-log-'));
     const hooksPath = path.join(tempDir, 'notifies.hooks.yaml');

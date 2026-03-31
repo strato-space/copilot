@@ -34,6 +34,8 @@ export interface VoiceMetadataSignatureInput {
 export interface VoiceMetadataSignatureRowLike {
     source_file_name?: string | null | undefined;
     message_timestamp?: unknown;
+    timeStart?: unknown;
+    timeEnd?: unknown;
 }
 
 export interface CategorizationBlockMetadataSignatureInput {
@@ -91,12 +93,35 @@ export const buildCategorizationBlockMetadataSignature = ({
 }: CategorizationBlockMetadataSignatureInput): string | null => {
     const candidates = [...(rows || []), ...(materials || [])];
     const withFileName = candidates.find((item) => normalizeVoiceSourceFileName(item?.source_file_name).length > 0);
+    const timedRows = (rows || []).filter((item) => toSeconds(item?.timeStart) != null || toSeconds(item?.timeEnd) != null);
+
+    let startSeconds: number | undefined;
+    let endSeconds: number | undefined;
+
+    if (timedRows.length > 0) {
+        const starts = timedRows
+            .map((item) => toSeconds(item?.timeStart))
+            .filter((value): value is number => value != null);
+        const ends = timedRows
+            .map((item) => toSeconds(item?.timeEnd))
+            .filter((value): value is number => value != null);
+
+        if (starts.length > 0) {
+            startSeconds = Math.min(...starts);
+        }
+        if (ends.length > 0) {
+            endSeconds = Math.max(...ends);
+        }
+    }
 
     const sourceFileName = withFileName?.source_file_name;
     const timestampCandidate = withFileName?.message_timestamp ?? messageTimestamp;
 
-    return formatVoiceMetadataFooterSignature({
+    return formatVoiceMetadataSignature({
+        startSeconds: startSeconds ?? null,
+        endSeconds: endSeconds ?? startSeconds ?? null,
         sourceFileName,
         absoluteTimestampMs: timestampCandidate,
+        omitZeroRange: true,
     });
 };

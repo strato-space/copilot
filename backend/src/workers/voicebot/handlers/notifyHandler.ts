@@ -18,6 +18,15 @@ export { resetNotifyHooksCacheForTests };
 
 const logger = getLogger();
 
+const DEFAULT_NOTIFY_HOOK_TIMEOUT_MS = 5 * 60 * 1000;
+const MIN_NOTIFY_HOOK_TIMEOUT_MS = 1000;
+
+const resolveNotifyHookTimeoutMs = (): number => {
+  const raw = Number.parseInt(String(process.env.VOICE_BOT_NOTIFY_HOOK_TIMEOUT_MS || ''), 10);
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_NOTIFY_HOOK_TIMEOUT_MS;
+  return Math.max(raw, MIN_NOTIFY_HOOK_TIMEOUT_MS);
+};
+
 export type NotifyJobData = {
   session_id?: string;
   event?: string;
@@ -269,6 +278,7 @@ const runNotifyHooks = async ({
 
     const logContext = await buildSessionLogContext({ event, session_id, payload });
 
+    const hookTimeoutMs = resolveNotifyHookTimeoutMs();
     let started = 0;
     for (const [hookIndex, hook] of (hooks as NotifyHook[]).entries()) {
       const cmd = hook.cmd;
@@ -313,14 +323,33 @@ const runNotifyHooks = async ({
         } catch {}
       }
 
-      child.on('error', (spawnErr) => {
-        logger.error('[voicebot-worker] notify hook spawn failed', {
+      let hookSettled = false;
+      let hookTimeoutHandle: NodeJS.Timeout | null = null;
+
+      const clearHookTimeout = () => {
+        if (!hookTimeoutHandle) return;
+        clearTimeout(hookTimeoutHandle);
+        hookTimeoutHandle = null;
+      };
+
+      const markHookFailure = ({
+        reason,
+        metadata,
+      }: {
+        reason: string;
+        metadata: Record<string, unknown>;
+      }) => {
+        if (hookSettled) return;
+        hookSettled = true;
+        clearHookTimeout();
+        logger.error('[voicebot-worker] notify hook failed', {
           event,
           session_id: session_id || null,
           cmd,
           args,
           log_path: logPath,
-          error: String(spawnErr),
+          reason,
+          ...metadata,
         });
         void writeNotifyLog({
           context: logContext,
@@ -328,11 +357,12 @@ const runNotifyHooks = async ({
           status: 'error',
           sourceTransport: 'local_hook',
           metadata: {
+            reason,
             cmd,
             args,
             log_path: logPath,
-            error: String(spawnErr),
             hooks_config_path: loaded.resolvedPath,
+            ...metadata,
           },
         });
         void writeSummarizeAuditOutcome({
@@ -340,20 +370,33 @@ const runNotifyHooks = async ({
           status: 'failed',
           sourceTransport: 'local_hook',
           metadata: {
-            reason: 'notify_hook_spawn_failed',
+            reason,
             cmd,
             args,
             log_path: logPath,
-            error: String(spawnErr),
             hooks_config_path: loaded.resolvedPath,
+            ...metadata,
+          },
+        });
+      };
+
+      child.on('error', (spawnErr) => {
+        markHookFailure({
+          reason: 'notify_hook_spawn_failed',
+          metadata: {
+            error: String(spawnErr),
           },
         });
       });
 
       child.on('exit', (code, signal) => {
+        if (hookSettled) return;
+
         const failedByCode = typeof code === 'number' && code !== 0;
         const failedBySignal = typeof signal === 'string' && signal.length > 0;
         if (!failedByCode && !failedBySignal) {
+          hookSettled = true;
+          clearHookTimeout();
           void writeSummarizeAuditOutcome({
             context: logContext,
             status: 'done',
@@ -371,45 +414,42 @@ const runNotifyHooks = async ({
           return;
         }
 
-        logger.error('[voicebot-worker] notify hook exited with failure', {
-          event,
-          session_id: session_id || null,
-          cmd,
-          args,
-          log_path: logPath,
-          exit_code: typeof code === 'number' ? code : null,
-          exit_signal: signal || null,
-        });
-        void writeNotifyLog({
-          context: logContext,
-          eventName: 'notify_hook_failed',
-          status: 'error',
-          sourceTransport: 'local_hook',
+        markHookFailure({
+          reason: 'notify_hook_exit_non_zero',
           metadata: {
-            reason: 'notify_hook_exit_non_zero',
-            cmd,
-            args,
-            log_path: logPath,
             exit_code: typeof code === 'number' ? code : null,
             exit_signal: signal || null,
-            hooks_config_path: loaded.resolvedPath,
-          },
-        });
-        void writeSummarizeAuditOutcome({
-          context: logContext,
-          status: 'failed',
-          sourceTransport: 'local_hook',
-          metadata: {
-            reason: 'notify_hook_exit_non_zero',
-            cmd,
-            args,
-            log_path: logPath,
-            exit_code: typeof code === 'number' ? code : null,
-            exit_signal: signal || null,
-            hooks_config_path: loaded.resolvedPath,
           },
         });
       });
+
+      hookTimeoutHandle = setTimeout(() => {
+        let killAttempted = false;
+        let killError: string | null = null;
+
+        try {
+          if (typeof child.pid === 'number' && child.pid > 0) {
+            killAttempted = true;
+            process.kill(-child.pid, 'SIGKILL');
+          } else {
+            killAttempted = true;
+            child.kill('SIGKILL');
+          }
+        } catch (error) {
+          killError = error instanceof Error ? error.message : String(error);
+        }
+
+        markHookFailure({
+          reason: 'notify_hook_timeout',
+          metadata: {
+            hook_timeout_ms: hookTimeoutMs,
+            kill_attempted: killAttempted,
+            kill_error: killError,
+            pid: typeof child.pid === 'number' ? child.pid : null,
+          },
+        });
+      }, hookTimeoutMs);
+      hookTimeoutHandle.unref();
 
       child.unref();
       started += 1;

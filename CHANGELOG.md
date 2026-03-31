@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-03-31
+### PROBLEM SOLVED
+- **09:26** Voice metadata signatures drifted across tabs: in some runs `Транскрипция`/`Категоризация` either lost signatures entirely or rendered them in the wrong visual position, which broke operator reading flow and forensics traceability.
+- **09:26** Detached notify hooks could outlive the main notify HTTP ack without producing a terminal failure outcome, leaving summarize audit/session-log state inconsistent when a hook stalled.
+
+### FEATURE IMPLEMENTED
+- **09:26** Restored deterministic metadata-signature contract for Voice reading surfaces: signatures now render after text blocks in `Транскрипция` and `Категоризация`, with per-segment timeline labels preserved in transcript rows.
+- **09:26** Added bounded notify-hook execution with timeout-driven failure finalization (`notify_hook_timeout`) so summarize audit/session logs get deterministic failed outcomes when detached hooks hang.
+
+### CHANGES
+- **09:26** Updated Voice UI/runtime files:
+  - `app/src/components/voice/TranscriptionTableRow.tsx`
+  - `app/src/components/voice/Categorization.tsx`
+  - `app/src/utils/voiceMetadataSignature.ts`
+  - `app/__tests__/voice/{transcriptionTimelineLabel,transcriptionFallbackErrorSignatureContract,categorizationMetadataSignatureContract,categorizationBlockMetadataSignature}.test.ts`
+- **09:26** Updated notify-worker timeout handling and coverage:
+  - `backend/src/workers/voicebot/handlers/notifyHandler.ts`
+  - `backend/__tests__/voicebot/notify/notifyWorkerEventLog.test.ts`
+- **09:26** Verification:
+  - `cd app && npm test -- transcriptionTimelineLabel transcriptionFallbackErrorSignatureContract categorizationMetadataSignatureContract categorizationBlockMetadataSignature`
+  - `./scripts/pm2-backend.sh prod`
+
 ## 2026-03-30
 ### PROBLEM SOLVED
 - **22:46** `copilot-glsw` summary delivery could still start the notify pipeline and then lose durable outcome tracking when the detached hook died, leaving the chat attempt and audit rows out of sync.

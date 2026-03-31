@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('Categorization metadata signature contract', () => {
-    it('renders metadata signature once per block footer and keeps row renderer signature-free', () => {
+    it('renders one compact block metadata signature after the block text rows', () => {
         const categorizationPath = path.resolve(process.cwd(), 'src/components/voice/Categorization.tsx');
         const rowPath = path.resolve(process.cwd(), 'src/components/voice/CategorizationTableRow.tsx');
         const utilsPath = path.resolve(process.cwd(), 'src/utils/voiceMetadataSignature.ts');
@@ -12,10 +12,10 @@ describe('Categorization metadata signature contract', () => {
 
         expect(categorizationSource).toContain('buildCategorizationBlockMetadataSignature');
         expect(categorizationSource).toContain('const metadataSignature = buildCategorizationBlockMetadataSignature({');
-        expect(categorizationSource).toContain('rows: sortedRows');
-        expect(categorizationSource).toContain('materials,');
         expect(categorizationSource).toContain('{metadataSignature ? (');
-        expect(categorizationSource).toContain('text-black/45 text-[9px] font-normal leading-3');
+        expect(categorizationSource).toContain('text-black/45 text-[10px] leading-4 select-none');
+        expect(categorizationSource.indexOf('rowsToRender.map')).toBeGreaterThan(-1);
+        expect(categorizationSource.indexOf('{metadataSignature ? (')).toBeGreaterThan(categorizationSource.indexOf('rowsToRender.map'));
 
         expect(utilsSource).toContain('export const formatVoiceMetadataFooterSignature');
         expect(utilsSource).toContain('export const buildCategorizationBlockMetadataSignature');

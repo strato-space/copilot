@@ -150,7 +150,6 @@ describe('Transcription fallback error signature contract', () => {
       text: 'Текст оператора важнее fallback',
       transcription_text: '',
     });
-
     const view = renderIntoDom(
       React.createElement(TranscriptionTableRow, {
         row,
@@ -273,7 +272,7 @@ describe('Transcription fallback error signature contract', () => {
     }
   });
 
-  it('does not render per-segment signature lines inline while keeping transcript text visible', () => {
+  it('renders per-segment signature after transcript text', () => {
     const messageTimestampMs = 1710000300000;
     const sessionBaseTimestampMs = 1710000000000;
     const row = asVoiceMessage({
@@ -309,7 +308,65 @@ describe('Transcription fallback error signature contract', () => {
 
     try {
       expect(view.container.textContent).toContain('Первый абзац транскрипта без шумной подписи.');
-      expect(view.container.textContent).not.toContain(expectedInlineSignature);
+      expect(view.container.textContent).toContain(expectedInlineSignature);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  it('keeps multi-segment text and renders per-segment signatures after each text block', () => {
+    const messageTimestampMs = 1710000600000;
+    const sessionBaseTimestampMs = 1710000000000;
+    const sourceFileName = 'row-signature-source.webm';
+    const row = asVoiceMessage({
+      file_name: sourceFileName,
+      message_timestamp: messageTimestampMs,
+      transcription: {
+        segments: [
+          {
+            id: 'ch_1',
+            start: 0,
+            end: 28,
+            text: 'Первый сегмент без служебной подписи.',
+            is_deleted: false,
+          },
+          {
+            id: 'ch_2',
+            start: 28,
+            end: 61,
+            text: 'Второй сегмент тоже должен оставаться чистым.',
+            is_deleted: false,
+          },
+        ],
+      } as VoiceBotMessage['transcription'],
+    });
+
+    const expectedInlineSignatureFirst = formatVoiceMetadataSignature({
+      startSeconds: (messageTimestampMs - sessionBaseTimestampMs) / 1000,
+      endSeconds: (messageTimestampMs - sessionBaseTimestampMs) / 1000 + 28,
+      sourceFileName,
+      absoluteTimestampMs: messageTimestampMs,
+    });
+
+    const expectedInlineSignatureSecond = formatVoiceMetadataSignature({
+      startSeconds: (messageTimestampMs - sessionBaseTimestampMs) / 1000 + 28,
+      endSeconds: (messageTimestampMs - sessionBaseTimestampMs) / 1000 + 61,
+      sourceFileName,
+      absoluteTimestampMs: messageTimestampMs + 28_000,
+    });
+    const view = renderIntoDom(
+      React.createElement(TranscriptionTableRow, {
+        row,
+        isLast: false,
+        sessionBaseTimestampMs,
+      })
+    );
+
+    try {
+      expect(view.container.textContent).toContain('Первый сегмент без служебной подписи.');
+      expect(view.container.textContent).toContain('Второй сегмент тоже должен оставаться чистым.');
+      expect(view.container.textContent).toContain(expectedInlineSignatureFirst as string);
+      expect(view.container.textContent).toContain(expectedInlineSignatureSecond as string);
     } finally {
       view.unmount();
     }
