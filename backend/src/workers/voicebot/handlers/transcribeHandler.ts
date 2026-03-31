@@ -755,6 +755,7 @@ const reencodeAudioForChunkCap = ({
         'error',
         '-i',
         sourcePath,
+        '-vn',
         '-ac',
         '1',
         '-ar',
