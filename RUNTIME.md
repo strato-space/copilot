@@ -136,6 +136,7 @@ These constraints are derived from origin/main + CHANGELOG.md. They describe cur
 ## PM2 Services (prod/dev)
 - PM2 runs the backend API and miniapp backend; frontend builds are served statically via Nginx.
 - PM2 startup uses [scripts/pm2-backend.ecosystem.config.js](scripts/pm2-backend.ecosystem.config.js) with per-mode `env_file`.
+- Production backend API runtimes (`copilot-backend-prod`, `copilot-miniapp-backend-prod`) parse `backend/.env.production` into explicit PM2 `env` values so sensitive keys such as `OPENAI_API_KEY` are authoritative to the env file rather than inherited ambient shell/daemon variables.
 
 ### PM2 services (prod) -> repo paths
 - `copilot-backend-prod` — Finance Ops backend API (`npm run start` with `backend/.env.production`).
