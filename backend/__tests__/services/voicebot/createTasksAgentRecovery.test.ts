@@ -1195,4 +1195,120 @@ describe('runCreateTasksAgent quota fallback', () => {
       }),
     ]);
   });
+
+  it('drops coordination, input, reference, and status rows from task_draft while preserving deliverables', async () => {
+    initializeSessionMock.mockResolvedValue({ sessionId: 'ontology-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: 'Есть и summary, и review.',
+              scholastic_review_md: 'Есть review.',
+              task_draft: [
+                {
+                  id: 'TASK-DELIVERABLE',
+                  row_id: 'TASK-DELIVERABLE',
+                  name: 'Описать навигационную структуру Jabula mainpage',
+                  description: 'Сделать схему entry point, разделов и переходов.',
+                  priority: 'P2',
+                },
+                {
+                  id: 'TASK-COORD',
+                  row_id: 'TASK-COORD',
+                  name: 'Созвониться с Юрой после колла',
+                  description: 'После созвона показать платформу и обсудить позже.',
+                  priority: 'P3',
+                },
+                {
+                  id: 'TASK-INPUT',
+                  row_id: 'TASK-INPUT',
+                  name: 'Скинуть логины и пароли Jabula',
+                  description: 'Передать креды и доступы.',
+                  priority: 'P3',
+                },
+                {
+                  id: 'TASK-REF',
+                  row_id: 'TASK-REF',
+                  name: 'Посмотреть кайфовый референс impact',
+                  description: 'Можно бы потом использовать как пример.',
+                  priority: 'P4',
+                },
+                {
+                  id: 'TASK-STATUS',
+                  row_id: 'TASK-STATUS',
+                  name: 'Посмотрю это позже и отпишусь',
+                  description: 'Это просто статус-апдейт без deliverable.',
+                  priority: 'P4',
+                },
+              ],
+              enrich_ready_task_comments: [],
+              session_name: '',
+              project_id: 'proj-ontology',
+            }),
+          },
+        ],
+      },
+    });
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-ontology',
+      projectId: 'proj-ontology',
+    });
+
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toEqual(
+      expect.objectContaining({
+        id: 'TASK-DELIVERABLE',
+        name: 'Описать навигационную структуру Jabula mainpage',
+      })
+    );
+  });
+
+  it('keeps bounded preparation tasks that end in a presentable artifact', async () => {
+    initializeSessionMock.mockResolvedValue({ sessionId: 'ontology-prep-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: '',
+              scholastic_review_md: '',
+              task_draft: [
+                {
+                  id: 'TASK-PREP',
+                  row_id: 'TASK-PREP',
+                  name: 'Подготовить демо и тезисы для показа клиенту',
+                  description: 'Собрать документ с тезисами и демо-сценарием, затем показать клиенту.',
+                  priority: 'P2',
+                },
+              ],
+              enrich_ready_task_comments: [],
+              session_name: '',
+              project_id: 'proj-ontology',
+            }),
+          },
+        ],
+      },
+    });
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-ontology-prep',
+      projectId: 'proj-ontology',
+    });
+
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toEqual(
+      expect.objectContaining({
+        id: 'TASK-PREP',
+        name: 'Подготовить демо и тезисы для показа клиенту',
+      })
+    );
+  });
 });

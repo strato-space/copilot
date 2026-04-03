@@ -66,6 +66,7 @@ These decisions are part of the current platform contract and must be preserved 
   - filter state is restored after navigation/reload.
 - Voice/OperOps integration remains canonical:
   - `CREATE_TASKS` payload shape is `id/name/description/priority/...`,
+  - `CREATE_TASKS` extraction is ontology-first: only bounded deliverables may materialize into `task_draft`; coordination, inputs/accesses, references/ideas, and status/report statements must stay out of Draft materialization unless they are explicitly transformed into supporting context or comment enrichment,
   - `task_type_id` is optional in Possible Tasks UI,
   - possible tasks are master records in `automation_tasks` with `task_status=DRAFT_10`,
   - Draft task editing is autosave-first across both inline row edits and the right-hand detail card; the primary manual action is `Run`, not `Save`, and `Run` must not materialize a row to `READY_10` if autosave failed,

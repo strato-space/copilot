@@ -22,6 +22,7 @@ Use this as a fast guardrail before implementing anything:
   - filter state persistence across navigation/reload.
 - Possible Tasks contract:
   - canonical payload shape `id/name/description/priority/...`,
+  - task extraction is ontology-first: only bounded deliverables should become Draft rows; coordination-only actions, input/access handoffs, references/ideas, and status updates are not canonical tasks by themselves,
   - `task_type_id` stays optional,
   - master store is `automation_tasks` with draft status `DRAFT_10`,
   - draft editing is autosave-first across both inline table edits and the right-hand detail editor,

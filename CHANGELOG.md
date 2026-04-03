@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-04-03
+### PROBLEM SOLVED
+- **16:04** `CREATE_TASKS` still treated heterogeneous speech acts as flat task candidates, so sessions like `69cf65712a7446295ac67771` under-materialized real deliverables while letting coordination/input/status phrases compete with actual task extraction.
+- **16:04** The extractor contract did not explicitly require ontology-first classification before Draft materialization, which left the MCP prompt and backend runtime free to diverge on what counts as a canonical task.
+
+### FEATURE IMPLEMENTED
+- **16:04** Added an ontology-first `CREATE_TASKS` contract: only bounded deliverables may materialize into `task_draft`, while coordination-only asks, access/input handoffs, references/ideas, and status/report statements are routed away from Draft materialization.
+- **16:04** Added a backend safety-net that drops obvious non-deliverable draft rows even when the model emits them, preserving bounded preparation tasks that still end in a presentable artifact.
+
+### CHANGES
+- **16:04** Updated the canonical MCP prompt card:
+  - `agents/agent-cards/create_tasks.md`
+- **16:04** Updated backend extraction normalization:
+  - `backend/src/services/voicebot/createTasksAgent.ts`
+- **16:04** Added focused regression coverage:
+  - `backend/__tests__/services/voicebot/createTasksAgentCardContract.test.ts`
+  - `backend/__tests__/services/voicebot/createTasksAgentRecovery.test.ts`
+- **16:04** Verification:
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules --disable-warning=ExperimentalWarning --disable-warning=DEP0040' npx jest --runInBand __tests__/services/voicebot/createTasksAgentCardContract.test.ts __tests__/services/voicebot/createTasksAgentRecovery.test.ts`
+
 ## 2026-03-31
 ### PROBLEM SOLVED
 - **09:26** Voice metadata signatures drifted across tabs: in some runs `Транскрипция`/`Категоризация` either lost signatures entirely or rendered them in the wrong visual position, which broke operator reading flow and forensics traceability.

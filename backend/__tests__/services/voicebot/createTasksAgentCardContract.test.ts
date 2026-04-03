@@ -16,4 +16,17 @@ describe('create_tasks agent card language contract', () => {
     expect(source).toContain('Для `ru` запрещены английские section headings');
     expect(source).toContain('Ontology allowlist terms');
   });
+
+  it('requires ontology-first classification before task draft materialization', () => {
+    const cardPath = path.resolve(process.cwd(), '../agents/agent-cards/create_tasks.md');
+    const source = readFileSync(cardPath, 'utf8');
+
+    expect(source).toContain('## Ontology-first classification перед `task_draft`');
+    expect(source).toContain('`deliverable_task`');
+    expect(source).toContain('`coordination_only`');
+    expect(source).toContain('`input_artifact`');
+    expect(source).toContain('`reference_or_idea`');
+    expect(source).toContain('`status_or_report`');
+    expect(source).toContain('Только `deliverable_task` может попасть в `task_draft`');
+  });
 });

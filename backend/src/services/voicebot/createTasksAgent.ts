@@ -128,6 +128,25 @@ const RUSSIAN_ONTOLOGY_ALLOWLIST = new Set([
   'deliverable',
 ]);
 
+const TASK_ONTOLOGY_COORDINATION_RE =
+  /созвон|созвони|встреч|синк|sync\b|колл|калл|обсуд(?:ить|им|им позже)?|показат(?:ь|ься)?|покажу|демо|после созвона|после колла|созвонимся|обсудим позже|переслать|перешл[юе]|скину|скинуть|закину|подойти за советом/i;
+const TASK_ONTOLOGY_INPUT_RE =
+  /логин|парол[ья]|креды|credentials?|доступ|vpn\b|ссылк|скрин(?:ы|шоты?)?|материалы|input data|докину доступ/i;
+const TASK_ONTOLOGY_STATUS_RE =
+  /статус|апдейт|update\b|обновлени[ея]|в работе|посмотрю|гляну|вернусь позже|позже вернусь|доложу|расскажу|отпишусь/i;
+const TASK_ONTOLOGY_REFERENCE_RE =
+  /референс|reference\b|пример|образец|идея|inspiration\b|для вдохновения|можно бы|было бы неплохо|нравится как пример/i;
+const TASK_ONTOLOGY_DELIVERABLE_RE =
+  /подготов(?:ить|ка)|описат(?:ь|ие)|собрат(?:ь|ь)|состав(?:ить|ление)|сделат(?:ь|ь)|доработ(?:ать|ка)|подфинал(?:ить|ка)|оформ(?:ить|ление)|разобрат(?:ь|ка)|проработ(?:ать|ка)|нарис(?:овать|овка)|зафиксир(?:овать|овка)|постро(?:ить|ение)|схем[ауые]?|каталог|тезис(?:ы)?|список|документ|таблиц(?:а|ы)|карт[ауые]?|структур[ауые]?|навигац(?:ию|ия|ионн)|инвентаризац(?:ию|ия)|маппинг|mapping\b|комментари|walkthrough\b|гайд|brief\b|отчет|прототип|prototype\b|диаграмм[ауые]?|канвас/i;
+
+type TaskOntologyBucket =
+  | 'deliverable_task'
+  | 'coordination_only'
+  | 'input_artifact'
+  | 'reference_or_idea'
+  | 'status_or_report'
+  | 'unknown';
+
 type ProjectCrmWindow = {
   from_date: string;
   to_date: string;
@@ -246,6 +265,23 @@ const buildCanonicalDraftDescription = (name: string, description: string): stri
   return normalizeWhitespace(lines.join('\n'));
 };
 
+const stripTaskMarkdownScaffold = (value: string): string =>
+  value
+    .split('\n')
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+      if (/^##\s+(description|object_locators|expected_results|acceptance_criteria|evidence_links|executor_routing_hints|open_questions)\s*$/i.test(trimmed)) {
+        return false;
+      }
+      if (/^не указано$/i.test(trimmed)) {
+        return false;
+      }
+      return true;
+    })
+    .join('\n')
+    .trim();
+
 const normalizeDraftDescription = (name: string, description: string): string => {
   const normalized = normalizeWhitespace(description);
   if (!normalized) {
@@ -265,6 +301,43 @@ const normalizeCompositeSessionName = (value: unknown): string => {
     return '';
   }
   return normalized;
+};
+
+const classifyTaskOntologyBucket = (task: Record<string, unknown>): TaskOntologyBucket => {
+  const combined = normalizeWhitespace(
+    [
+      toText(task.name),
+      stripTaskMarkdownScaffold(toText(task.description)),
+      toText(task.dialogue_reference),
+    ]
+      .filter(Boolean)
+      .join('\n')
+  ).toLowerCase();
+
+  if (!combined) return 'unknown';
+
+  const hasDeliverableSignal = TASK_ONTOLOGY_DELIVERABLE_RE.test(combined);
+  if (hasDeliverableSignal) {
+    return 'deliverable_task';
+  }
+  if (TASK_ONTOLOGY_INPUT_RE.test(combined)) {
+    return 'input_artifact';
+  }
+  if (TASK_ONTOLOGY_COORDINATION_RE.test(combined)) {
+    return 'coordination_only';
+  }
+  if (TASK_ONTOLOGY_REFERENCE_RE.test(combined)) {
+    return 'reference_or_idea';
+  }
+  if (TASK_ONTOLOGY_STATUS_RE.test(combined)) {
+    return 'status_or_report';
+  }
+  return 'unknown';
+};
+
+const isOntologyMaterializableTask = (task: Record<string, unknown>): boolean => {
+  const bucket = classifyTaskOntologyBucket(task);
+  return bucket === 'deliverable_task' || bucket === 'unknown';
 };
 
 const normalizeTaskShape = (
@@ -302,9 +375,23 @@ const normalizeTaskShape = (
 
 const parseTasksPayload = (value: unknown, defaultProjectId = ''): Array<Record<string, unknown>> => {
   if (Array.isArray(value)) {
-    return value
+    const normalized = value
       .map((entry, index) => normalizeTaskShape(entry, index, defaultProjectId))
       .filter((entry): entry is Record<string, unknown> => entry !== null);
+    const filtered = normalized.filter((entry) => isOntologyMaterializableTask(entry));
+    if (filtered.length !== normalized.length) {
+      const discarded = normalized
+        .filter((entry) => !isOntologyMaterializableTask(entry))
+        .map((entry) => ({
+          name: toText(entry.name),
+          bucket: classifyTaskOntologyBucket(entry),
+        }));
+      logger.warn('[voicebot-worker] create_tasks ontology filter dropped non-deliverable candidates', {
+        discarded_count: discarded.length,
+        discarded,
+      });
+    }
+    return filtered;
   }
   const record = asRecord(value);
   if (!record) return [];

@@ -171,6 +171,7 @@ oneOf:
 7. Если доступен словарь task types, попытайся вывести `task_type_id`.
 8. До summary/review/evidence enrichment выполни breadth-first candidate extraction:
    - составь полный внутренний список всех явных imperatives, requested artifacts, next steps, process changes, infra/runtime asks, taxonomy/spec asks и cross-project asks;
+   - до materialization ОБЯЗАТЕЛЬНО выполни ontology-first classification каждого candidate;
    - отдельно сделай tail-pass по последним 25-30% transcript: каждый concrete ask / requested artifact / next step из хвоста обязан попасть либо в `task_draft`, либо в `enrich_ready_task_comments`, либо в `scholastic_review_md` как явно объяснённый discard;
    - каждый такой candidate обязан попасть либо в `task_draft`, либо в `enrich_ready_task_comments`, либо в `scholastic_review_md` как явно объяснённый discard/superseded/non-goal case;
    - silent drop запрещён.
@@ -181,6 +182,61 @@ oneOf:
    - `enrich_ready_task_comments`
    - `session_name`
    - `project_id`
+
+## Ontology-first classification перед `task_draft`
+Каждый candidate перед materialization обязан быть внутренне классифицирован ровно в один ontology bucket:
+- `deliverable_task`
+- `coordination_only`
+- `input_artifact`
+- `reference_or_idea`
+- `status_or_report`
+
+### Что такое `deliverable_task`
+Candidate можно materialize в `task_draft` только если он одновременно задаёт:
+- объект работы;
+- ожидаемый результат / артефакт / изменённое состояние;
+- минимальную границу завершения, достаточную для executor-ready interpretation.
+
+Примеры `deliverable_task`:
+- `Описать навигационную структуру Jabula mainpage`
+- `Собрать каталог UI-элементов и соотнести с Ant Design`
+- `Подготовить тезисы по спорным техограничениям для Юры`
+
+### Что не materialize в `task_draft`
+- `coordination_only`:
+  - созвониться;
+  - остаться после колла;
+  - показать что-то на встрече;
+  - обсудить позже;
+  - переслать без собственного deliverable.
+- `input_artifact`:
+  - логины;
+  - пароли;
+  - креды;
+  - доступы;
+  - VPN;
+  - ссылка;
+  - скриншоты;
+  - любые входные материалы без самостоятельной работы над ними.
+- `reference_or_idea`:
+  - `можно бы потом посмотреть`;
+  - `вот есть хороший референс`;
+  - `можно добавить как образец`;
+  - любые inspiration/reference mentions без зафиксированного deliverable.
+- `status_or_report`:
+  - `я посмотрю`;
+  - `позже вернусь`;
+  - `это в работе`;
+  - `мы уже обсуждали`;
+  - любые report/update statements без bounded deliverable.
+
+### Materialization rule
+- Только `deliverable_task` может попасть в `task_draft`.
+- `coordination_only`, `input_artifact`, `reference_or_idea`, `status_or_report` не должны silently disappear:
+  - либо отрази их в `scholastic_review_md` как discard c reason;
+  - либо используй их как supporting context внутри валидной deliverable-задачи;
+  - либо преврати в `enrich_ready_task_comments`, если это комментарий к уже существующей Ready+/Codex задаче.
+- Нельзя materialize candidate в `task_draft` только потому, что там есть императивный глагол. Сначала проверь ontology bucket, потом executor-ready deliverable semantics.
 
 ## Правила `task_draft`
 - Возвращай full desired snapshot для текущей сессии, а не только delta.
