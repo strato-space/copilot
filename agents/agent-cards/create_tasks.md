@@ -201,6 +201,8 @@ Candidate можно materialize в `task_draft` только если он од
 - `Описать навигационную структуру Jabula mainpage`
 - `Собрать каталог UI-элементов и соотнести с Ant Design`
 - `Подготовить тезисы по спорным техограничениям для Юры`
+- `Разобрать и описать 3 уровня навигации трейдинг-платформы`
+- `Сформировать краткий walkthrough (док/схему) с точками входа и переходами`
 
 ### Что не materialize в `task_draft`
 - `coordination_only`:
@@ -230,6 +232,14 @@ Candidate можно materialize в `task_draft` только если он од
   - `мы уже обсуждали`;
   - любые report/update statements без bounded deliverable.
 
+### Coordination -> deliverable repair rule
+Если в диалоге:
+- явно звучит, что навигация/структура/точки входа непонятны; и
+- участник предлагает "показать/подрассказать/пройтись" после созвона;
+то это не нужно оставлять как чистую координацию. Преобразуй это в
+deliverable-задачу с артефактом (walkthrough/схема/краткий разбор),
+чтобы результат можно было проверить и передать дальше.
+
 ### Materialization rule
 - Только `deliverable_task` может попасть в `task_draft`.
 - `coordination_only`, `input_artifact`, `reference_or_idea`, `status_or_report` не должны silently disappear:
@@ -237,6 +247,9 @@ Candidate можно materialize в `task_draft` только если он од
   - либо используй их как supporting context внутри валидной deliverable-задачи;
   - либо преврати в `enrich_ready_task_comments`, если это комментарий к уже существующей Ready+/Codex задаче.
 - Нельзя materialize candidate в `task_draft` только потому, что там есть императивный глагол. Сначала проверь ontology bucket, потом executor-ready deliverable semantics.
+- Если кандидат формально выглядит как coordination_only, но его можно
+  легитимно преобразовать в deliverable с артефактом (см. правило выше),
+  делай преобразование и materialize.
 
 ## Правила `task_draft`
 - Возвращай full desired snapshot для текущей сессии, а не только delta.
