@@ -364,4 +364,50 @@ describe('handleCreateTasksFromChunksJob', () => {
     expect(setPayload['processors_data.CREATE_TASKS.job_finished_timestamp']).toEqual(expect.any(Number));
     expect(setPayload['processors_data.CREATE_TASKS.error']).toBe('create_tasks_agent_error: insufficient_quota');
   });
+
+  it('does not persist or emit no_tasks when agent returns a semantically empty composite failure', async () => {
+    const sessionId = new ObjectId();
+    const sessionsFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      session_name: 'Demo session',
+      project_id: 'proj-1',
+      user_id: 'user-1',
+    }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.EVENTS]: { add: jest.fn(async () => ({ id: 'event-job' })) },
+    });
+
+    runCreateTasksAgentMock.mockRejectedValue(new Error('create_tasks_empty_mcp_result'));
+
+    const result = await handleCreateTasksFromChunksJob({
+      session_id: sessionId.toString(),
+      chunks_to_process: [],
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'create_tasks_empty_mcp_result',
+      session_id: sessionId.toString(),
+    });
+    expect(persistPossibleTasksForSessionMock).not.toHaveBeenCalled();
+    expect(applyCreateTasksCompositeCommentSideEffectsMock).not.toHaveBeenCalled();
+    expect(sessionsUpdateOne).toHaveBeenCalledTimes(1);
+    const updatePayload = sessionsUpdateOne.mock.calls[0]?.[1] as Record<string, unknown>;
+    const setPayload = (updatePayload.$set as Record<string, unknown>) || {};
+    expect(setPayload['processors_data.CREATE_TASKS.is_processed']).toBe(false);
+    expect(setPayload['processors_data.CREATE_TASKS.error']).toBe('create_tasks_empty_mcp_result');
+  });
 });

@@ -8,6 +8,7 @@ import {
 } from '../../api/routes/voicebot/possibleTasksMasterModel.js';
 import { attemptAgentsQuotaRecovery, isAgentsQuotaFailure } from './agentsRuntimeRecovery.js';
 import {
+  CREATE_TASKS_NO_TASK_REASON_MISSING_CODE,
   normalizeCreateTasksNoTaskDecision,
   resolveCreateTasksNoTaskDecisionOutcome,
   type CreateTasksNoTaskDecision,
@@ -999,6 +1000,21 @@ const toEmptyCompositeResult = (defaultProjectId = ''): CreateTasksCompositeResu
   project_id: defaultProjectId,
 });
 
+const isSemanticallyEmptyCompositeResult = (value: CreateTasksCompositeResult): boolean =>
+  {
+    const inferredMissingNoTask =
+      value.no_task_decision?.code === CREATE_TASKS_NO_TASK_REASON_MISSING_CODE &&
+      value.no_task_decision?.inferred === true &&
+      value.no_task_decision?.source === 'agent_inferred';
+    return (
+  value.task_draft.length === 0 &&
+  value.enrich_ready_task_comments.length === 0 &&
+  (!value.no_task_decision || inferredMissingNoTask) &&
+  !value.summary_md_text &&
+  !value.scholastic_review_md
+    );
+  };
+
 const normalizeCompositeResult = (
   value: unknown,
   defaultProjectId = ''
@@ -1250,12 +1266,16 @@ export const runCreateTasksCompositeAgent = async ({
       }
 
       const parsedComposite = parseCreateTasksCompositeResult(result.data, normalizedProjectId);
-      return repairCompositeLanguageIfNeeded({
+      const repairedComposite = await repairCompositeLanguageIfNeeded({
         composite: parsedComposite,
         preferredOutputLanguage,
         sessionId,
         defaultProjectId: normalizedProjectId,
       });
+      if (isSemanticallyEmptyCompositeResult(repairedComposite)) {
+        throw new Error('create_tasks_empty_mcp_result');
+      }
+      return repairedComposite;
     } finally {
       await mcpClient.closeSession(session.sessionId).catch((error) => {
         logger.warn('[voicebot-worker] create_tasks agent session close failed', {

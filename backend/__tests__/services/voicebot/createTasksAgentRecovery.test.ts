@@ -323,6 +323,32 @@ describe('runCreateTasksAgent quota fallback', () => {
     );
   });
 
+  it('throws on semantically empty composite payloads instead of treating them as no-task success', async () => {
+    initializeSessionMock.mockResolvedValue({ sessionId: 'empty-composite-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              session_name: 'Only session title leaked through',
+              project_id: 'proj-empty',
+            }),
+          },
+        ],
+      },
+    });
+
+    await expect(
+      runCreateTasksAgent({
+        sessionId: 'session-empty-composite',
+        projectId: 'proj-empty',
+      })
+    ).rejects.toThrow('create_tasks_empty_mcp_result');
+  });
+
   it('assigns deterministic content-based locators when the model omits row identifiers', async () => {
     initializeSessionMock.mockResolvedValue({ sessionId: 'anonymous-session' });
     closeSessionMock.mockResolvedValue(undefined);
@@ -527,7 +553,15 @@ describe('runCreateTasksAgent quota fallback', () => {
                 text: JSON.stringify({
                   summary_md_text: '',
                   scholastic_review_md: '',
-                  task_draft: [],
+                  task_draft: [
+                    {
+                      id: 'TASK-LOOKBACK-1',
+                      row_id: 'TASK-LOOKBACK-1',
+                      name: 'Lookback task',
+                      description: 'Envelope validation task',
+                      priority: 'P3',
+                    },
+                  ],
                   enrich_ready_task_comments: [],
                   session_name: '',
                   project_id: 'proj-window',
@@ -648,7 +682,15 @@ describe('runCreateTasksAgent quota fallback', () => {
             text: JSON.stringify({
               summary_md_text: '',
               scholastic_review_md: '',
-              task_draft: [],
+              task_draft: [
+                {
+                  id: 'TASK-LANG-1',
+                  row_id: 'TASK-LANG-1',
+                  name: 'Language sample task',
+                  description: 'Envelope language selection task',
+                  priority: 'P3',
+                },
+              ],
               enrich_ready_task_comments: [],
               session_name: '',
               project_id: 'proj-msg-lang',
@@ -1088,6 +1130,11 @@ describe('runCreateTasksAgent quota fallback', () => {
                 scholastic_review_md: '',
                 task_draft: [],
                 enrich_ready_task_comments: [],
+                no_task_decision: {
+                  code: 'discussion_only',
+                  reason: 'Reduced context yielded discussion-only output.',
+                  evidence: ['retry_path=reduced_context'],
+                },
                 session_name: '',
                 project_id: '',
               }),
