@@ -30,6 +30,12 @@
 - **22:49** Verification:
   - `cd backend && npm run test:parallel-safe -- --runTestsByPath __tests__/services/voicebot/createTasksAgentCardContract.test.ts __tests__/services/voicebot/createTasksAgentRecovery.test.ts __tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts __tests__/voicebot/runtime/generatePossibleTasksRoute.test.ts`
   - `cd backend && npm run build`
+- **22:54** Production deploy/smoke:
+  - `./scripts/pm2-backend.sh prod`
+  - `./scripts/pm2-runtime-readiness.sh prod`
+  - `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production`
+  - `curl -fsS http://127.0.0.1:3002/api/health`
+  - `curl -s -o /tmp/generate_possible_tasks_smoke.out -w '%{http_code}' -X POST http://127.0.0.1:3002/api/voicebot/generate_possible_tasks -H 'Content-Type: application/json' --data '{}'` (`401 Unauthorized` expected without auth token)
 
 ## 2026-04-03
 ### PROBLEM SOLVED
