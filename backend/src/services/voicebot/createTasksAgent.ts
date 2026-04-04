@@ -148,7 +148,7 @@ const TASK_GAP_REPAIR_CARDINAL_RE =
 const TASK_GAP_REPAIR_STRUCTURAL_OBJECT_RE =
   /навигац|уровн|точки\s+входа|куда\s+переход|структур|сценари|flow\b|флоу|walkthrough\b|путь\s+пользователя|user\s+journey|ветк|переход/u;
 const TASK_GAP_REPAIR_STRUCTURAL_RECOVERY_RE =
-  /после\s+созвона|после\s+колла|после\s+демо|после\s+встречи|показат(?:ь|ься|л)|пройдемся|подрасскажу|разберем|разобрать/iu;
+  /после\s+созвона|после\s+колла|после\s+демо|после\s+встречи|показат(?:ь|ься|л)|покаж(?:и|ем|ете?)|пройдемся|подрасскажу|разберем|разобрать/iu;
 const TASK_GAP_REPAIR_CONFUSION_RE = /не\s+понял|не\s+понимаю|непонятно|не\s+ясно|запутал(?:ся|ись|о)|теряюсь/iu;
 const TASK_GAP_REPAIR_MAX_EXCERPTS = 4;
 const TASK_GAP_REPAIR_CONTEXT_WINDOW = 1;
