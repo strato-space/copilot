@@ -21,25 +21,36 @@ describe('create_tasks agent card language contract', () => {
     const cardPath = path.resolve(process.cwd(), '../agents/agent-cards/create_tasks.md');
     const source = readFileSync(cardPath, 'utf8');
 
-    expect(source).toContain('## Ontology-first classification перед `task_draft`');
-    expect(source).toContain('`deliverable_task`');
-    expect(source).toContain('`coordination_only`');
-    expect(source).toContain('`input_artifact`');
-    expect(source).toContain('`reference_or_idea`');
-    expect(source).toContain('`status_or_report`');
-    expect(source).toContain('Только `deliverable_task` может попасть в `task_draft`');
+    expect(source).toContain('## Онтологическая проверка перед `task_draft`');
+    expect(source).toContain('`задача`');
+    expect(source).toContain('`координация`');
+    expect(source).toContain('`входные данные`');
+    expect(source).toContain('`референс/идея`');
+    expect(source).toContain('`статус`');
+    expect(source).toContain('В `task_draft` может попасть только `задача`');
   });
 
   it('keeps distinct-deliverable rules generalized instead of transcript-specific', () => {
     const cardPath = path.resolve(process.cwd(), '../agents/agent-cards/create_tasks.md');
     const source = readFileSync(cardPath, 'utf8');
 
-    expect(source).toContain('Не схлопывай task про локальную surface-доработку и task про communication artifact');
-    expect(source).toContain('Не схлопывай structural mapping / walkthrough задачи по разным объектам работы');
+    expect(source).toContain('Не схлопывай local surface-доработку и отдельный communication artifact');
+    expect(source).toContain('Не схлопывай structural mapping / flow-разбор по разным объектам работы');
+    expect(source).toContain('Не предполагай существование Draft/Ready задачи');
+    expect(source).toContain('эта задача у тебя уже есть');
     expect(source).not.toContain('Jabula mainpage');
     expect(source).not.toContain('трейдинг-платформы');
     expect(source).not.toContain('для Юры');
     expect(source).not.toContain('после созвона');
     expect(source).not.toContain('подрассказать/пройтись');
+  });
+
+  it('keeps the scholastic review contract concise and russian-only', () => {
+    const cardPath = path.resolve(process.cwd(), '../agents/agent-cards/create_tasks.md');
+    const source = readFileSync(cardPath, 'utf8');
+
+    expect(source).toContain('Формат review держи коротким и строгим');
+    expect(source).not.toContain('You are a reasoning assistant');
+    expect(source).not.toContain('Define key terms');
   });
 });

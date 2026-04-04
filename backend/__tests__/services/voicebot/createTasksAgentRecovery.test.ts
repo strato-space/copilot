@@ -113,10 +113,8 @@ describe('runCreateTasksAgent quota fallback', () => {
     ]);
   });
 
-  it('runs a focused task-gap repair pass when transcript cues show more deliverables than the primary result', async () => {
-    initializeSessionMock
-      .mockResolvedValueOnce({ sessionId: 'primary-gap-session' })
-      .mockResolvedValueOnce({ sessionId: 'repair-gap-session' });
+  it('completes explicit numbered task cues without a second generative repair pass', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'primary-gap-session' });
     closeSessionMock.mockResolvedValue(undefined);
     callToolMock
       .mockResolvedValueOnce({
@@ -142,39 +140,6 @@ describe('runCreateTasksAgent quota fallback', () => {
                     name: 'Составить каталог UI-элементов по страницам',
                     description: 'Каталог UI с маппингом на Ant Design.',
                     priority: 'P3',
-                  },
-                ],
-                enrich_ready_task_comments: [],
-                session_name: 'Навигация Джабулы и каталог элементов интерфейса',
-                project_id: 'proj-gap',
-              }),
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        data: {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary_md_text: '',
-                scholastic_review_md: '',
-                task_draft: [
-                  {
-                    id: 'TASK-COMMENTS',
-                    row_id: 'TASK-COMMENTS',
-                    name: 'Финализировать комментарии по главной странице Jabula',
-                    description: 'Подфиналить комментарии по mainpage.',
-                    priority: 'P2',
-                  },
-                  {
-                    id: 'TASK-TRADING-NAV',
-                    row_id: 'TASK-TRADING-NAV',
-                    name: 'Сделать схему навигации трейдинг-платформы',
-                    description: 'Разобрать три уровня и точки входа.',
-                    priority: 'P2',
                   },
                   {
                     id: 'TASK-YURA-THESES',
@@ -219,13 +184,6 @@ describe('runCreateTasksAgent quota fallback', () => {
         'Свести клиентские комментарии в технические тезисы',
       ])
     );
-
-    const repairEnvelopeRaw = callToolMock.mock.calls[1]?.[1]?.message as string;
-    const repairEnvelope = JSON.parse(repairEnvelopeRaw) as Record<string, unknown>;
-    expect(repairEnvelope.mode).toBe('raw_text');
-    expect(repairEnvelope.session_id).toBe('session-gap-repair');
-    expect(String(repairEnvelope.raw_text || '')).toContain('Task-gap repair mode');
-    expect(String(repairEnvelope.raw_text || '')).toContain('Уже извлечённые deliverable-задачи');
   });
 
   it('runs task-gap repair for generic structural coordination cues outside the Jabula wording', async () => {
@@ -288,7 +246,7 @@ describe('runCreateTasksAgent quota fallback', () => {
       });
 
     const transcript = [
-      'Первая задача — собрать чеклист требований по релизу.',
+      'Нужно собрать чеклист требований по релизу.',
       'После демо покажи платежный сценарий, потому что я не понимаю, где вход пользователя, какие ветки и как он проходит путь до оплаты.',
       'Нужно это разложить в понятный walkthrough, чтобы потом отдать команде.',
     ].join('\n\n');
@@ -307,7 +265,9 @@ describe('runCreateTasksAgent quota fallback', () => {
 
     const repairEnvelopeRaw = callToolMock.mock.calls[1]?.[1]?.message as string;
     const repairEnvelope = JSON.parse(repairEnvelopeRaw) as Record<string, unknown>;
-    expect(String(repairEnvelope.raw_text || '')).toContain('Task-gap repair mode');
+    expect(String(repairEnvelope.raw_text || '')).toContain('Режим добора задач');
+    expect(String(repairEnvelope.raw_text || '')).toContain('Уже извлечено в первичном проходе');
+    expect(String(repairEnvelope.raw_text || '')).toContain('платежный сценарий');
     expect(String(repairEnvelope.raw_text || '')).toContain('walkthrough');
   });
 
@@ -359,6 +319,459 @@ describe('runCreateTasksAgent quota fallback', () => {
         name: 'Собрать список шагов воспроизведения для ошибки логина',
       })
     );
+  });
+
+  it('does not open a generic repair pass for loose non-enumerated asks when primary extraction already covers bounded deliverables', async () => {
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'primary-distributed-session' })
+      .mockResolvedValueOnce({ sessionId: 'repair-distributed-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: 'Primary summary',
+                scholastic_review_md: 'Primary review',
+                task_draft: [
+                  {
+                    id: 'TASK-COMMENTS',
+                    row_id: 'TASK-COMMENTS',
+                    name: 'Подфиналить комментарии по главной странице',
+                    description: 'Подфиналить комментарии по mainpage.',
+                    priority: 'P2',
+                  },
+                  {
+                    id: 'TASK-NAV',
+                    row_id: 'TASK-NAV',
+                    name: 'Собрать диаграмму навигации Jabula',
+                    description: 'Диаграмма навигации.',
+                    priority: 'P2',
+                  },
+                  {
+                    id: 'TASK-UI',
+                    row_id: 'TASK-UI',
+                    name: 'Составить каталог UI-элементов',
+                    description: 'Каталог UI.',
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: 'Jabula',
+                project_id: 'proj-distributed',
+              }),
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [
+                  {
+                    id: 'TASK-THESES',
+                    row_id: 'TASK-THESES',
+                    name: 'Свести комментарии в технические тезисы',
+                    description: 'Подготовить тезисы для Юры.',
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-distributed',
+              }),
+            },
+          ],
+        },
+      });
+
+    const transcript = [
+      'Нужно подфиналить комментарии по mainpage.',
+      'По самой Jabula нужна схема навигации.',
+      'И еще нужен каталог UI элементов.',
+      'Отдельная задача — проверить доступы и креды.',
+      'Нужно созвониться и после колла показать платформу.',
+      'Тебе нужно просто собрать этот пак комментариев в тезисы для Юры: что можем, а что не можем.',
+    ].join('\n\n');
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-distributed-repair',
+      projectId: 'proj-distributed',
+      rawText: transcript,
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(3);
+    expect(tasks.map((task) => String(task.name))).toEqual(
+      expect.arrayContaining([
+        'Подфиналить комментарии по главной странице',
+        'Собрать диаграмму навигации Jabula',
+        'Составить каталог UI-элементов',
+      ])
+    );
+  });
+
+  it('adds a deterministic literal-cue task when explicit numbered task cues stay uncovered after primary extraction', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'primary-literal-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: 'Primary summary',
+                scholastic_review_md: 'Primary review',
+                task_draft: [
+                  {
+                    id: 'TASK-NAV',
+                    row_id: 'TASK-NAV',
+                    name: 'Собрать диаграмму навигации Jabula',
+                    description: 'Диаграмма навигации.',
+                    priority: 'P2',
+                  },
+                  {
+                    id: 'TASK-UI',
+                    row_id: 'TASK-UI',
+                    name: 'Составить каталог UI-элементов',
+                    description: 'Каталог UI.',
+                    priority: 'P3',
+                  },
+                  {
+                    id: 'TASK-THESES',
+                    row_id: 'TASK-THESES',
+                    name: 'Свести комментарии в технические тезисы',
+                    description: 'Подготовить тезисы для Юры.',
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: 'Jabula',
+                project_id: 'proj-literal',
+              }),
+            },
+          ],
+        },
+      });
+
+    const transcript = [
+      'Первая задача — подфиналить комментарии по mainpage.',
+      'Нужно сделать две задачи. Описать навигационную структуру Jabula.',
+      'Вторая задача — собрать каталог UI элементов.',
+      'Тебе нужно просто собрать этот пак комментариев в тезисы для Юры: что можем, а что не можем.',
+    ].join('\n\n');
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-literal-repair',
+      projectId: 'proj-literal',
+      rawText: transcript,
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(4);
+    expect(tasks.map((task) => String(task.name))).toEqual(
+      expect.arrayContaining([
+        'Финализировать комментарии по главной странице',
+        'Собрать диаграмму навигации Jabula',
+        'Составить каталог UI-элементов',
+        'Свести комментарии в технические тезисы',
+      ])
+    );
+  });
+
+  it('normalizes colloquial numbered literal cues before deterministic fallback materialization', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'primary-colloquial-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: 'Primary summary',
+                scholastic_review_md: 'Primary review',
+                task_draft: [
+                  {
+                    id: 'TASK-NAV',
+                    row_id: 'TASK-NAV',
+                    name: 'Собрать диаграмму навигации Jabula',
+                    description: 'Диаграмма навигации.',
+                    priority: 'P2',
+                  },
+                  {
+                    id: 'TASK-UI',
+                    row_id: 'TASK-UI',
+                    name: 'Составить каталог UI-элементов',
+                    description: 'Каталог UI.',
+                    priority: 'P3',
+                  },
+                  {
+                    id: 'TASK-THESES',
+                    row_id: 'TASK-THESES',
+                    name: 'Свести комментарии в технические тезисы',
+                    description: 'Подготовить тезисы для Юры.',
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: 'Jabula',
+                project_id: 'proj-colloquial',
+              }),
+            },
+          ],
+        },
+      });
+
+    const transcript = [
+      'Ну, тогда первая задача у нас подфиналить комментарии относительно мейнпэйджи.',
+      'Нужно сделать две задачи. Описать навигационную структуру Jabula.',
+      'Вторая задача — собрать каталог UI элементов.',
+      'Тебе нужно просто собрать этот пак комментариев в тезисы для Юры: что можем, а что не можем.',
+    ].join('\n\n');
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-colloquial-literal',
+      projectId: 'proj-colloquial',
+      rawText: transcript,
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(4);
+    expect(tasks.map((task) => String(task.name))).toEqual(
+      expect.arrayContaining([
+        'Собрать диаграмму навигации Jabula',
+        'Составить каталог UI-элементов',
+        'Свести комментарии в технические тезисы',
+        'Финализировать комментарии по главной странице',
+      ])
+    );
+    expect(tasks.map((task) => String(task.name))).not.toContain(
+      'Ну, тогда первая задача у нас подфиналить комментарии относительно мейнпэйджи'
+    );
+  });
+
+  it('does not run an extra repair pass or add a duplicate when the normalized deliverable is already covered', async () => {
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'primary-dedup-session' })
+      .mockResolvedValueOnce({ sessionId: 'generic-dedup-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: 'Primary summary',
+                scholastic_review_md: 'Primary review',
+                task_draft: [
+                  {
+                    id: 'TASK-COMMENTS',
+                    row_id: 'TASK-COMMENTS',
+                    name: 'Финализировать комментарии по главной странице Jabula',
+                    description: 'Подфиналить комментарии по mainpage Jabula.',
+                    priority: 'P2',
+                  },
+                  {
+                    id: 'TASK-NAV',
+                    row_id: 'TASK-NAV',
+                    name: 'Построить схему навигации главной страницы Jabula',
+                    description: 'Диаграмма переходов по mainpage.',
+                    priority: 'P2',
+                  },
+                  {
+                    id: 'TASK-UI',
+                    row_id: 'TASK-UI',
+                    name: 'Собрать каталог UI-элементов по страницам Jabula',
+                    description: 'Каталог уникальных элементов интерфейса.',
+                    priority: 'P3',
+                  },
+                  {
+                    id: 'TASK-THESES',
+                    row_id: 'TASK-THESES',
+                    name: 'Подготовить тезисный пакет трёх комментариев для Юры',
+                    description: 'Пак тезисов для Юры: что можем и что не можем.',
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: 'Jabula',
+                project_id: 'proj-dedup',
+              }),
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-dedup',
+              }),
+            },
+          ],
+        },
+      });
+
+    const transcript = [
+      'Ну, тогда первая задача у нас подфиналить комментарии относительно мейнпэйджи.',
+      'Нужно сделать две задачи. Описать навигационную структуру Jabula mainpage в виде диаграммы.',
+      'Вторая задача — выделить список UI элементов, которые там есть, уникальные.',
+      'Тебе нужно просто собрать пак комментариев в тезисы для Юры: что можем, а что не можем.',
+    ].join('\n\n');
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-dedup-literal',
+      projectId: 'proj-dedup',
+      rawText: transcript,
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(4);
+    expect(tasks.map((task) => String(task.name))).toEqual([
+      'Финализировать комментарии по главной странице Jabula',
+      'Построить схему навигации главной страницы Jabula',
+      'Собрать каталог UI-элементов по страницам Jabula',
+      'Подготовить тезисный пакет трёх комментариев для Юры',
+    ]);
+  });
+
+  it('does not add a second inventory task when the literal cue only differs by compact UI wording', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'primary-ui-dedup-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: 'Primary summary',
+              scholastic_review_md: 'Primary review',
+              task_draft: [
+                {
+                  id: 'TASK-UI',
+                  row_id: 'TASK-UI',
+                  name: 'Собрать каталог UI-элементов по всем страницам',
+                  description: 'Каталог уникальных элементов интерфейса.',
+                  priority: 'P3',
+                },
+              ],
+              enrich_ready_task_comments: [],
+              session_name: 'UI inventory',
+              project_id: 'proj-ui-dedup',
+            }),
+          },
+        ],
+      },
+    });
+
+    const transcript = [
+      'Нужно сделать две задачи.',
+      'Вторая задача — выделить список UI элементов, которые там есть, уникальные.',
+    ].join('\n\n');
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-ui-dedup',
+      projectId: 'proj-ui-dedup',
+      rawText: transcript,
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toEqual(
+      expect.objectContaining({
+        name: 'Собрать каталог UI-элементов по всем страницам',
+      })
+    );
+  });
+
+  it('does not start task-gap repair from coordination-heavy reference asks without an explicit deliverable action', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'primary-reference-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: 'Primary summary',
+              scholastic_review_md: 'Primary review',
+              task_draft: [
+                {
+                  id: 'TASK-COMMENTS',
+                  row_id: 'TASK-COMMENTS',
+                  name: 'Финализировать комментарии по главной странице Jabula',
+                  description: 'Подфиналить комментарии по mainpage Jabula.',
+                  priority: 'P2',
+                },
+                {
+                  id: 'TASK-NAV',
+                  row_id: 'TASK-NAV',
+                  name: 'Построить схему навигации главной страницы Jabula',
+                  description: 'Диаграмма переходов по mainpage.',
+                  priority: 'P2',
+                },
+                {
+                  id: 'TASK-UI',
+                  row_id: 'TASK-UI',
+                  name: 'Собрать каталог UI-элементов по страницам Jabula',
+                  description: 'Каталог уникальных элементов интерфейса.',
+                  priority: 'P3',
+                },
+              ],
+              enrich_ready_task_comments: [],
+              session_name: 'Jabula',
+              project_id: 'proj-reference',
+            }),
+          },
+        ],
+      },
+    });
+
+    const transcript = [
+      'Первая задача — подфиналить комментарии по mainpage.',
+      'Вторая задача — описать навигационную структуру Jabula.',
+      'Третья задача — собрать каталог UI элементов по страницам.',
+      'Нам бы показать UX-овые пласты работ в формате большого юзерфлоу, диаграмм, документов.',
+    ].join('\n\n');
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-reference-skip',
+      projectId: 'proj-reference',
+      rawText: transcript,
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(3);
+    expect(tasks.map((task) => String(task.name))).toEqual([
+      'Финализировать комментарии по главной странице Jabula',
+      'Построить схему навигации главной страницы Jabula',
+      'Собрать каталог UI-элементов по страницам Jabula',
+    ]);
   });
 
   it('extracts composite create_tasks payload and attaches non-enumerable metadata to draft rows', async () => {
