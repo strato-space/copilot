@@ -3,7 +3,8 @@
 ## Status
 - Spec status: `Implemented` (primary scope delivered)
 - Primary BD issue: `copilot-j7dp` (`closed`, 2026-04-04)
-- Residual quality issue: `copilot-2bd3` (`in_progress`)
+- Closed residual issue: `copilot-2bd3` (`closed`, 2026-04-04)
+- Residual quality issue: `copilot-bzt6` (`open`, row_id determinism across reruns)
 - Closed residual blocker: `copilot-grzr` (`closed`, 2026-04-04)
 - Related issue: `copilot-52pj` (runtime transition exceptions for LLM reformulation)
 - Scope:

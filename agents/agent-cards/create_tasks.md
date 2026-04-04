@@ -19,7 +19,15 @@ default: false
 {
   "summary_md_text": "string",
   "scholastic_review_md": "string",
-  "task_draft": [],
+  "task_draft": [
+    {
+      "id": "string",
+      "name": "string",
+      "description": "string",
+      "priority": "P1|P2|P3|P4|P5|P6|P7",
+      "candidate_class": "deliverable_task"
+    }
+  ],
   "enrich_ready_task_comments": [],
   "session_name": "string",
   "project_id": "string"
@@ -33,6 +41,12 @@ default: false
 - `enrich_ready_task_comments` — comment-first enrichment для existing Ready+/Codex задач.
 - `session_name` — короткое имя сессии по сути обсуждения.
 - `project_id` — project id из envelope или `""`.
+
+## Обязательный `candidate_class` в `task_draft`
+- Для каждого item в `task_draft` поле `candidate_class` обязательно.
+- Для materialized задачи в `task_draft` всегда ставь `candidate_class: "deliverable_task"`.
+- Не оставляй класс пустым и не пропускай поле.
+- Недопустимые значения (`"task"`, `"deliverable"`, `"coordination"` и т.п.) не используй; в `task_draft` допускается только `"deliverable_task"`.
 
 ## Язык output
 - Сначала определи основной язык по transcript / raw_text / metadata envelope.
@@ -81,6 +95,9 @@ default: false
 - `входные данные` -> `input_artifact`
 - `референс/идея` -> `reference_or_idea`
 - `статус` -> `status_or_report`
+
+Практическое правило materialization:
+- Если candidate попал в `task_draft`, он уже классифицирован как `deliverable_task` и должен содержать `candidate_class: "deliverable_task"`.
 
 ### Prompt ownership: лексика и морфология
 - Семантическая классификация, stopwords/morphology cues и object phrase cleanup принадлежат prompt-слою.

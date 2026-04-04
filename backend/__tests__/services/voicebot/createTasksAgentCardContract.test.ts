@@ -60,6 +60,16 @@ describe('create_tasks agent card language contract', () => {
     expect(source).toContain('единственным bounded reformulation pass');
   });
 
+  it('requires explicit candidate_class on every task_draft item', () => {
+    const cardPath = path.resolve(process.cwd(), '../agents/agent-cards/create_tasks.md');
+    const source = readFileSync(cardPath, 'utf8');
+
+    expect(source).toContain('## Обязательный `candidate_class` в `task_draft`');
+    expect(source).toContain('поле `candidate_class` обязательно');
+    expect(source).toContain('`candidate_class: "deliverable_task"`');
+    expect(source).toContain('в `task_draft` допускается только `"deliverable_task"`');
+  });
+
   it('keeps distinct-deliverable rules generalized instead of transcript-specific', () => {
     const cardPath = path.resolve(process.cwd(), '../agents/agent-cards/create_tasks.md');
     const source = readFileSync(cardPath, 'utf8');
