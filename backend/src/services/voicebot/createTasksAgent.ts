@@ -194,6 +194,7 @@ const TASK_NAME_STOPWORDS = new Set([
 const TASK_SHORT_COVERAGE_TOKENS = new Set(['ui', 'ux']);
 const TASK_OBJECT_ACTION_TOKEN_RE =
   /^(?:собрат|состав|описат|разобрат|подготов|сделат|финализир|подфинал|выделит)$/u;
+const STRUCTURAL_OBJECT_TOKEN_RE = /[A-Za-zА-Яа-яЁё0-9-]+/gu;
 
 type TaskOntologyBucket =
   | 'deliverable_task'
@@ -683,19 +684,33 @@ const collectLiteralCueCoverage = ({
 };
 
 const normalizeStructuralObjectPhrase = (value: string): string => {
-  const normalized = normalizeWhitespace(value)
-    .replace(/^(?:ты\s+|мне\s+|нам\s+|эту\s+самую\s+|эту\s+|этот\s+|эти\s+)/iu, '')
-    .replace(/\s+(?:пожалуйста|сейчас|потом)$/iu, '')
-    .trim();
-  if (!normalized) return '';
+  const tokens = normalizeWhitespace(value).match(STRUCTURAL_OBJECT_TOKEN_RE) || [];
+  if (tokens.length === 0) return '';
 
-  if (/у$/iu.test(normalized)) {
-    return normalized.replace(/у$/iu, 'ы');
+  const isStrongToken = (token: string): boolean =>
+    token.length >= 4 || /[-0-9A-Za-z]/u.test(token);
+
+  let start = 0;
+  while (start < tokens.length && !isStrongToken(tokens[start] || '')) {
+    start += 1;
   }
-  if (/ю$/iu.test(normalized)) {
-    return normalized.replace(/ю$/iu, 'и');
+
+  let end = tokens.length - 1;
+  while (end >= start && !isStrongToken(tokens[end] || '')) {
+    end -= 1;
   }
-  return normalized;
+
+  const phraseTokens = tokens.slice(start <= end ? start : tokens.length - 1, end >= start ? end + 1 : tokens.length);
+  if (phraseTokens.length === 0) return '';
+
+  const tail = phraseTokens[phraseTokens.length - 1] || '';
+  if (/у$/iu.test(tail)) {
+    phraseTokens[phraseTokens.length - 1] = tail.replace(/у$/iu, 'ы');
+  } else if (/ю$/iu.test(tail)) {
+    phraseTokens[phraseTokens.length - 1] = tail.replace(/ю$/iu, 'и');
+  }
+
+  return phraseTokens.join(' ');
 };
 
 const extractStructuralAnalysisCues = (transcriptText: string): StructuralAnalysisCue[] => {
@@ -710,13 +725,13 @@ const extractStructuralAnalysisCues = (transcriptText: string): StructuralAnalys
 
     const objectPhrase = normalizeStructuralObjectPhrase(
       currentUnit.match(
-        /(?:покаж(?:и|ем|ете?)|разобрат(?:ь|ка)?|разбер(?:ем|емся)?)\s+(?:мне\s+|нам\s+)?([A-Za-zА-Яа-яЁё0-9-]+(?:\s+[A-Za-zА-Яа-яЁё0-9-]+){0,2})/iu
+        /(?:покаж(?:и|ем|ете?)|разобрат(?:ь|ка)?|разбер(?:ем|емся)?)\s+([A-Za-zА-Яа-яЁё0-9-]+(?:\s+[A-Za-zА-Яа-яЁё0-9-]+){0,2})/iu
       )?.[1] ||
         currentUnit.match(
-          /(?:ты\s+)?(?:мне\s+|нам\s+)?([A-Za-zА-Яа-яЁё0-9-]+(?:\s+[A-Za-zА-Яа-яЁё0-9-]+){0,2})\s+показал/iu
+          /([A-Za-zА-Яа-яЁё0-9-]+(?:\s+[A-Za-zА-Яа-яЁё0-9-]+){0,2})\s+показал/iu
         )?.[1] ||
         currentUnit.match(
-          /(?:ты\s+)?(?:мне\s+|нам\s+)?([A-Za-zА-Яа-яЁё0-9-]+(?:\s+[A-Za-zА-Яа-яЁё0-9-]+){0,2})\s+показать/iu
+          /([A-Za-zА-Яа-яЁё0-9-]+(?:\s+[A-Za-zА-Яа-яЁё0-9-]+){0,2})\s+показать/iu
         )?.[1] ||
         ''
     );
