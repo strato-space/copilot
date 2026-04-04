@@ -201,7 +201,7 @@ T1 ──┬── T2 ──┬── T7a ─┐
 - **description**: Post full evidence set (tests, replay, review, smoke), mark issue status accordingly.
 - **validation**: `bd show copilot-j7dp --json` reflects final state and closure rationale.
 - **status**: Completed
-- **log**: Posted closure evidence in `bd` for `copilot-j7dp` (comments `579`/`581`; `580` on `copilot-2bd3`) including replay outputs, test pack, and deploy smoke results; superseded malformed shell-escaped comments (`577`/`578`) explicitly. Closed `copilot-j7dp` with reason: migration delivered; residual quality tracked in `copilot-grzr` and `copilot-2bd3`.
+- **log**: Posted closure evidence in `bd` for `copilot-j7dp` (comments `579`/`581`; `580` on `copilot-2bd3`) including replay outputs, test pack, and deploy smoke results; superseded malformed shell-escaped comments (`577`/`578`) explicitly. Closed `copilot-j7dp` with residual quality tracked issues; later status alignment closed `copilot-grzr` and kept `copilot-2bd3` as the only active residual track.
 - **files edited/created**: `plan/2026-04-04-create-tasks-ontology-prompt-migration-swarm-plan.md`
 
 ## Parallel Execution Groups
