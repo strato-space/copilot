@@ -16,6 +16,9 @@ const persistPossibleTasksForSessionMock = jest.fn();
 const applyCreateTasksCompositeCommentSideEffectsMock = jest.fn();
 const loggerInfoMock = jest.fn();
 const loggerErrorMock = jest.fn();
+const {
+  extractCreateTasksRuntimeFailure: extractCreateTasksRuntimeFailureFromSource,
+} = await import('../../../src/services/voicebot/createTasksAgent.ts');
 
 jest.unstable_mockModule('../../../src/services/db.js', () => ({
   getDb: getDbMock,
@@ -29,10 +32,13 @@ jest.unstable_mockModule('../../../src/permissions/permission-manager.js', () =>
   },
 }));
 
-jest.unstable_mockModule('../../../src/services/voicebot/createTasksAgent.js', () => ({
-  runCreateTasksAgent: runCreateTasksAgentMock,
-  runCreateTasksCompositeAgent: runCreateTasksCompositeAgentMock,
-}));
+jest.unstable_mockModule('../../../src/services/voicebot/createTasksAgent.js', async () => {
+  return {
+    extractCreateTasksRuntimeFailure: extractCreateTasksRuntimeFailureFromSource,
+    runCreateTasksAgent: runCreateTasksAgentMock,
+    runCreateTasksCompositeAgent: runCreateTasksCompositeAgentMock,
+  };
+});
 
 jest.unstable_mockModule('../../../src/services/voicebot/persistPossibleTasks.js', async () => {
   return {
@@ -446,5 +452,50 @@ describe('POST /voicebot/generate_possible_tasks', () => {
         saved_count: 1,
       })
     );
+  });
+
+  it('returns machine-readable transition rejection details without flattening in generate_possible_tasks API', async () => {
+    const fixture = buildFixture();
+    getDbMock.mockReturnValue(fixture.dbStub);
+    getRawDbMock.mockReturnValue(fixture.dbStub);
+
+    const transitionFailure = {
+      code: 'create_tasks_transition_retries_exhausted',
+      message: 'Runtime transition reformulation budget exhausted',
+      runtime_rejections: [
+        {
+          candidate_id: 'TASK-INVALID',
+          attempted_surface: 'task_draft',
+          candidate_class: 'missing',
+          violated_invariant_code: 'task_draft_class_missing',
+          message: 'Task draft candidate class is required and missing.',
+          recovery_action: 'reclassify',
+        },
+      ],
+      retry_budget: {
+        transition_reformulation_attempts: 1,
+        transition_reformulation_limit: 1,
+      },
+    };
+    runCreateTasksAgentMock.mockRejectedValue(
+      Object.assign(new Error('transition failure'), { details: transitionFailure })
+    );
+
+    const app = createApp(fixture.performerId);
+    const response = await request(app)
+      .post('/voicebot/generate_possible_tasks')
+      .send({ session_id: fixture.sessionId.toHexString() });
+
+    expect(response.status).toBe(422);
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: 'Runtime transition reformulation budget exhausted',
+        error_code: 'create_tasks_transition_retries_exhausted',
+        error_details: expect.objectContaining({
+          runtime_rejections: expect.any(Array),
+        }),
+      })
+    );
+    expect(loggerErrorMock).not.toHaveBeenCalledWith('Error in generate_possible_tasks:', expect.anything());
   });
 });

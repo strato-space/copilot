@@ -108,7 +108,10 @@ import {
 import {
     repairLegacyAttachmentMediaProjection,
 } from '../../../services/voicebot/legacyAttachmentMediaRepair.js';
-import { runCreateTasksAgent } from '../../../services/voicebot/createTasksAgent.js';
+import {
+    extractCreateTasksRuntimeFailure,
+    runCreateTasksAgent,
+} from '../../../services/voicebot/createTasksAgent.js';
 import {
     applyCreateTasksCompositeSessionPatch,
     buildCreateTasksCategorizationNotQueuedDecision,
@@ -6257,6 +6260,14 @@ router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
                 : {}),
         });
     } catch (error) {
+        const runtimeFailure = extractCreateTasksRuntimeFailure(error);
+        if (runtimeFailure) {
+            return res.status(422).json({
+                error: runtimeFailure.message,
+                error_code: runtimeFailure.code,
+                error_details: runtimeFailure,
+            });
+        }
         logger.error('Error in generate_possible_tasks:', error);
         return res.status(500).json({ error: String(error) });
     }

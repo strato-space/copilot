@@ -28,6 +28,36 @@ describe('create_tasks agent card language contract', () => {
     expect(source).toContain('`референс/идея`');
     expect(source).toContain('`статус`');
     expect(source).toContain('В `task_draft` может попасть только `задача`');
+    expect(source).toContain('`deliverable_task`');
+    expect(source).toContain('`coordination_only`');
+    expect(source).toContain('`input_artifact`');
+    expect(source).toContain('`reference_or_idea`');
+    expect(source).toContain('`status_or_report`');
+  });
+
+  it('keeps lexical and morphology ownership in prompt contract instead of runtime policy branches', () => {
+    const cardPath = path.resolve(process.cwd(), '../agents/agent-cards/create_tasks.md');
+    const source = readFileSync(cardPath, 'utf8');
+
+    expect(source).toContain('### Prompt ownership: лексика и морфология');
+    expect(source).toContain('stopwords/morphology cues');
+    expect(source).toContain('не является основанием reject/downgrade deliverable');
+    expect(source).toContain('Runtime не выполняет semantic reclassification');
+    expect(source).toContain('runtime валидирует только legality перехода');
+  });
+
+  it('defines runtime_rejections recovery contract for reclassify, reattribute, and discard flows', () => {
+    const cardPath = path.resolve(process.cwd(), '../agents/agent-cards/create_tasks.md');
+    const source = readFileSync(cardPath, 'utf8');
+
+    expect(source).toContain('## Обработка `runtime_rejections`');
+    expect(source).toContain('`candidate_id`');
+    expect(source).toContain('`attempted_surface`');
+    expect(source).toContain('`candidate_class`');
+    expect(source).toContain('`violated_invariant_code`');
+    expect(source).toContain('`recovery_action` (`reclassify` | `reattribute` | `discard`)');
+    expect(source).toContain('Никогда не повторяй отклонённый transition без изменений');
+    expect(source).toContain('единственным bounded reformulation pass');
   });
 
   it('keeps distinct-deliverable rules generalized instead of transcript-specific', () => {

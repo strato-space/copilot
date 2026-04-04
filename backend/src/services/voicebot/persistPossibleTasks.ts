@@ -408,6 +408,42 @@ const listPossibleTaskMasterDocs = async ({
   );
 };
 
+export const loadPersistedPossibleTaskCarryOverDrafts = async ({
+  db,
+  sessionId,
+  defaultProjectId = '',
+}: {
+  db: Db;
+  sessionId: string;
+  defaultProjectId?: string;
+}): Promise<Array<Record<string, unknown>>> => {
+  const docs = await listPossibleTaskMasterDocs({ db, sessionId });
+  const normalizedFallbackProjectId = toTaskText(defaultProjectId);
+
+  return docs
+    .map((doc, index) => {
+      const normalized = normalizeVoicePossibleTaskDocForApi(doc);
+      if (!normalized) return null;
+      const rowId = resolveVoicePossibleTaskRowId({ rawTask: normalized, index });
+      const id = toTaskText(normalized.id) || rowId;
+      const name = toTaskText(normalized.name);
+      if (!rowId || !id || !name) return null;
+
+      const projectId = toTaskText(normalized.project_id) || normalizedFallbackProjectId;
+      const carryOverDraft: Record<string, unknown> = {
+        ...normalized,
+        row_id: rowId,
+        id,
+        name,
+        candidate_class: 'deliverable_task',
+      };
+      delete carryOverDraft._id;
+      carryOverDraft.project_id = projectId;
+      return carryOverDraft;
+    })
+    .filter((draft): draft is Record<string, unknown> => draft !== null);
+};
+
 const buildProjectScopedPossibleTaskRuntimeQuery = ({
   projectId,
   rowIds,

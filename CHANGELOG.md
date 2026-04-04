@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-04-04
+### PROBLEM SOLVED
+- **22:49** `CREATE_TASKS` runtime still owned lexical/morphology semantics in TypeScript, so prompt/runtime responsibility boundaries drifted and replay behavior could vary by implementation detail instead of prompt contract.
+- **22:49** Missing `candidate_class` outcomes could exhaust bounded reformulation and collapse generation to zero while legacy draft rows stayed persisted, making clean-vs-incremental replay convergence ambiguous.
+- **22:49** Worker and route surfaces flattened transition failures into opaque errors, which hid machine-readable rejection context needed for operations and retries.
+
+### FEATURE IMPLEMENTED
+- **22:49** Migrated ontology/morphology ownership into the prompt card with explicit class mapping and `runtime_rejections` handling guidance; runtime now enforces transition legality without semantic stopword/allowlist ownership.
+- **22:49** Added deterministic transition-failure contracts in runtime (`create_tasks_transition_retries_exhausted`, `create_tasks_runtime_rejections_malformed`) with one bounded reformulation retry and explicit retry-budget metadata.
+- **22:49** Added missing-class convergence behavior: unresolved `task_draft_class_missing` candidates can be discarded and replaced with persisted Draft carry-over, with explicit `runtime_transition_carry_over` evidence.
+- **22:49** Propagated structured transition failures through worker and API surfaces via `error_code`/`error_details` instead of string-only errors.
+
+### CHANGES
+- **22:49** Updated create_tasks contract and runtime implementation:
+  - `agents/agent-cards/create_tasks.md`
+  - `backend/src/services/voicebot/createTasksAgent.ts`
+  - `backend/src/services/voicebot/persistPossibleTasks.ts`
+  - `backend/src/workers/voicebot/handlers/createTasksFromChunks.ts`
+  - `backend/src/api/routes/voicebot/sessions.ts`
+- **22:49** Updated regression coverage:
+  - `backend/__tests__/services/voicebot/createTasksAgentCardContract.test.ts`
+  - `backend/__tests__/services/voicebot/createTasksAgentRecovery.test.ts`
+  - `backend/__tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts`
+  - `backend/__tests__/voicebot/runtime/generatePossibleTasksRoute.test.ts`
+- **22:49** Added execution/spec artifacts:
+  - `plan/2026-04-04-create-tasks-ontology-prompt-migration-spec.md`
+  - `plan/2026-04-04-create-tasks-ontology-prompt-migration-swarm-plan.md`
+- **22:49** Verification:
+  - `cd backend && npm run test:parallel-safe -- --runTestsByPath __tests__/services/voicebot/createTasksAgentCardContract.test.ts __tests__/services/voicebot/createTasksAgentRecovery.test.ts __tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts __tests__/voicebot/runtime/generatePossibleTasksRoute.test.ts`
+  - `cd backend && npm run build`
+
 ## 2026-04-03
 ### PROBLEM SOLVED
 - **16:04** `CREATE_TASKS` still treated heterogeneous speech acts as flat task candidates, so sessions like `69cf65712a7446295ac67771` under-materialized real deliverables while letting coordination/input/status phrases compete with actual task extraction.

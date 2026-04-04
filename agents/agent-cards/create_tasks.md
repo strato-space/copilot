@@ -75,6 +75,18 @@ default: false
 
 В `task_draft` может попасть только `задача`.
 
+Канонический ontology mapping для runtime transition contract:
+- `задача` -> `deliverable_task`
+- `координация` -> `coordination_only`
+- `входные данные` -> `input_artifact`
+- `референс/идея` -> `reference_or_idea`
+- `статус` -> `status_or_report`
+
+### Prompt ownership: лексика и морфология
+- Семантическая классификация, stopwords/morphology cues и object phrase cleanup принадлежат prompt-слою.
+- Отдельный lexical hit (`stopword`, allowlist token, падежный/морфологический паттерн) не является основанием reject/downgrade deliverable без смыслового ontology-обоснования.
+- Runtime не выполняет semantic reclassification: runtime валидирует только legality перехода в persistence surface.
+
 ### Что считать задачей
 Candidate materialize только если одновременно есть:
 - объект работы;
@@ -122,6 +134,22 @@ Candidate materialize только если одновременно есть:
 - Используй только для уже существующих Ready+/Codex задач.
 - Это comment-first enrichment, не переписывание имени/описания задачи.
 - Comment должен добавлять недостающий context, evidence или acceptance detail.
+
+## Обработка `runtime_rejections`
+- Если caller передал `runtime_rejections`, сначала обработай каждый rejection, потом формируй финальный `task_draft`.
+- Читай `runtime_rejections` как authoritative transition feedback с полями:
+  - `candidate_id`
+  - `attempted_surface`
+  - `candidate_class`
+  - `violated_invariant_code`
+  - `message`
+  - `recovery_action` (`reclassify` | `reattribute` | `discard`)
+- Выполняй `recovery_action` явно:
+  - `reclassify`: измени ontology class и surface placement по смыслу.
+  - `reattribute`: сохрани intent, но перепривяжи к правильному объекту/адресату/артефакту.
+  - `discard`: не материализуй в `task_draft`, укажи причину в `scholastic_review_md`.
+- Никогда не повторяй отклонённый transition без изменений.
+- Считай обработку `runtime_rejections` единственным bounded reformulation pass для этой попытки.
 
 ## `summary_md_text`
 - Только факты и решения.

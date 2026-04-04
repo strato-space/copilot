@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import { getLogger } from '../../utils/logger.js';
 import { MCPProxyClient } from '../mcp/proxyClient.js';
 import { voiceSessionUrlUtils } from '../../api/routes/voicebot/sessionUrlUtils.js';
@@ -17,6 +16,7 @@ import { getDb } from '../db.js';
 import { VOICEBOT_COLLECTIONS } from '../../constants.js';
 import { ObjectId, type Db } from 'mongodb';
 import { randomUUID } from 'node:crypto';
+import { loadPersistedPossibleTaskCarryOverDrafts } from './persistPossibleTasks.js';
 
 const logger = getLogger();
 
@@ -40,6 +40,8 @@ export type CreateTasksCompositeResult = {
   no_task_decision: CreateTasksNoTaskDecision | null;
   session_name: string;
   project_id: string;
+  runtime_transition_discards?: CreateTasksRuntimeRejection[];
+  runtime_transition_carry_over?: CreateTasksRuntimeCarryOver;
 };
 
 const VOICE_TASK_ENRICHMENT_SECTION_KEYS = [
@@ -73,128 +75,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const LANGUAGE_SAMPLE_MAX_MESSAGES = 12;
 const CYRILLIC_RE = /[А-Яа-яЁё]/g;
 const LATIN_RE = /[A-Za-z]/g;
-const LOWERCASE_LATIN_WORD_RE = /\b[a-z][a-z-]{2,}\b/g;
-const ENGLISH_REVIEW_HEADING_RE =
-  /(^|\n)\s{0,3}#{1,6}\s*(terms|ontology check|logic|discard\s*\/\s*non-goal|minimal repair|scholastic review)\b/gim;
-const CREATE_TASKS_LANGUAGE_REPAIR_MODEL =
-  String(process.env.VOICEBOT_CREATE_TASKS_LANGUAGE_REPAIR_MODEL || '').trim() ||
-  String(process.env.VOICEBOT_SUMMARIZATION_MODEL || '').trim() ||
-  'gpt-4.1-mini';
-const RUSSIAN_ONTOLOGY_ALLOWLIST = new Set([
-  'task',
-  'voice_session',
-  'processing_run',
-  'task_execution_run',
-  'context_enrichment',
-  'execution_context',
-  'human_approval',
-  'authority_scope',
-  'executor_role',
-  'performer_profile',
-  'coding_agent',
-  'object_locator',
-  'outcome_record',
-  'settled_decision',
-  'artifact_record',
-  'result_artifact',
-  'acceptance_evaluation',
-  'goal_process',
-  'goal_product',
-  'business_need',
-  'requirement',
-  'issue',
-  'risk',
-  'constraint',
-  'change_proposal',
-  'kpi',
-  'kpi_observation',
-  'codex_task',
-  'system_of_interest',
-  'producing_system',
-  'project',
-  'task_type',
-  'task_classification',
-  'task_family',
-  'task_intake_pool',
-  'executor_routing',
-  'acceptance_criterion',
-  'evidence_link',
-  'writeback_decision',
-  'patch',
-  'seed_context_base',
-  'discussion_linkage',
-  'draft_recency_horizon',
-  'active_draft_window',
-  'discussion_window',
-  'deliverable',
-]);
-
-const TASK_ONTOLOGY_COORDINATION_RE =
-  /созвон|созвони|встреч|синк|sync\b|колл|калл|обсуд(?:ить|им|им позже)?|показат(?:ь|ься)?|покажу|демо|после созвона|после колла|созвонимся|обсудим позже|переслать|перешл[юе]|скину|скинуть|закину|подойти за советом/i;
-const TASK_ONTOLOGY_INPUT_RE =
-  /логин|парол[ья]|креды|credentials?|доступ|vpn\b|ссылк|скрин(?:ы|шоты?)?|материалы|input data|докину доступ/i;
-const TASK_ONTOLOGY_STATUS_RE =
-  /статус|апдейт|update\b|обновлени[ея]|в работе|посмотрю|гляну|вернусь позже|позже вернусь|доложу|расскажу|отпишусь/i;
-const TASK_ONTOLOGY_REFERENCE_RE =
-  /референс|reference\b|пример|образец|идея|inspiration\b|для вдохновения|можно бы|было бы неплохо|нравится как пример/i;
-const TASK_ONTOLOGY_DELIVERABLE_RE =
-  /подготов(?:ить|ка)|описат(?:ь|ие)|собрат(?:ь|ь)|состав(?:ить|ление)|сделат(?:ь|ь)|доработ(?:ать|ка)|подфинал(?:ить|ка)|оформ(?:ить|ление)|разобрат(?:ь|ка)|проработ(?:ать|ка)|нарис(?:овать|овка)|зафиксир(?:овать|овка)|постро(?:ить|ение)|схем[ауые]?|каталог|тезис(?:ы)?|список|документ|таблиц(?:а|ы)|карт[ауые]?|структур[ауые]?|навигац(?:ию|ия|ионн)|инвентаризац(?:ию|ия)|маппинг|mapping\b|комментари|walkthrough\b|гайд|brief\b|отчет|прототип|prototype\b|диаграмм[ауые]?|канвас/i;
-const TASK_GAP_REPAIR_INTRO_RE =
-  /(?:отдельн(?:ая|ую|ой)?\s+задач[аеиуы]?|ещ[её]\s+одн(?:а|у|ой)\s+задач[аеиуы]?|нов(?:ая|ую|ой)\s+задач[аеиуы]?)/iu;
-const TASK_GAP_REPAIR_ORDINAL_RE =
-  /(перв(?:ая|ую|ой)|втор(?:ая|ую|ой)|треть(?:я|ю|ей)|четверт(?:ая|ую|ой)|пят(?:ая|ую|ой)|шест(?:ая|ую|ой)|седьм(?:ая|ую|ой)|восьм(?:ая|ую|ой)|девят(?:ая|ую|ой)|десят(?:ая|ую|ой))\s+задач/i;
-const TASK_GAP_REPAIR_CARDINAL_RE =
-  /(одн(?:а|у)|две|три|четыре|пять)\s+задач/i;
-const TASK_GAP_REPAIR_STRUCTURAL_OBJECT_RE =
-  /навигац|уровн|точки\s+входа|куда\s+переход|структур|сценари|flow\b|флоу|walkthrough\b|путь\s+пользователя|user\s+journey|ветк|переход/u;
-const TASK_GAP_REPAIR_STRUCTURAL_RECOVERY_RE =
-  /после\s+созвона|после\s+колла|после\s+демо|после\s+встречи|показат(?:ь|ься|л)|покаж(?:и|ем|ете?)|пройдемся|подрасскажу|разберем|разобрать/iu;
-const TASK_GAP_REPAIR_CONFUSION_RE = /не\s+понял|не\s+понимаю|непонятно|не\s+ясно|запутал(?:ся|ись|о)|теряюсь/iu;
-const TASK_GAP_REPAIR_MAX_EXCERPTS = 4;
-const TASK_GAP_REPAIR_CONTEXT_WINDOW = 1;
-const TASK_GAP_REPAIR_MIN_EXCERPTS = 1;
-const TASK_GAP_REPAIR_MAX_CHARS = 6000;
-const TASK_LITERAL_ACTION_START_RE =
-  /(подготовить|описать|собрать|составить|сделать|доработать|подфиналить|оформить|разобрать|проработать|нарисовать|зафиксировать|построить|выделить|свести)(?=$|[^A-Za-zА-Яа-яЁё])/iu;
-const TASK_NAME_STOPWORDS = new Set([
-  'сделать',
-  'собрать',
-  'выделить',
-  'подготовить',
-  'описать',
-  'разобрать',
-  'составить',
-  'подфиналить',
-  'задача',
-  'задачи',
-  'нужно',
-  'надо',
-  'нам',
-  'тебе',
-  'для',
-  'по',
-  'и',
-  'в',
-  'на',
-  'с',
-  'из',
-  'или',
-  'это',
-  'тот',
-  'эта',
-  'этот',
-  'пак',
-  'там',
-  'есть',
-  'котор',
-  'которы',
-  'уникальн',
-]);
-
-const TASK_SHORT_COVERAGE_TOKENS = new Set(['ui', 'ux']);
-const TASK_OBJECT_ACTION_TOKEN_RE =
-  /^(?:собрат|состав|описат|разобрат|подготов|сделат|финализир|подфинал|выделит)$/u;
-const STRUCTURAL_OBJECT_TOKEN_RE = /[A-Za-zА-Яа-яЁё0-9-]+/gu;
 
 type TaskOntologyBucket =
   | 'deliverable_task'
@@ -204,6 +84,49 @@ type TaskOntologyBucket =
   | 'status_or_report'
   | 'unknown';
 
+const CREATE_TASKS_TRANSITION_REFORMULATION_LIMIT = 1;
+const CREATE_TASKS_TASK_DRAFT_SURFACE = 'task_draft' as const;
+const CREATE_TASKS_ALLOWED_TASK_DRAFT_CLASSES = new Set<TaskOntologyBucket>(['deliverable_task']);
+
+type CreateTasksTransitionInvariantCode =
+  | 'task_draft_class_missing'
+  | 'task_draft_class_not_materializable'
+  | 'task_draft_class_unknown'
+  | 'runtime_rejections_malformed'
+  | 'transition_reformulation_budget_exhausted';
+
+type CreateTasksRuntimeRecoveryAction = 'reclassify' | 'reattribute' | 'discard';
+
+export type CreateTasksRuntimeRejection = {
+  candidate_id: string;
+  attempted_surface: typeof CREATE_TASKS_TASK_DRAFT_SURFACE;
+  candidate_class: string;
+  violated_invariant_code: CreateTasksTransitionInvariantCode;
+  message: string;
+  recovery_action: CreateTasksRuntimeRecoveryAction;
+};
+
+export type CreateTasksRuntimeCarryOver = {
+  carry_over_code: 'missing_class_discarded';
+  source: 'persisted_possible_tasks';
+  discarded_count: number;
+  carried_over_count: number;
+  evidence: string[];
+};
+
+export type CreateTasksRuntimeFailure = {
+  code:
+    | 'create_tasks_transition_rejection'
+    | 'create_tasks_transition_retries_exhausted'
+    | 'create_tasks_runtime_rejections_malformed';
+  message: string;
+  runtime_rejections: CreateTasksRuntimeRejection[];
+  retry_budget: {
+    transition_reformulation_attempts: number;
+    transition_reformulation_limit: number;
+  };
+};
+
 type ProjectCrmWindow = {
   from_date: string;
   to_date: string;
@@ -211,29 +134,6 @@ type ProjectCrmWindow = {
   anchor_to: string;
   source: 'message_bounds' | 'session_bounds';
 };
-
-type TaskGapRepairPayload = {
-  rawText: string;
-  excerptCount: number;
-  cueCount: number;
-};
-
-type LiteralCueCoverage = {
-  literalCues: string[];
-  uncoveredLiteralCues: string[];
-};
-
-type StructuralAnalysisCue = {
-  taskName: string;
-  dialogueReference: string;
-};
-
-type TaskSemanticKind =
-  | 'surface_edit'
-  | 'structure_map'
-  | 'inventory'
-  | 'communication_packet'
-  | 'unknown';
 
 const measureTextPayload = (value: string): { chars: number; bytes: number } => ({
   chars: value.length,
@@ -251,6 +151,118 @@ const toText = (value: unknown): string => {
   return '';
 };
 
+const normalizeTransitionInvariantCode = (value: unknown): CreateTasksTransitionInvariantCode | null => {
+  const normalized = toText(value).toLowerCase();
+  if (!normalized) return null;
+  if (
+    normalized === 'task_draft_class_missing' ||
+    normalized === 'task_draft_class_not_materializable' ||
+    normalized === 'task_draft_class_unknown' ||
+    normalized === 'runtime_rejections_malformed' ||
+    normalized === 'transition_reformulation_budget_exhausted'
+  ) {
+    return normalized;
+  }
+  return null;
+};
+
+const normalizeRuntimeRecoveryAction = (value: unknown): CreateTasksRuntimeRecoveryAction => {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === 'reattribute') return 'reattribute';
+  if (normalized === 'discard') return 'discard';
+  return 'reclassify';
+};
+
+const normalizeRuntimeRejections = (value: unknown): CreateTasksRuntimeRejection[] | null => {
+  if (!Array.isArray(value)) return null;
+  const normalized: CreateTasksRuntimeRejection[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const record = asRecord(value[index]);
+    if (!record) return null;
+    const invariantCode = normalizeTransitionInvariantCode(record.violated_invariant_code);
+    if (!invariantCode) return null;
+    const candidateId = toText(record.candidate_id) || `candidate-${index + 1}`;
+    const attemptedSurface = toText(record.attempted_surface) || CREATE_TASKS_TASK_DRAFT_SURFACE;
+    if (attemptedSurface !== CREATE_TASKS_TASK_DRAFT_SURFACE) return null;
+    normalized.push({
+      candidate_id: candidateId,
+      attempted_surface: CREATE_TASKS_TASK_DRAFT_SURFACE,
+      candidate_class: toText(record.candidate_class) || 'unknown',
+      violated_invariant_code: invariantCode,
+      message: toText(record.message) || 'Invalid runtime rejection payload',
+      recovery_action: normalizeRuntimeRecoveryAction(record.recovery_action),
+    });
+  }
+  return normalized;
+};
+
+const normalizeRetryAttempts = (value: unknown): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.trunc(value));
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return Math.max(0, Math.trunc(parsed));
+  }
+  return 0;
+};
+
+class CreateTasksTransitionError extends Error {
+  public readonly details: CreateTasksRuntimeFailure;
+
+  constructor(details: CreateTasksRuntimeFailure) {
+    super(details.message);
+    this.name = 'CreateTasksTransitionError';
+    this.details = details;
+  }
+}
+
+export const extractCreateTasksRuntimeFailure = (error: unknown): CreateTasksRuntimeFailure | null => {
+  if (error instanceof CreateTasksTransitionError) {
+    return error.details;
+  }
+
+  const record = asRecord(error);
+  if (!record) return null;
+
+  const detailsRecord = asRecord(record.details);
+  const candidate = detailsRecord || record;
+  const code = toText(candidate.code);
+  if (
+    code !== 'create_tasks_transition_rejection' &&
+    code !== 'create_tasks_transition_retries_exhausted' &&
+    code !== 'create_tasks_runtime_rejections_malformed'
+  ) {
+    return null;
+  }
+
+  const normalizedRuntimeRejections = normalizeRuntimeRejections(candidate.runtime_rejections);
+  if (!normalizedRuntimeRejections) {
+    return {
+      code: 'create_tasks_runtime_rejections_malformed',
+      message: 'Malformed runtime_rejections payload',
+      runtime_rejections: [],
+      retry_budget: {
+        transition_reformulation_attempts: 0,
+        transition_reformulation_limit: CREATE_TASKS_TRANSITION_REFORMULATION_LIMIT,
+      },
+    };
+  }
+
+  const retryBudgetRecord = asRecord(candidate.retry_budget);
+  return {
+    code: code as CreateTasksRuntimeFailure['code'],
+    message: toText(candidate.message) || 'create_tasks_runtime_transition_failure',
+    runtime_rejections: normalizedRuntimeRejections,
+    retry_budget: {
+      transition_reformulation_attempts: normalizeRetryAttempts(
+        retryBudgetRecord?.transition_reformulation_attempts
+      ),
+      transition_reformulation_limit:
+        normalizeRetryAttempts(retryBudgetRecord?.transition_reformulation_limit) ||
+        CREATE_TASKS_TRANSITION_REFORMULATION_LIMIT,
+    },
+  };
+};
+
 const normalizeWhitespace = (value: string): string =>
   value.replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 
@@ -259,12 +271,6 @@ const truncateStructuredText = (value: string, limit: number): string =>
 
 const normalizeSummaryMarkdown = (value: unknown): string =>
   normalizeWhitespace(toText(value));
-
-const createOpenAiClient = (): OpenAI | null => {
-  const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
-  if (!apiKey) return null;
-  return new OpenAI({ apiKey });
-};
 
 const countWords = (value: string): number =>
   value
@@ -365,432 +371,13 @@ const stripTaskMarkdownScaffold = (value: string): string =>
     .join('\n')
     .trim();
 
-const splitTranscriptIntoUnits = (value: string): string[] =>
-  value
-    .replace(/\r\n/g, '\n')
-    .split(/\n{2,}|(?<=[.!?])\s+(?=[A-ZА-ЯЁ])/u)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-
-const isTaskGapRepairCueUnit = (value: string): boolean => {
-  const normalized = normalizeWhitespace(value);
-  if (!normalized) return false;
-  if (TASK_GAP_REPAIR_ORDINAL_RE.test(normalized)) return true;
-  if (TASK_GAP_REPAIR_CARDINAL_RE.test(normalized) && TASK_ONTOLOGY_DELIVERABLE_RE.test(normalized)) {
-    return true;
-  }
-  if (
-    TASK_GAP_REPAIR_STRUCTURAL_OBJECT_RE.test(normalized) &&
-    TASK_GAP_REPAIR_STRUCTURAL_RECOVERY_RE.test(normalized) &&
-    TASK_GAP_REPAIR_CONFUSION_RE.test(normalized)
-  ) {
-    return true;
-  }
-
-  if (!TASK_GAP_REPAIR_INTRO_RE.test(normalized) || !TASK_ONTOLOGY_DELIVERABLE_RE.test(normalized)) {
-    return false;
-  }
-
-  if (TASK_ONTOLOGY_REFERENCE_RE.test(normalized) || TASK_ONTOLOGY_INPUT_RE.test(normalized)) {
-    return false;
-  }
-
-  return TASK_LITERAL_ACTION_START_RE.test(normalized);
-};
-
-const collectTaskGapRepairCueIndexes = (units: string[]): number[] => {
-  const indexes: number[] = [];
-  for (let index = 0; index < units.length; index += 1) {
-    const current = normalizeWhitespace(units[index] || '');
-    const previous = index > 0 ? normalizeWhitespace(units[index - 1] || '') : '';
-    const currentIsOrdinalOrCardinalCue =
-      Boolean(current) &&
-      (TASK_GAP_REPAIR_ORDINAL_RE.test(current) || TASK_GAP_REPAIR_CARDINAL_RE.test(current));
-    const previousIsOrdinalOrCardinalCue =
-      Boolean(previous) &&
-      (TASK_GAP_REPAIR_ORDINAL_RE.test(previous) || TASK_GAP_REPAIR_CARDINAL_RE.test(previous));
-    const currentIsDirectCue = isTaskGapRepairCueUnit(current) && !currentIsOrdinalOrCardinalCue;
-    const followsIntroCue =
-      Boolean(previous) &&
-      (TASK_GAP_REPAIR_ORDINAL_RE.test(previous) ||
-        TASK_GAP_REPAIR_CARDINAL_RE.test(previous) ||
-        TASK_GAP_REPAIR_INTRO_RE.test(previous)) &&
-      !previousIsOrdinalOrCardinalCue &&
-      TASK_ONTOLOGY_DELIVERABLE_RE.test(current) &&
-      !TASK_ONTOLOGY_REFERENCE_RE.test(current) &&
-      !TASK_ONTOLOGY_INPUT_RE.test(current) &&
-      TASK_LITERAL_ACTION_START_RE.test(current);
-    if (currentIsDirectCue || followsIntroCue) {
-      indexes.push(index);
-    }
-  }
-  return indexes;
-};
-
-const pickDistributedCueIndexes = (indexes: number[], limit: number): number[] => {
-  if (indexes.length <= limit) {
-    return indexes;
-  }
-
-  const picked = new Set<number>();
-  const lastPosition = indexes.length - 1;
-  const lastSlot = Math.max(1, limit - 1);
-
-  for (let slot = 0; slot < limit; slot += 1) {
-    const sampledPosition = Math.round((slot * lastPosition) / lastSlot);
-    const cueIndex = indexes[sampledPosition];
-    if (typeof cueIndex === 'number' && Number.isInteger(cueIndex)) {
-      picked.add(cueIndex);
-    }
-  }
-
-  return Array.from(picked).sort((left, right) => left - right);
-};
-
-const extractTaskGapRepairExcerpts = (value: string): string[] => {
-  const units = splitTranscriptIntoUnits(value);
-  if (units.length === 0) return [];
-
-  const excerpts: string[] = [];
-  const seen = new Set<string>();
-  const cueIndexes = collectTaskGapRepairCueIndexes(units);
-  for (const index of pickDistributedCueIndexes(cueIndexes, TASK_GAP_REPAIR_MAX_EXCERPTS)) {
-    const start = Math.max(0, index - TASK_GAP_REPAIR_CONTEXT_WINDOW);
-    const end = Math.min(units.length - 1, index + TASK_GAP_REPAIR_CONTEXT_WINDOW);
-    const excerpt = normalizeWhitespace(units.slice(start, end + 1).join(' '));
-    if (!excerpt || seen.has(excerpt)) {
-      continue;
-    }
-    seen.add(excerpt);
-    excerpts.push(excerpt);
-  }
-
-  return excerpts;
-};
-
 const normalizeTaskNameKey = (value: string): string =>
   value
     .toLowerCase()
-    .replace(/ё/g, 'е')
     .replace(/[^a-zа-я0-9]+/giu, ' ')
     .split(/\s+/)
-    .map((token) =>
-      token.replace(
-        /(иями|ями|ами|ого|его|ому|ему|иях|ях|ах|ов|ев|ий|ый|ой|ая|яя|ое|ее|ую|юю|ых|их|ам|ям|ом|ем|ах|ях|ы|и|а|я|у|ю|е|о)$/u,
-        ''
-      )
-    )
-    .filter(
-      (token) =>
-        (token.length > 2 || TASK_SHORT_COVERAGE_TOKENS.has(token)) &&
-        !TASK_NAME_STOPWORDS.has(token)
-    )
-    .join(' ');
-
-const normalizeLiteralCueText = (value: string): string => {
-  const normalized = normalizeWhitespace(value);
-  if (!normalized) return '';
-
-  let stripped = normalized;
-  for (let pass = 0; pass < 3; pass += 1) {
-    const next = stripped
-      .replace(/^(?:(?:ну|ладно|окей|хорошо|так|вот|тогда)(?=$|[\s,.:;—–-])[\s,.:;—–-]*)+/iu, '')
-      .replace(/^(?:у\s+нас\s+)/iu, '')
-      .replace(
-        /^(?:перв(?:ая|ую|ой)|втор(?:ая|ую|ой)|треть(?:я|ю|ей)|четверт(?:ая|ую|ой)|пят(?:ая|ую|ой)|шест(?:ая|ую|ой)|седьм(?:ая|ую|ой)|восьм(?:ая|ую|ой)|девят(?:ая|ую|ой)|десят(?:ая|ую|ой))\s+задач[а-я]*\s*(?:у\s+нас\s+)?[—–:.,-]?\s*/iu,
-        ''
-      )
-      .replace(
-        /^(?:(?:нужно|надо|нам\s+бы|тебе\s+нужно)\s*)?(?:сделать|собрать|подготовить|описать|разобрать|составить)?\s*(?:одн(?:а|у)|две|три|четыре|пять)\s+задач[а-я]*\s*(?:у\s+нас\s+)?[—–:.,-]?\s*/iu,
-        ''
-      )
-      .replace(/^(?:это|вот)\s+/iu, '')
-      .replace(/^(?:у\s+нас\s+)/iu, '')
-      .replace(/^[—–:.,;\s-]+/u, '')
-      .trim();
-    if (next === stripped) {
-      break;
-    }
-    stripped = next;
-  }
-
-  if (!stripped || !TASK_ONTOLOGY_DELIVERABLE_RE.test(stripped)) {
-    return '';
-  }
-
-  const actionMatch = stripped.match(TASK_LITERAL_ACTION_START_RE);
-  const fromAction = actionMatch?.index ? stripped.slice(actionMatch.index) : stripped;
-  const firstSentence = fromAction.split(/[.!?]/u)[0] || fromAction;
-  const withoutTail = firstSentence
-    .replace(/\s+(?:чтобы|потом|после|когда|если|потому\s+что)\b[\s\S]*$/iu, '')
-    .replace(/(^|[^A-Za-zА-Яа-яЁё])(?:ну|короче|прям|просто)(?=$|[^A-Za-zА-Яа-яЁё])/giu, '$1')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-
-  return withoutTail && TASK_ONTOLOGY_DELIVERABLE_RE.test(withoutTail) ? withoutTail : '';
-};
-
-const humanizeLiteralCueText = (value: string): string =>
-  normalizeWhitespace(value)
-    .replace(/(^|[^A-Za-zА-Яа-яЁё])подфиналить(?=$|[^A-Za-zА-Яа-яЁё])/giu, '$1финализировать')
-    .replace(/(^|[^A-Za-zА-Яа-яЁё])выделить\s+список(?=$|[^A-Za-zА-Яа-яЁё])/giu, '$1составить каталог')
-    .replace(/(^|[^A-Za-zА-Яа-яЁё])(?:mainpage|мейнп[еэ]йдж[а-я]*)(?=$|[^A-Za-zА-Яа-яЁё])/giu, '$1главной странице')
-    .replace(/(^|[^A-Za-zА-Яа-яЁё])относительно(?=$|[^A-Za-zА-Яа-яЁё])/giu, '$1по')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-
-const normalizeCoverageText = (value: string): string =>
-  value
-    .replace(/(^|[^A-Za-zА-Яа-яЁё])(?:main\s?page|mainpage|мейнп[еэ]йдж[а-я]*)(?=$|[^A-Za-zА-Яа-яЁё])/giu, '$1mainpage ')
-    .replace(/(^|[^A-Za-zА-Яа-яЁё])главн(?:ая|ой|ую|ые|ых)?\s+страниц(?:а|е|у|ы|ой|ах)?(?=$|[^A-Za-zА-Яа-яЁё])/giu, '$1mainpage ')
-    .replace(/(^|[^A-Za-zА-Яа-яЁё])комментар(?:ий|ия|ии|иев|иями|иях)?(?=$|[^A-Za-zА-Яа-яЁё])/giu, '$1комментарии ')
-    .replace(/(^|[^A-Za-zА-Яа-яЁё])коммент(?:ы|ов|ами|ах)?(?=$|[^A-Za-zА-Яа-яЁё])/giu, '$1комментарии ')
-    .replace(/(^|[^A-Za-zА-Яа-яЁё])подфиналить(?=$|[^A-Za-zА-Яа-яЁё])/giu, '$1финализировать ')
-    .replace(/(^|[^A-Za-zА-Яа-яЁё])юр(?:а|е|у|ой|ы)?(?=$|[^A-Za-zА-Яа-яЁё])/giu, '$1yuri ');
-
-const canonicalizeCoverageToken = (token: string): string => {
-  if (/^(?:джабул|jabula)$/u.test(token)) return 'jabula';
-  if (/^(?:mainpage|мейнпейдж|мейнпэйдж)$/u.test(token)) return 'mainpage';
-  if (/^(?:ui|интерфейс)$/u.test(token)) return 'ui';
-  if (/^(?:ux)$/u.test(token)) return 'ux';
-  if (/^(?:элемент|element)$/u.test(token)) return 'elements';
-  if (/^(?:списк|перечн|каталог)$/u.test(token)) return 'catalog';
-  if (/^(?:схем|диаграмм|структур|маппинг|карт)$/u.test(token)) return 'structure';
-  if (/^(?:навигацион|навигац)$/u.test(token)) return 'navigation';
-  if (/^(?:финализир|подфинал)$/u.test(token)) return 'finalize';
-  return token;
-};
-
-const coverageTokens = (value: string): string[] =>
-  normalizeTaskNameKey(normalizeCoverageText(value))
-    .split(/\s+/)
-    .map((token) => canonicalizeCoverageToken(token))
-    .filter(Boolean);
-
-const inferTaskSemanticKind = (value: string): TaskSemanticKind => {
-  const normalized = normalizeCoverageText(value.toLowerCase());
-  if (!normalized) return 'unknown';
-  if (
-    /(?:тезис|пакет|brief|ответ)/iu.test(normalized) &&
-    (/(?:комментар|comment)/iu.test(normalized) || /\bдля\s+yuri\b/iu.test(normalized))
-  ) {
-    return 'communication_packet';
-  }
-  if (/(?:схем|диаграмм|структур|навигац|flow\b|walkthrough\b|путь\s+пользователя)/iu.test(normalized)) {
-    return 'structure_map';
-  }
-  if (/(?:каталог|список|перечн|инвентаризац|маппинг)/iu.test(normalized)) {
-    return 'inventory';
-  }
-  if (/(?:финализир|доработ|исправ|закрыт[ья]|подправ)/iu.test(normalized)) {
-    return 'surface_edit';
-  }
-  return 'unknown';
-};
-
-const objectCoverageTokens = (value: string): string[] => {
-  const kind = inferTaskSemanticKind(value);
-  return coverageTokens(value).filter((token) => {
-    if (!token) return false;
-    if (TASK_OBJECT_ACTION_TOKEN_RE.test(token)) return false;
-    if (['structure', 'navigation', 'catalog', 'finalize'].includes(token)) return false;
-    if (kind === 'communication_packet' && ['тезис', 'пакет', 'ответ'].includes(token)) return false;
-    return true;
-  });
-};
-
-const extractLiteralCueCandidates = (units: string[]): string[] => {
-  const literalCues: string[] = [];
-  const seen = new Set<string>();
-
-  for (let index = 0; index < units.length; index += 1) {
-    const currentUnit = normalizeWhitespace(units[index] || '');
-    const hasOrdinalCue = Boolean(currentUnit) && TASK_GAP_REPAIR_ORDINAL_RE.test(currentUnit);
-    const hasCardinalCue = Boolean(currentUnit) && TASK_GAP_REPAIR_CARDINAL_RE.test(currentUnit);
-    const hasExplicitCountingCue = hasOrdinalCue || hasCardinalCue;
-    if (!hasExplicitCountingCue) {
-      continue;
-    }
-
-    const currentCue = hasOrdinalCue ? normalizeLiteralCueText(currentUnit) : '';
-    if (currentCue && !seen.has(currentCue)) {
-      seen.add(currentCue);
-      literalCues.push(currentCue);
-    }
-
-    if (hasOrdinalCue && currentCue) {
-      continue;
-    }
-
-    const nextUnit = normalizeWhitespace(units[index + 1] || '');
-    const nextCue = normalizeLiteralCueText(nextUnit);
-    if (nextCue && !seen.has(nextCue)) {
-      seen.add(nextCue);
-      literalCues.push(nextCue);
-    }
-  }
-
-  return literalCues;
-};
-
-const hasCueCoverageInTask = (cue: string, task: Record<string, unknown>): boolean => {
-  const cueKind = inferTaskSemanticKind(cue);
-  const taskText = [
-    toText(task.name),
-    stripTaskMarkdownScaffold(toText(task.description)),
-    toText(task.dialogue_reference),
-  ]
     .filter(Boolean)
-    .join('\n');
-  const taskKind = inferTaskSemanticKind(taskText);
-  if (cueKind !== 'unknown' && taskKind !== 'unknown' && cueKind !== taskKind) {
-    return false;
-  }
-
-  const cueObjectTokens = objectCoverageTokens(cue);
-  if (cueObjectTokens.length === 0) return true;
-
-  const taskTokens = new Set([
-    ...objectCoverageTokens(toText(task.name)),
-    ...objectCoverageTokens(stripTaskMarkdownScaffold(toText(task.description))),
-    ...objectCoverageTokens(toText(task.dialogue_reference)),
-  ]);
-
-  if (taskTokens.size === 0) return false;
-
-  const shared = cueObjectTokens.filter((token) => taskTokens.has(token)).length;
-  if (cueObjectTokens.length <= 2) {
-    return shared >= 1;
-  }
-
-  return shared >= 2 && shared / cueObjectTokens.length >= 0.5;
-};
-
-const collectLiteralCueCoverage = ({
-  transcriptText,
-  tasks,
-}: {
-  transcriptText: string;
-  tasks: Array<Record<string, unknown>>;
-}): LiteralCueCoverage => {
-  const units = splitTranscriptIntoUnits(normalizeWhitespace(transcriptText));
-  const literalCues = extractLiteralCueCandidates(units);
-
-  const uncoveredLiteralCues = literalCues.filter(
-    (cue) => !tasks.some((task) => hasCueCoverageInTask(cue, task))
-  );
-
-  return { literalCues, uncoveredLiteralCues };
-};
-
-const normalizeStructuralObjectPhrase = (value: string): string => {
-  const tokens = normalizeWhitespace(value).match(STRUCTURAL_OBJECT_TOKEN_RE) || [];
-  if (tokens.length === 0) return '';
-
-  const isStrongToken = (token: string): boolean =>
-    token.length >= 4 || /[-0-9A-Za-z]/u.test(token);
-
-  let start = 0;
-  while (start < tokens.length && !isStrongToken(tokens[start] || '')) {
-    start += 1;
-  }
-
-  let end = tokens.length - 1;
-  while (end >= start && !isStrongToken(tokens[end] || '')) {
-    end -= 1;
-  }
-
-  const phraseTokens = tokens.slice(start <= end ? start : tokens.length - 1, end >= start ? end + 1 : tokens.length);
-  if (phraseTokens.length === 0) return '';
-
-  const tail = phraseTokens[phraseTokens.length - 1] || '';
-  if (/у$/iu.test(tail)) {
-    phraseTokens[phraseTokens.length - 1] = tail.replace(/у$/iu, 'ы');
-  } else if (/ю$/iu.test(tail)) {
-    phraseTokens[phraseTokens.length - 1] = tail.replace(/ю$/iu, 'и');
-  }
-
-  return phraseTokens.join(' ');
-};
-
-const extractStructuralAnalysisCues = (transcriptText: string): StructuralAnalysisCue[] => {
-  const units = splitTranscriptIntoUnits(normalizeWhitespace(transcriptText));
-  const cues: StructuralAnalysisCue[] = [];
-  const seen = new Set<string>();
-
-  for (let index = 0; index < units.length; index += 1) {
-    const currentUnit = normalizeWhitespace(units[index] || '');
-    if (!currentUnit) continue;
-    if (!TASK_GAP_REPAIR_STRUCTURAL_RECOVERY_RE.test(currentUnit)) continue;
-
-    const objectPhrase = normalizeStructuralObjectPhrase(
-      currentUnit.match(
-        /(?:покаж(?:и|ем|ете?)|разобрат(?:ь|ка)?|разбер(?:ем|емся)?)\s+([A-Za-zА-Яа-яЁё0-9-]+(?:\s+[A-Za-zА-Яа-яЁё0-9-]+){0,2})/iu
-      )?.[1] ||
-        currentUnit.match(
-          /([A-Za-zА-Яа-яЁё0-9-]+(?:\s+[A-Za-zА-Яа-яЁё0-9-]+){0,2})\s+показал/iu
-        )?.[1] ||
-        currentUnit.match(
-          /([A-Za-zА-Яа-яЁё0-9-]+(?:\s+[A-Za-zА-Яа-яЁё0-9-]+){0,2})\s+показать/iu
-        )?.[1] ||
-        ''
-    );
-    if (!objectPhrase) continue;
-
-    const excerpt = normalizeWhitespace(units.slice(index, index + 5).join(' '));
-    if (!excerpt) continue;
-    if (!TASK_GAP_REPAIR_CONFUSION_RE.test(excerpt)) continue;
-    if (!TASK_GAP_REPAIR_STRUCTURAL_OBJECT_RE.test(excerpt)) continue;
-
-    const taskName = `Разобрать навигацию ${objectPhrase}`;
-    const key = normalizeTaskNameKey(taskName);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    cues.push({
-      taskName,
-      dialogueReference: excerpt,
-    });
-  }
-
-  return cues;
-};
-
-const buildDeterministicStructuralAnalysisTasks = ({
-  cues,
-  existingTasks,
-  defaultProjectId,
-}: {
-  cues: StructuralAnalysisCue[];
-  existingTasks: Array<Record<string, unknown>>;
-  defaultProjectId: string;
-}): Array<Record<string, unknown>> => {
-  const built: Array<Record<string, unknown>> = [];
-
-  for (const cue of cues) {
-    if (
-      existingTasks.some((task) => hasCueCoverageInTask(cue.taskName, task)) ||
-      built.some((task) => hasCueCoverageInTask(cue.taskName, task))
-    ) {
-      continue;
-    }
-
-    const normalized = normalizeTaskShape(
-      {
-        name: clipText(cue.taskName, 120),
-        description: cue.taskName,
-        dialogue_reference: cue.dialogueReference,
-        priority: 'P3',
-        project_id: defaultProjectId,
-      },
-      existingTasks.length + built.length,
-      defaultProjectId
-    );
-    if (!normalized) continue;
-    built.push(normalized);
-  }
-
-  return built;
-};
+    .join(' ');
 
 const normalizeDraftDescription = (name: string, description: string): string => {
   const normalized = normalizeWhitespace(description);
@@ -811,57 +398,6 @@ const normalizeCompositeSessionName = (value: unknown): string => {
     return '';
   }
   return normalized;
-};
-
-const classifyTaskOntologyBucket = (task: Record<string, unknown>): TaskOntologyBucket => {
-  const combined = normalizeWhitespace(
-    [
-      toText(task.name),
-      stripTaskMarkdownScaffold(toText(task.description)),
-      toText(task.dialogue_reference),
-    ]
-      .filter(Boolean)
-      .join('\n')
-  ).toLowerCase();
-
-  if (!combined) return 'unknown';
-
-  const hasDeliverableSignal = TASK_ONTOLOGY_DELIVERABLE_RE.test(combined);
-  if (hasDeliverableSignal) {
-    return 'deliverable_task';
-  }
-  if (TASK_ONTOLOGY_INPUT_RE.test(combined)) {
-    return 'input_artifact';
-  }
-  if (TASK_ONTOLOGY_COORDINATION_RE.test(combined)) {
-    return 'coordination_only';
-  }
-  if (TASK_ONTOLOGY_REFERENCE_RE.test(combined)) {
-    return 'reference_or_idea';
-  }
-  if (TASK_ONTOLOGY_STATUS_RE.test(combined)) {
-    return 'status_or_report';
-  }
-  return 'unknown';
-};
-
-const isOntologyMaterializableTask = (task: Record<string, unknown>): boolean => {
-  const dialogueReference = normalizeWhitespace(toText(task.dialogue_reference));
-  const explicitDialogueCue = normalizeLiteralCueText(dialogueReference);
-  const dialogueIsStructuralRepair =
-    TASK_GAP_REPAIR_STRUCTURAL_OBJECT_RE.test(dialogueReference) &&
-    TASK_GAP_REPAIR_STRUCTURAL_RECOVERY_RE.test(dialogueReference) &&
-    TASK_GAP_REPAIR_CONFUSION_RE.test(dialogueReference);
-  if (
-    dialogueReference &&
-    !explicitDialogueCue &&
-    !dialogueIsStructuralRepair &&
-    (TASK_ONTOLOGY_COORDINATION_RE.test(dialogueReference) || TASK_ONTOLOGY_REFERENCE_RE.test(dialogueReference))
-  ) {
-    return false;
-  }
-  const bucket = classifyTaskOntologyBucket(task);
-  return bucket === 'deliverable_task' || bucket === 'unknown';
 };
 
 const normalizeTaskShape = (
@@ -899,27 +435,277 @@ const normalizeTaskShape = (
 
 const parseTasksPayload = (value: unknown, defaultProjectId = ''): Array<Record<string, unknown>> => {
   if (Array.isArray(value)) {
-    const normalized = value
+    return value
       .map((entry, index) => normalizeTaskShape(entry, index, defaultProjectId))
       .filter((entry): entry is Record<string, unknown> => entry !== null);
-    const filtered = normalized.filter((entry) => isOntologyMaterializableTask(entry));
-    if (filtered.length !== normalized.length) {
-      const discarded = normalized
-        .filter((entry) => !isOntologyMaterializableTask(entry))
-        .map((entry) => ({
-          name: toText(entry.name),
-          bucket: classifyTaskOntologyBucket(entry),
-        }));
-      logger.warn('[voicebot-worker] create_tasks ontology filter dropped non-deliverable candidates', {
-        discarded_count: discarded.length,
-        discarded,
-      });
-    }
-    return filtered;
   }
   const record = asRecord(value);
   if (!record) return [];
   return parseTasksPayload(record.items ?? record.data ?? record.tasks, defaultProjectId);
+};
+
+const resolveTaskDraftCandidateId = (task: Record<string, unknown>, index: number): string =>
+  toText(task.row_id) ||
+  toText(task.id) ||
+  toText(task.task_id_from_ai) ||
+  `task_draft_candidate_${index + 1}`;
+
+const normalizeTaskOntologyClass = (value: unknown): TaskOntologyBucket => {
+  const normalized = toText(value)
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/-/g, '_');
+  if (!normalized) return 'unknown';
+  if (normalized === 'deliverable_task' || normalized === 'deliverable' || normalized === 'task') {
+    return 'deliverable_task';
+  }
+  if (normalized === 'coordination_only' || normalized === 'coordination') {
+    return 'coordination_only';
+  }
+  if (normalized === 'input_artifact' || normalized === 'input') {
+    return 'input_artifact';
+  }
+  if (normalized === 'reference_or_idea' || normalized === 'reference') {
+    return 'reference_or_idea';
+  }
+  if (normalized === 'status_or_report' || normalized === 'status') {
+    return 'status_or_report';
+  }
+  if (normalized === 'unknown') {
+    return 'unknown';
+  }
+  return 'unknown';
+};
+
+const resolveTaskDraftCandidateClass = (
+  task: Record<string, unknown>
+): { explicitClass: string; normalizedClass: TaskOntologyBucket; isMissingClass: boolean } => {
+  const explicitClass =
+    toText(task.candidate_class) ||
+    toText(task.task_class) ||
+    toText(task.ontology_class) ||
+    toText(task.class);
+  if (!explicitClass) {
+    return {
+      explicitClass: '',
+      normalizedClass: 'unknown',
+      isMissingClass: true,
+    };
+  }
+  return {
+    explicitClass,
+    normalizedClass: normalizeTaskOntologyClass(explicitClass),
+    isMissingClass: false,
+  };
+};
+
+const collectTaskDraftTransitionRejections = (
+  taskDraft: Array<Record<string, unknown>>
+): CreateTasksRuntimeRejection[] => {
+  const rejections: CreateTasksRuntimeRejection[] = [];
+
+  for (let index = 0; index < taskDraft.length; index += 1) {
+    const task = taskDraft[index] || {};
+    const candidateId = resolveTaskDraftCandidateId(task, index);
+    const { explicitClass, normalizedClass, isMissingClass } = resolveTaskDraftCandidateClass(task);
+    if (CREATE_TASKS_ALLOWED_TASK_DRAFT_CLASSES.has(normalizedClass)) {
+      continue;
+    }
+
+    if (normalizedClass === 'unknown') {
+      rejections.push({
+        candidate_id: candidateId,
+        attempted_surface: CREATE_TASKS_TASK_DRAFT_SURFACE,
+        candidate_class: explicitClass || 'missing',
+        violated_invariant_code: isMissingClass ? 'task_draft_class_missing' : 'task_draft_class_unknown',
+        message: isMissingClass
+          ? 'Task draft candidate class is required and missing.'
+          : `Task draft candidate class '${explicitClass || 'unknown'}' is not recognized.`,
+        recovery_action: 'reclassify',
+      });
+      continue;
+    }
+
+    rejections.push({
+      candidate_id: candidateId,
+      attempted_surface: CREATE_TASKS_TASK_DRAFT_SURFACE,
+      candidate_class: explicitClass,
+      violated_invariant_code: 'task_draft_class_not_materializable',
+      message: `Task draft candidate class '${explicitClass}' is not materializable for task_draft.`,
+      recovery_action: normalizedClass === 'coordination_only' ? 'reattribute' : 'discard',
+    });
+  }
+
+  return rejections;
+};
+
+const isTaskDraftClassMissingRejection = (rejection: CreateTasksRuntimeRejection): boolean =>
+  rejection.violated_invariant_code === 'task_draft_class_missing';
+
+const toDiscardedMissingClassRejection = (
+  rejection: CreateTasksRuntimeRejection
+): CreateTasksRuntimeRejection => {
+  const discardSuffix = 'Discarded after bounded transition reformulation retry.';
+  const normalizedMessage = rejection.message || 'Task draft candidate class is required and missing.';
+  const message = normalizedMessage.includes(discardSuffix)
+    ? normalizedMessage
+    : `${normalizedMessage} ${discardSuffix}`;
+  return {
+    ...rejection,
+    message,
+    recovery_action: 'discard',
+  };
+};
+
+const discardMissingClassTaskDraftCandidates = ({
+  composite,
+  transitionRejections,
+}: {
+  composite: CreateTasksCompositeResult;
+  transitionRejections: CreateTasksRuntimeRejection[];
+}): {
+  composite: CreateTasksCompositeResult;
+  discardedRejections: CreateTasksRuntimeRejection[];
+} => {
+  const missingClassRejections = transitionRejections.filter(isTaskDraftClassMissingRejection);
+  if (missingClassRejections.length === 0) {
+    return { composite, discardedRejections: [] };
+  }
+
+  const missingClassCandidateIds = new Set(missingClassRejections.map((rejection) => rejection.candidate_id));
+  const discardedCandidateIds = new Set<string>();
+  const retainedTaskDraft: Array<Record<string, unknown>> = [];
+
+  for (let index = 0; index < composite.task_draft.length; index += 1) {
+    const task = composite.task_draft[index] || {};
+    const candidateId = resolveTaskDraftCandidateId(task, index);
+    if (missingClassCandidateIds.has(candidateId)) {
+      discardedCandidateIds.add(candidateId);
+      continue;
+    }
+    retainedTaskDraft.push(task);
+  }
+
+  if (discardedCandidateIds.size === 0) {
+    return { composite, discardedRejections: [] };
+  }
+
+  const discardedRejections = missingClassRejections
+    .filter((rejection) => discardedCandidateIds.has(rejection.candidate_id))
+    .map(toDiscardedMissingClassRejection);
+  const noTaskDecision = resolveCreateTasksNoTaskDecisionOutcome({
+    decision: composite.no_task_decision,
+    extractedTaskCount: retainedTaskDraft.length,
+    persistedTaskCount: retainedTaskDraft.length,
+    hasSummary: Boolean(composite.summary_md_text),
+    hasReview: Boolean(composite.scholastic_review_md),
+  });
+
+  return {
+    composite: {
+      ...composite,
+      task_draft: retainedTaskDraft,
+      no_task_decision: noTaskDecision,
+      runtime_transition_discards: [
+        ...(composite.runtime_transition_discards || []),
+        ...discardedRejections,
+      ],
+    },
+    discardedRejections,
+  };
+};
+
+const buildMissingClassCarryOverMetadata = ({
+  discardedCount,
+  carriedOverCount,
+}: {
+  discardedCount: number;
+  carriedOverCount: number;
+}): CreateTasksRuntimeCarryOver => ({
+  carry_over_code: 'missing_class_discarded',
+  source: 'persisted_possible_tasks',
+  discarded_count: discardedCount,
+  carried_over_count: carriedOverCount,
+  evidence: [
+    'runtime_transition_discard=missing_class',
+    `discarded_count=${discardedCount}`,
+    `carried_over_count=${carriedOverCount}`,
+    'source=persisted_possible_tasks',
+  ],
+});
+
+const applyPersistedDraftCarryOver = async ({
+  composite,
+  discardedRejections,
+  db,
+  sessionId,
+  defaultProjectId,
+}: {
+  composite: CreateTasksCompositeResult;
+  discardedRejections: CreateTasksRuntimeRejection[];
+  db: Db | null;
+  sessionId: string;
+  defaultProjectId: string;
+}): Promise<CreateTasksCompositeResult> => {
+  if (discardedRejections.length === 0) return composite;
+  if (composite.task_draft.length > 0) return composite;
+  if (!db) return composite;
+
+  const carryOverDrafts = await loadPersistedPossibleTaskCarryOverDrafts({
+    db,
+    sessionId,
+    defaultProjectId,
+  });
+  if (carryOverDrafts.length === 0) return composite;
+
+  return {
+    ...composite,
+    task_draft: carryOverDrafts,
+    no_task_decision: null,
+    runtime_transition_carry_over: buildMissingClassCarryOverMetadata({
+      discardedCount: discardedRejections.length,
+      carriedOverCount: carryOverDrafts.length,
+    }),
+  };
+};
+
+const toTransitionFailure = ({
+  code,
+  runtimeRejections,
+  attempts,
+}: {
+  code: CreateTasksRuntimeFailure['code'];
+  runtimeRejections: CreateTasksRuntimeRejection[];
+  attempts: number;
+}): CreateTasksRuntimeFailure => ({
+  code,
+  message:
+    code === 'create_tasks_transition_retries_exhausted'
+      ? 'Runtime transition reformulation budget exhausted'
+      : code === 'create_tasks_runtime_rejections_malformed'
+        ? 'Malformed runtime_rejections payload'
+        : 'Runtime transition rejected non-materializable task_draft candidates',
+  runtime_rejections: runtimeRejections,
+  retry_budget: {
+    transition_reformulation_attempts: attempts,
+    transition_reformulation_limit: CREATE_TASKS_TRANSITION_REFORMULATION_LIMIT,
+  },
+});
+
+const ensureRuntimeRejectionsShape = (
+  value: unknown,
+  attempts: number
+): CreateTasksRuntimeRejection[] => {
+  if (value === undefined || value === null) return [];
+  const normalized = normalizeRuntimeRejections(value);
+  if (normalized) return normalized;
+  throw new CreateTasksTransitionError(
+    toTransitionFailure({
+      code: 'create_tasks_runtime_rejections_malformed',
+      runtimeRejections: [],
+      attempts,
+    })
+  );
 };
 
 const normalizeEnrichmentDraft = (value: unknown): CreateTasksCompositeEnrichmentDraft | null => {
@@ -1265,202 +1051,15 @@ const derivePreferredOutputLanguage = async ({
   return inferPreferredOutputLanguageFromText(samples.join('\n'));
 };
 
-const loadSessionTranscriptText = async ({
-  db,
-  sessionId,
-}: {
-  db: Db;
-  sessionId: string;
-}): Promise<string> => {
-  if (!ObjectId.isValid(sessionId)) {
-    return '';
-  }
-
-  const sessionObjectId = new ObjectId(sessionId);
-  const messagesCollection = db.collection(VOICEBOT_COLLECTIONS.MESSAGES) as {
-    find?: (
-      query: Record<string, unknown>,
-      options: { projection: Record<string, number> }
-    ) => {
-      sort: (value: Record<string, number>) => {
-        toArray?: () => Promise<unknown[]>;
-      };
-    };
-  };
-  if (typeof messagesCollection.find !== 'function') {
-    return '';
-  }
-
-  const messageCursor = messagesCollection.find(
-    {
-      session_id: { $in: [sessionId, sessionObjectId] },
-      is_deleted: { $ne: true },
-    },
-    {
-      projection: {
-        _id: 1,
-        message_timestamp: 1,
-        transcription_text: 1,
-        text: 1,
-      },
-    }
-  );
-  const sortedCursor = messageCursor.sort({ message_timestamp: 1, _id: 1 });
-  if (typeof sortedCursor.toArray !== 'function') {
-    return '';
-  }
-  const messageDocs = await sortedCursor.toArray();
-
-  return messageDocs
-    .map((doc) => {
-      const record = asRecord(doc);
-      if (!record) return '';
-      return toText(record.transcription_text) || toText(record.text);
-    })
-    .filter(Boolean)
-    .join('\n\n')
-    .trim();
-};
-
-const buildTaskGapRepairPayload = ({
-  transcriptText,
-  existingTasks,
-  allowAtHigherTaskCount = false,
-}: {
-  transcriptText: string;
-  existingTasks: Array<Record<string, unknown>>;
-  allowAtHigherTaskCount?: boolean;
-}): TaskGapRepairPayload | null => {
-  const normalizedTranscript = normalizeWhitespace(transcriptText);
-  if (!normalizedTranscript) return null;
-
-  const units = splitTranscriptIntoUnits(normalizedTranscript);
-  const cueIndexes = collectTaskGapRepairCueIndexes(units);
-  const selectedCueIndexes = pickDistributedCueIndexes(cueIndexes, TASK_GAP_REPAIR_MAX_EXCERPTS);
-  const cueCount = cueIndexes.length;
-  const cueUnits = selectedCueIndexes
-    .map((index) => normalizeWhitespace(units[index] || ''))
-    .filter(Boolean)
-    .map((unit) => clipText(unit, 280));
-  const excerpts = extractTaskGapRepairExcerpts(normalizedTranscript);
-  if (
-    excerpts.length < TASK_GAP_REPAIR_MIN_EXCERPTS ||
-    (existingTasks.length >= 4 && !allowAtHigherTaskCount)
-  ) {
-    return null;
-  }
-
-  const existingNames = existingTasks
-    .map((task) => toText(task.name))
-    .filter(Boolean)
-    .slice(0, 8);
-
-  const parts = [
-    'Режим добора задач.',
-    'Ниже только task-heavy transcript-фрагменты.',
-    existingNames.length
-      ? `Уже извлечено в первичном проходе:\n${existingNames.map((name) => `- ${name}`).join('\n')}`
-      : '',
-    'Верни только недостающие materially distinct задачи. Не повторяй уже извлечённые пункты.',
-    'Не предполагай существование уже созданных Draft/Ready задач, если они не даны в этом payload.',
-    'Фраза из transcript вида "эта задача уже есть" сама по себе не доказывает, что active task state действительно существует.',
-    'Не считай правку исходного объекта и отдельный тезисный пакет по тем же комментариям одной задачей, если различается адресат или результат.',
-    cueUnits.length
-      ? `Явные task cues:\n${cueUnits.map((unit, index) => `${index + 1}. ${unit}`).join('\n')}`
-      : '',
-    `Фрагменты transcript:\n${excerpts.map((excerpt, index) => `${index + 1}. ${excerpt}`).join('\n\n')}`,
-  ].filter(Boolean);
-
-  return {
-    rawText: truncateStructuredText(parts.join('\n\n'), TASK_GAP_REPAIR_MAX_CHARS),
-    excerptCount: excerpts.length,
-    cueCount,
-  };
-};
-
-const toDeterministicTaskNameFromLiteralCue = (cue: string): string => {
-  const normalized = humanizeLiteralCueText(cue.trim().replace(/[.!?]+$/u, ''));
-  if (!normalized) return 'Задача из transcript';
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
-};
-
-const buildDeterministicLiteralCueTasks = ({
-  literalCues,
-  existingTasks,
-  defaultProjectId,
-}: {
-  literalCues: string[];
-  existingTasks: Array<Record<string, unknown>>;
-  defaultProjectId: string;
-}): Array<Record<string, unknown>> => {
-  const built: Array<Record<string, unknown>> = [];
-
-  for (const cue of literalCues) {
-    const normalizedCue = humanizeLiteralCueText(normalizeLiteralCueText(cue) || cue);
-    const normalized = normalizeTaskShape(
-      {
-        name: clipText(toDeterministicTaskNameFromLiteralCue(normalizedCue), 120),
-        description: normalizedCue,
-        dialogue_reference: cue,
-        priority: 'P3',
-        project_id: defaultProjectId,
-      },
-      existingTasks.length + built.length,
-      defaultProjectId
-    );
-
-    if (!normalized) {
-      continue;
-    }
-    if (
-      existingTasks.some((task) => areSemanticallyEquivalentTaskDrafts(task, normalized)) ||
-      built.some((task) => areSemanticallyEquivalentTaskDrafts(task, normalized))
-    ) {
-      continue;
-    }
-    built.push(normalized);
-  }
-
-  return built;
-};
-
-const taskDraftSemanticText = (task: Record<string, unknown>): string =>
+const taskDraftTextKey = (task: Record<string, unknown>): string =>
   [
     toText(task.name),
     stripTaskMarkdownScaffold(toText(task.description)),
     toText(task.dialogue_reference),
   ]
     .filter(Boolean)
-    .join('\n');
-
-const normalizeTranscriptShapedTaskDraft = (
-  task: Record<string, unknown>
-): Record<string, unknown> => {
-  const name = toText(task.name);
-  const normalizedCue = normalizeLiteralCueText(name);
-  if (!normalizedCue) {
-    return task;
-  }
-
-  if (!/(?:перв|втор|треть|четверт|пят|шест|седьм|восьм|девят|десят)\s+задач|нужно\s+сделать\s+\w+\s+задач|нам\s+бы|тебе\s+нужно|ну,\s*тогда/iu.test(name)) {
-    return task;
-  }
-
-  return {
-    ...task,
-    name: clipText(toDeterministicTaskNameFromLiteralCue(normalizedCue), 120),
-  };
-};
-
-const areSemanticallyEquivalentTaskDrafts = (
-  left: Record<string, unknown>,
-  right: Record<string, unknown>
-): boolean => {
-  const leftText = taskDraftSemanticText(left);
-  const rightText = taskDraftSemanticText(right);
-  if (!leftText || !rightText) return false;
-  return hasCueCoverageInTask(leftText, right) && hasCueCoverageInTask(rightText, left);
-};
+    .join('\n')
+    .trim();
 
 const mergeCompositeTaskDrafts = (
   primary: Array<Record<string, unknown>>,
@@ -1470,14 +1069,15 @@ const mergeCompositeTaskDrafts = (
   const seenKeys = new Set<string>();
 
   for (const rawCandidate of [...primary, ...supplemental]) {
-    const candidate = normalizeTranscriptShapedTaskDraft(rawCandidate);
-    const keys = [toText(candidate.row_id), toText(candidate.id), normalizeTaskNameKey(toText(candidate.name))].filter(
-      Boolean
-    );
+    const candidate = rawCandidate;
+    const textKey = normalizeTaskNameKey(taskDraftTextKey(candidate));
+    const keys = [
+      toText(candidate.row_id),
+      toText(candidate.id),
+      toText(candidate.task_id_from_ai),
+      textKey,
+    ].filter(Boolean);
     if (keys.some((key) => seenKeys.has(key))) {
-      continue;
-    }
-    if (merged.some((existing) => areSemanticallyEquivalentTaskDrafts(existing, candidate))) {
       continue;
     }
     merged.push(candidate);
@@ -1521,6 +1121,9 @@ const mergeCompositeResults = ({
       ? null
       : primary.no_task_decision || supplemental.no_task_decision;
 
+  const runtimeTransitionCarryOver =
+    primary.runtime_transition_carry_over || supplemental.runtime_transition_carry_over;
+
   return {
     summary_md_text: primary.summary_md_text || supplemental.summary_md_text,
     scholastic_review_md: primary.scholastic_review_md || supplemental.scholastic_review_md,
@@ -1529,6 +1132,13 @@ const mergeCompositeResults = ({
     no_task_decision: noTaskDecision,
     session_name: primary.session_name || supplemental.session_name,
     project_id: primary.project_id || supplemental.project_id,
+    runtime_transition_discards: [
+      ...(primary.runtime_transition_discards || []),
+      ...(supplemental.runtime_transition_discards || []),
+    ],
+    ...(runtimeTransitionCarryOver
+      ? { runtime_transition_carry_over: runtimeTransitionCarryOver }
+      : {}),
   };
 };
 
@@ -1541,182 +1151,6 @@ const finalizeCompositeTaskDraft = (
     task_draft: taskDraft,
     no_task_decision: taskDraft.length > 0 ? null : composite.no_task_decision,
   };
-};
-
-const scrubLanguageCheckText = (value: string): string =>
-  value
-    .replace(/https?:\/\/\S+/g, ' ')
-      .replace(/`[^`]+`/g, ' ')
-      .replace(/\[[^\]]+\]\([^)]+\)/g, ' ');
-
-const collectUnexpectedEnglishTokensForRussian = (value: string): string[] => {
-  const normalized = scrubLanguageCheckText(value);
-  if (!normalized) return [];
-
-  const issues: string[] = [];
-  if (ENGLISH_REVIEW_HEADING_RE.test(normalized)) {
-    issues.push('[english-heading]');
-  }
-  ENGLISH_REVIEW_HEADING_RE.lastIndex = 0;
-
-  for (const token of normalized.match(LOWERCASE_LATIN_WORD_RE) || []) {
-    if (!RUSSIAN_ONTOLOGY_ALLOWLIST.has(token)) {
-      issues.push(token);
-    }
-  }
-
-  return Array.from(new Set(issues));
-};
-
-const taskDescriptionLanguageCheckText = (value: string): string =>
-  scrubLanguageCheckText(
-    value
-      .split('\n')
-      .filter((line) => !/^##\s+(description|object_locators|expected_results|acceptance_criteria|evidence_links|executor_routing_hints|open_questions)\s*$/i.test(line.trim()))
-      .join('\n')
-  );
-
-const hasUnexpectedEnglishForRussian = (value: string): boolean => {
-  return collectUnexpectedEnglishTokensForRussian(value).length > 0;
-};
-
-const needsRussianLanguageRepair = (composite: CreateTasksCompositeResult): boolean => {
-  if (hasUnexpectedEnglishForRussian(composite.summary_md_text)) return true;
-  if (hasUnexpectedEnglishForRussian(composite.scholastic_review_md)) return true;
-  if (hasUnexpectedEnglishForRussian(composite.session_name)) return true;
-
-  for (const draft of composite.task_draft) {
-    if (hasUnexpectedEnglishForRussian(toText(draft.name))) return true;
-    if (hasUnexpectedEnglishForRussian(toText(draft.dialogue_reference))) return true;
-    if (hasUnexpectedEnglishForRussian(taskDescriptionLanguageCheckText(toText(draft.description)))) return true;
-  }
-
-  for (const comment of composite.enrich_ready_task_comments) {
-    if (hasUnexpectedEnglishForRussian(comment.comment)) return true;
-  }
-
-  return false;
-};
-
-const repairCompositeLanguageIfNeeded = async ({
-  composite,
-  preferredOutputLanguage,
-  sessionId,
-  defaultProjectId,
-}: {
-  composite: CreateTasksCompositeResult;
-  preferredOutputLanguage: 'ru' | 'en';
-  sessionId: string;
-  defaultProjectId: string;
-}): Promise<CreateTasksCompositeResult> => {
-  if (preferredOutputLanguage !== 'ru') {
-    return composite;
-  }
-  if (!needsRussianLanguageRepair(composite)) {
-    return composite;
-  }
-
-  const client = createOpenAiClient();
-  if (!client) {
-    logger.warn('[voicebot-worker] create_tasks language repair skipped: OPENAI_API_KEY missing', {
-      session_id: sessionId,
-    });
-    return composite;
-  }
-
-  try {
-    const languageViolations = [
-      ...collectUnexpectedEnglishTokensForRussian(composite.summary_md_text),
-      ...collectUnexpectedEnglishTokensForRussian(composite.scholastic_review_md),
-      ...collectUnexpectedEnglishTokensForRussian(composite.session_name),
-      ...composite.task_draft.flatMap((draft) => [
-        ...collectUnexpectedEnglishTokensForRussian(toText(draft.name)),
-        ...collectUnexpectedEnglishTokensForRussian(toText(draft.dialogue_reference)),
-        ...collectUnexpectedEnglishTokensForRussian(taskDescriptionLanguageCheckText(toText(draft.description))),
-      ]),
-      ...composite.enrich_ready_task_comments.flatMap((comment) =>
-        collectUnexpectedEnglishTokensForRussian(comment.comment)
-      ),
-    ];
-    const uniqueViolations = Array.from(new Set(languageViolations)).slice(0, 40);
-    logger.warn('[voicebot-worker] create_tasks language repair started', {
-      session_id: sessionId,
-      model: CREATE_TASKS_LANGUAGE_REPAIR_MODEL,
-      violations: uniqueViolations,
-    });
-
-    const runRepair = async (
-      candidate: CreateTasksCompositeResult,
-      previousViolations: string[],
-      attempt: number
-    ): Promise<CreateTasksCompositeResult> => {
-      const response = await client.responses.create({
-        model: CREATE_TASKS_LANGUAGE_REPAIR_MODEL,
-        instructions: [
-          'Ты deterministic JSON language normalizer.',
-          'На входе create_tasks composite JSON.',
-          'Верни только один JSON-объект того же shape с теми же ключами и той же структурой массивов.',
-          'Перепиши все human-facing natural-language поля строго на русский язык.',
-          'Не оставляй английские headings или англоязычные пояснительные слова, кроме canonical ontology terms из allowlist.',
-          'Если предыдущая версия оставила forbidden tokens, убери их полностью.',
-          'Сохрани ids, row_id, public ids, project_id, URLs, ObjectId-подобные строки, имена файлов, markdown-секции task description и собственные имена/акронимы.',
-          'Ничего не удаляй, не схлопывай массивы и не меняй смысл.',
-        ].join(' '),
-        input: JSON.stringify({
-          preferred_output_language: preferredOutputLanguage,
-          allow_english_terms: Array.from(RUSSIAN_ONTOLOGY_ALLOWLIST).sort(),
-          forbidden_tokens_detected: previousViolations,
-          attempt,
-          composite: candidate,
-        }),
-        store: false,
-      });
-
-      return parseCreateTasksCompositeResult(
-        (response as { output_text?: string }).output_text || '',
-        defaultProjectId
-      );
-    };
-
-    let repaired = await runRepair(composite, uniqueViolations, 1);
-    if (needsRussianLanguageRepair(repaired)) {
-      const remainingViolations = Array.from(
-        new Set([
-          ...collectUnexpectedEnglishTokensForRussian(repaired.summary_md_text),
-          ...collectUnexpectedEnglishTokensForRussian(repaired.scholastic_review_md),
-          ...collectUnexpectedEnglishTokensForRussian(repaired.session_name),
-          ...repaired.task_draft.flatMap((draft) => [
-            ...collectUnexpectedEnglishTokensForRussian(toText(draft.name)),
-            ...collectUnexpectedEnglishTokensForRussian(toText(draft.dialogue_reference)),
-            ...collectUnexpectedEnglishTokensForRussian(taskDescriptionLanguageCheckText(toText(draft.description))),
-          ]),
-          ...repaired.enrich_ready_task_comments.flatMap((comment) =>
-            collectUnexpectedEnglishTokensForRussian(comment.comment)
-          ),
-        ])
-      ).slice(0, 40);
-      logger.warn('[voicebot-worker] create_tasks language repair retry', {
-        session_id: sessionId,
-        model: CREATE_TASKS_LANGUAGE_REPAIR_MODEL,
-        remaining_violations: remainingViolations,
-      });
-      repaired = await runRepair(repaired, remainingViolations, 2);
-    }
-
-    logger.info('[voicebot-worker] create_tasks language repair completed', {
-      session_id: sessionId,
-      model: CREATE_TASKS_LANGUAGE_REPAIR_MODEL,
-      repaired_review: Boolean(repaired.scholastic_review_md),
-    });
-
-    return repaired;
-  } catch (error) {
-    logger.warn('[voicebot-worker] create_tasks language repair failed', {
-      session_id: sessionId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return composite;
-  }
 };
 
 const buildReducedCreateTasksRawText = async ({
@@ -1965,6 +1399,8 @@ const attachCompositeMetaToDraft = (
     no_task_decision: composite.no_task_decision,
     session_name: composite.session_name,
     project_id: composite.project_id,
+    runtime_transition_discards: composite.runtime_transition_discards || [],
+    runtime_transition_carry_over: composite.runtime_transition_carry_over || null,
   };
   try {
     Object.defineProperty(taskDraft, CREATE_TASKS_COMPOSITE_META_KEY, {
@@ -2015,29 +1451,42 @@ export const runCreateTasksCompositeAgent = async ({
     }
   }
 
-  const buildEnvelope = (text?: string) =>
-    text && text.trim().length > 0
-      ? {
-          mode: 'raw_text',
-          raw_text: text.trim(),
-          session_id: sessionId,
-          session_url: canonicalSessionUrl,
-          project_id: normalizedProjectId,
-          preferred_output_language: preferredOutputLanguage,
-          ...(projectCrmWindow ? { project_crm_window: projectCrmWindow } : {}),
-        }
-      : {
-          mode: 'session_id',
-          session_id: sessionId,
-          session_url: canonicalSessionUrl,
-          project_id: normalizedProjectId,
-          preferred_output_language: preferredOutputLanguage,
-          ...(projectCrmWindow ? { project_crm_window: projectCrmWindow } : {}),
-        };
+  const buildEnvelope = (
+    text?: string,
+    runtimeRejections?: CreateTasksRuntimeRejection[]
+  ): Record<string, unknown> => {
+    const runtimeRejectionsPayload = ensureRuntimeRejectionsShape(runtimeRejections, 0);
+    const base =
+      text && text.trim().length > 0
+        ? {
+            mode: 'raw_text',
+            raw_text: text.trim(),
+            session_id: sessionId,
+            session_url: canonicalSessionUrl,
+            project_id: normalizedProjectId,
+            preferred_output_language: preferredOutputLanguage,
+            ...(projectCrmWindow ? { project_crm_window: projectCrmWindow } : {}),
+          }
+        : {
+            mode: 'session_id',
+            session_id: sessionId,
+            session_url: canonicalSessionUrl,
+            project_id: normalizedProjectId,
+            preferred_output_language: preferredOutputLanguage,
+            ...(projectCrmWindow ? { project_crm_window: projectCrmWindow } : {}),
+          };
+    return runtimeRejectionsPayload.length > 0
+      ? { ...base, runtime_rejections: runtimeRejectionsPayload }
+      : base;
+  };
 
   const executeAgentCall = async (envelope: Record<string, unknown>): Promise<CreateTasksCompositeResult> => {
     const mcpClient = new MCPProxyClient(mcpServerUrl);
     const session = await mcpClient.initializeSession();
+    const mcpSessionId = toText(asRecord(session)?.sessionId);
+    if (!mcpSessionId) {
+      throw new Error('create_tasks_mcp_session_init_failed');
+    }
     const serializedEnvelope = JSON.stringify(envelope);
     const envelopeMetrics = measureTextPayload(serializedEnvelope);
     const envelopeMode = toText(envelope.mode) || (toText(envelope.raw_text) ? 'raw_text' : 'session_id');
@@ -2058,7 +1507,7 @@ export const runCreateTasksCompositeAgent = async ({
       const result = await mcpClient.callTool(
         'create_tasks',
         createTasksRequest,
-        session.sessionId,
+        mcpSessionId,
         { timeout: 15 * 60 * 1000 }
       );
 
@@ -2068,208 +1517,120 @@ export const runCreateTasksCompositeAgent = async ({
       }
 
       const parsedComposite = parseCreateTasksCompositeResult(result.data, normalizedProjectId);
-      const repairedComposite = await repairCompositeLanguageIfNeeded({
-        composite: parsedComposite,
-        preferredOutputLanguage,
-        sessionId,
-        defaultProjectId: normalizedProjectId,
-      });
-      if (isSemanticallyEmptyCompositeResult(repairedComposite)) {
+      if (isSemanticallyEmptyCompositeResult(parsedComposite)) {
         throw new Error('create_tasks_empty_mcp_result');
       }
-      return repairedComposite;
+      return parsedComposite;
     } finally {
-      await mcpClient.closeSession(session.sessionId).catch((error) => {
+      await mcpClient.closeSession(mcpSessionId).catch((error) => {
         logger.warn('[voicebot-worker] create_tasks agent session close failed', {
           session_id: sessionId,
           error: error instanceof Error ? error.message : String(error),
         });
       });
-      }
+    }
   };
 
-  const maybeRecoverMissingDeliverables = async (
-    composite: CreateTasksCompositeResult
+  const retryBudget = {
+    transition_reformulation_attempts: 0,
+    reduced_context_attempts: 0,
+    quota_recovery_attempts: 0,
+  };
+
+  const runAgentWithTransitionReformulation = async (
+    text?: string
   ): Promise<CreateTasksCompositeResult> => {
-    const transcriptText =
-      toText(rawText) ||
-      (contextDb
-        ? await loadSessionTranscriptText({
-            db: contextDb,
-            sessionId,
-          })
-        : '');
-    if (!transcriptText) {
-      return composite;
-    }
+    let runtimeRejectionsForRetry: CreateTasksRuntimeRejection[] | undefined;
 
-    const initialLiteralCoverage = collectLiteralCueCoverage({
-      transcriptText,
-      tasks: composite.task_draft,
-    });
-    const hasExplicitLiteralTaskCues = initialLiteralCoverage.literalCues.length > 0;
-
-    const maybeRecoverUncoveredLiteralCues = async (
-      currentComposite: CreateTasksCompositeResult
-    ): Promise<CreateTasksCompositeResult> => {
-      const { uncoveredLiteralCues, literalCues } = collectLiteralCueCoverage({
-        transcriptText,
-        tasks: currentComposite.task_draft,
-      });
-      if (uncoveredLiteralCues.length === 0) {
-        return currentComposite;
+    while (true) {
+      const composite = await executeAgentCall(buildEnvelope(text, runtimeRejectionsForRetry));
+      const transitionRejections = collectTaskDraftTransitionRejections(composite.task_draft);
+      if (transitionRejections.length === 0) {
+        return composite;
       }
 
-      logger.warn('[voicebot-worker] create_tasks literal-cue repair started', {
-        profile_run_id: profileRunId,
-        session_id: sessionId,
-        literal_cue_count: literalCues.length,
-        uncovered_literal_cue_count: uncoveredLiteralCues.length,
-        current_tasks_count: currentComposite.task_draft.length,
-      });
-
-      const deterministicTasks = buildDeterministicLiteralCueTasks({
-        literalCues: uncoveredLiteralCues,
-        existingTasks: currentComposite.task_draft,
-        defaultProjectId: normalizedProjectId,
-      });
-      if (deterministicTasks.length === 0) {
-        logger.info('[voicebot-worker] create_tasks literal-cue repair skipped', {
-          profile_run_id: profileRunId,
-          session_id: sessionId,
-          literal_cue_count: literalCues.length,
-          uncovered_literal_cue_count: uncoveredLiteralCues.length,
-          current_tasks_count: currentComposite.task_draft.length,
-        });
-        return currentComposite;
-      }
-
-      const deterministicComposite = mergeCompositeResults({
-        primary: currentComposite,
-        supplemental: {
-          ...toEmptyCompositeResult(normalizedProjectId),
-          task_draft: deterministicTasks,
-        },
-      });
-      logger.warn('[voicebot-worker] create_tasks literal-cue deterministic fallback applied', {
-        profile_run_id: profileRunId,
-        session_id: sessionId,
-        literal_cue_count: literalCues.length,
-        uncovered_literal_cue_count: uncoveredLiteralCues.length,
-        fallback_task_count: deterministicTasks.length,
-        merged_tasks_count: deterministicComposite.task_draft.length,
-      });
-      return deterministicComposite;
-    };
-
-    const maybeRecoverDeterministicStructuralTasks = (
-      currentComposite: CreateTasksCompositeResult
-    ): CreateTasksCompositeResult => {
-      const deterministicStructuralTasks = buildDeterministicStructuralAnalysisTasks({
-        cues: extractStructuralAnalysisCues(transcriptText),
-        existingTasks: currentComposite.task_draft,
-        defaultProjectId: normalizedProjectId,
-      });
-      if (deterministicStructuralTasks.length === 0) {
-        return currentComposite;
-      }
-
-      const deterministicComposite = mergeCompositeResults({
-        primary: currentComposite,
-        supplemental: {
-          ...toEmptyCompositeResult(normalizedProjectId),
-          task_draft: deterministicStructuralTasks,
-        },
-      });
-      logger.warn('[voicebot-worker] create_tasks structural deterministic fallback applied', {
-        profile_run_id: profileRunId,
-        session_id: sessionId,
-        fallback_task_count: deterministicStructuralTasks.length,
-        merged_tasks_count: deterministicComposite.task_draft.length,
-      });
-      return deterministicComposite;
-    };
-
-    if (hasExplicitLiteralTaskCues) {
-      const literalCompletedComposite = await maybeRecoverUncoveredLiteralCues(composite);
-      const structurallyCompletedComposite =
-        maybeRecoverDeterministicStructuralTasks(literalCompletedComposite);
-      logger.info(
-        '[voicebot-worker] create_tasks skipped generic task-gap repair because transcript already enumerates tasks',
-        {
-          profile_run_id: profileRunId,
-          session_id: sessionId,
-          literal_cue_count: initialLiteralCoverage.literalCues.length,
-          current_tasks_count: composite.task_draft.length,
-          final_tasks_count: structurallyCompletedComposite.task_draft.length,
+      if (
+        retryBudget.transition_reformulation_attempts >=
+        CREATE_TASKS_TRANSITION_REFORMULATION_LIMIT
+      ) {
+        const nonMissingClassRejections = transitionRejections.filter(
+          (rejection) => !isTaskDraftClassMissingRejection(rejection)
+        );
+        if (nonMissingClassRejections.length === 0) {
+          const { composite: convergedComposite, discardedRejections } =
+            discardMissingClassTaskDraftCandidates({
+              composite,
+              transitionRejections,
+            });
+          if (discardedRejections.length > 0) {
+            const carryOverComposite = await applyPersistedDraftCarryOver({
+              composite: convergedComposite,
+              discardedRejections,
+              db: contextDb,
+              sessionId,
+              defaultProjectId: normalizedProjectId,
+            });
+            logger.warn(
+              '[voicebot-worker] create_tasks runtime transition discarded unresolved missing-class candidates',
+              {
+                profile_run_id: profileRunId,
+                session_id: sessionId,
+                discarded_count: discardedRejections.length,
+                carry_over_count: carryOverComposite.runtime_transition_carry_over?.carried_over_count ?? 0,
+                transition_reformulation_attempts: retryBudget.transition_reformulation_attempts,
+                transition_reformulation_limit: CREATE_TASKS_TRANSITION_REFORMULATION_LIMIT,
+              }
+            );
+            return carryOverComposite;
+          }
         }
+        throw new CreateTasksTransitionError(
+          toTransitionFailure({
+            code: 'create_tasks_transition_retries_exhausted',
+            runtimeRejections: transitionRejections,
+            attempts: retryBudget.transition_reformulation_attempts,
+          })
+        );
+      }
+
+      retryBudget.transition_reformulation_attempts += 1;
+      runtimeRejectionsForRetry = ensureRuntimeRejectionsShape(
+        transitionRejections,
+        retryBudget.transition_reformulation_attempts
       );
-      return structurallyCompletedComposite;
-    }
 
-    const repairPayload = buildTaskGapRepairPayload({
-      transcriptText,
-      existingTasks: composite.task_draft,
-    });
-    if (!repairPayload) {
-      return maybeRecoverUncoveredLiteralCues(composite);
-    }
-
-    logger.warn('[voicebot-worker] create_tasks task-gap repair started', {
-      profile_run_id: profileRunId,
-      session_id: sessionId,
-      current_tasks_count: composite.task_draft.length,
-      cue_excerpt_count: repairPayload.excerptCount,
-      cue_count: repairPayload.cueCount,
-    });
-    try {
-      const recoveredComposite = await executeAgentCall(buildEnvelope(repairPayload.rawText));
-      const mergedComposite = mergeCompositeResults({
-        primary: composite,
-        supplemental: recoveredComposite,
-      });
-
-      logger.info('[voicebot-worker] create_tasks task-gap repair completed', {
+      logger.warn('[voicebot-worker] create_tasks runtime transition rejected task_draft', {
         profile_run_id: profileRunId,
         session_id: sessionId,
-        primary_tasks_count: composite.task_draft.length,
-        recovered_tasks_count: recoveredComposite.task_draft.length,
-        merged_tasks_count: mergedComposite.task_draft.length,
-        cue_excerpt_count: repairPayload.excerptCount,
-        cue_count: repairPayload.cueCount,
+        rejected_count: transitionRejections.length,
+        transition_reformulation_attempts: retryBudget.transition_reformulation_attempts,
+        transition_reformulation_limit: CREATE_TASKS_TRANSITION_REFORMULATION_LIMIT,
       });
-
-      return maybeRecoverUncoveredLiteralCues(mergedComposite);
-    } catch (error) {
-      logger.warn('[voicebot-worker] create_tasks task-gap repair failed', {
-        profile_run_id: profileRunId,
-        session_id: sessionId,
-        cue_excerpt_count: repairPayload.excerptCount,
-        cue_count: repairPayload.cueCount,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return maybeRecoverUncoveredLiteralCues(composite);
     }
   };
 
   try {
-    const primaryComposite = await executeAgentCall(buildEnvelope(rawText));
-    const composite = finalizeCompositeTaskDraft(await maybeRecoverMissingDeliverables(primaryComposite));
+    const primaryComposite = await runAgentWithTransitionReformulation(rawText);
+    const composite = finalizeCompositeTaskDraft(primaryComposite);
     logger.info('[voicebot-worker] create_tasks agent completed', {
-        profile_run_id: profileRunId,
-        session_id: sessionId,
-        tasks_count: composite.task_draft.length,
-        has_summary_md_text: Boolean(composite.summary_md_text),
-        ready_comment_enrichment_count: composite.enrich_ready_task_comments.length,
-        has_scholastic_review_md: Boolean(composite.scholastic_review_md),
-        no_task_reason_code: composite.no_task_decision?.code || null,
-        mcp_server: mcpServerUrl,
-        mode: rawText && rawText.trim().length > 0 ? 'raw_text' : 'session_id',
-      });
+      profile_run_id: profileRunId,
+      session_id: sessionId,
+      tasks_count: composite.task_draft.length,
+      has_summary_md_text: Boolean(composite.summary_md_text),
+      ready_comment_enrichment_count: composite.enrich_ready_task_comments.length,
+      has_scholastic_review_md: Boolean(composite.scholastic_review_md),
+      no_task_reason_code: composite.no_task_decision?.code || null,
+      mcp_server: mcpServerUrl,
+      mode: rawText && rawText.trim().length > 0 ? 'raw_text' : 'session_id',
+    });
     return composite;
   } catch (error) {
     if (!isAgentsQuotaFailure(error)) {
-      if (shouldRetryCreateTasksWithReducedContext({ error, rawText })) {
+      if (
+        shouldRetryCreateTasksWithReducedContext({ error, rawText }) &&
+        retryBudget.reduced_context_attempts < 1
+      ) {
+        retryBudget.reduced_context_attempts += 1;
         const fallbackDb = contextDb ?? resolveDbForFallback(db);
         if (!fallbackDb) throw error;
         const reducedRawText = await buildReducedCreateTasksRawText({
@@ -2289,9 +1650,10 @@ export const runCreateTasksCompositeAgent = async ({
           mcp_server: mcpServerUrl,
           reduced_chars: reducedRawText.length,
           reduced_bytes: Buffer.byteLength(reducedRawText, 'utf8'),
+          reduced_context_attempts: retryBudget.reduced_context_attempts,
         });
-        const reducedComposite = await executeAgentCall(buildEnvelope(reducedRawText));
-        const composite = finalizeCompositeTaskDraft(await maybeRecoverMissingDeliverables(reducedComposite));
+        const reducedComposite = await runAgentWithTransitionReformulation(reducedRawText);
+        const composite = finalizeCompositeTaskDraft(reducedComposite);
         logger.info('[voicebot-worker] create_tasks agent completed with reduced context', {
           profile_run_id: profileRunId,
           session_id: sessionId,
@@ -2308,6 +1670,11 @@ export const runCreateTasksCompositeAgent = async ({
       throw error;
     }
 
+    if (retryBudget.quota_recovery_attempts >= 1) {
+      throw error;
+    }
+    retryBudget.quota_recovery_attempts += 1;
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     const recovered = await attemptAgentsQuotaRecovery({ reason: errorMessage });
     if (!recovered) {
@@ -2318,10 +1685,11 @@ export const runCreateTasksCompositeAgent = async ({
       profile_run_id: profileRunId,
       session_id: sessionId,
       mcp_server: mcpServerUrl,
+      quota_recovery_attempts: retryBudget.quota_recovery_attempts,
     });
 
-    const primaryComposite = await executeAgentCall(buildEnvelope(rawText));
-    const composite = finalizeCompositeTaskDraft(await maybeRecoverMissingDeliverables(primaryComposite));
+    const primaryComposite = await runAgentWithTransitionReformulation(rawText);
+    const composite = finalizeCompositeTaskDraft(primaryComposite);
     logger.info('[voicebot-worker] create_tasks agent completed after quota recovery', {
       profile_run_id: profileRunId,
       session_id: sessionId,

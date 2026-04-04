@@ -32,6 +32,7 @@ Use this as a fast guardrail before implementing anything:
   - session `processors_data.CREATE_TASKS` is legacy historical payload only and must not be used as the source of truth for Draft reads,
   - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate,
   - stale `CREATE_TASKS` repair marker precedence is explicit: processor-level timestamps (`job_queued_timestamp`, request timestamps, finish timestamps) dominate stale-age evaluation; session `_id` timestamp is fallback-only when explicit markers are absent,
+  - transition reformulation for `CREATE_TASKS` is bounded to one retry with machine-readable failures (`create_tasks_transition_retries_exhausted` / `create_tasks_runtime_rejections_malformed`); when unresolved candidates are only `task_draft_class_missing`, runtime may discard them and carry over persisted draft rows with explicit `runtime_transition_carry_over` evidence instead of silent zero-generation fallback,
   - user-owned draft fields follow a `user wins` collision policy against concurrent `CREATE_TASKS` recompute writes; the machine-actionable contract lives in `plan/2026-03-21-voice-task-surface-normalization-spec-2.md`,
   - accepted session-task reads are served through `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Ready+' }`; this bucket is accepted-only and `DRAFT_10` rows there are a bug (`copilot-f6z4`), not an allowed fallback.
 - Default transcription/categorization rendering stays operator-first: metadata signatures are rendered after the corresponding text block (never before it), while fallback error signatures remain visible when the transcript body is missing.
@@ -587,6 +588,12 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-04-04 22:49):
+  - Landed the ontology/morphology migration wave for `CREATE_TASKS` prompt/runtime boundaries (`copilot-j7dp`, related `copilot-52pj`): prompt card now owns semantic/lexical policy and explicit `runtime_rejections` handling, while runtime enforces deterministic transition legality.
+  - Added structured transition failure propagation through worker/API surfaces (`error_code`, `error_details`) so invalid `task_draft` transitions are observable without flattening to opaque strings.
+  - Added missing-class convergence behavior for replay stability (`copilot-2bd3`): when bounded transition retry still leaves only `task_draft_class_missing` candidates, runtime can discard those candidates and carry over persisted draft rows with explicit `runtime_transition_carry_over` evidence.
+  - Added migration artifacts `plan/2026-04-04-create-tasks-ontology-prompt-migration-{spec,swarm-plan}.md` and synchronized governance note in `AGENTS.md`.
+  - Validation passed: `cd backend && npm run test:parallel-safe -- --runTestsByPath __tests__/services/voicebot/createTasksAgentCardContract.test.ts __tests__/services/voicebot/createTasksAgentRecovery.test.ts __tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts __tests__/voicebot/runtime/generatePossibleTasksRoute.test.ts` and `cd backend && npm run build`.
 - Close-session refresh (2026-03-28 00:40):
   - Closed Phase I of the current Voice stabilization wave: `copilot-qtcp.9` and the full `copilot-8h9u*` test-noise/UI-warning bundle are resolved and synchronized in `bd`.
   - Closed Phase II (`copilot-c4n8`, `copilot-haq2`): WebRTC now drops stale post-`Done` chunk uploads with guaranteed fallback transition correlation, and the end-to-end `create_tasks` correlation logging contract was re-verified as already canonical.

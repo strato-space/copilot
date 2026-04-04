@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ObjectId } from 'mongodb';
+import { VOICEBOT_COLLECTIONS } from '../../../src/constants.js';
 
 const initializeSessionMock = jest.fn();
 const callToolMock = jest.fn();
 const closeSessionMock = jest.fn();
 const quotaRecoveryMock = jest.fn();
 const openAiResponsesCreateMock = jest.fn();
+const loadPersistedPossibleTaskCarryOverDraftsMock = jest.fn();
+
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+};
 
 jest.unstable_mockModule('../../../src/services/mcp/proxyClient.js', () => ({
   MCPProxyClient: jest.fn().mockImplementation(() => ({
@@ -31,6 +38,10 @@ jest.unstable_mockModule('openai', () => ({
   })),
 }));
 
+jest.unstable_mockModule('../../../src/services/voicebot/persistPossibleTasks.js', () => ({
+  loadPersistedPossibleTaskCarryOverDrafts: loadPersistedPossibleTaskCarryOverDraftsMock,
+}));
+
 const { runCreateTasksAgent } = await import('../../../src/services/voicebot/createTasksAgent.js');
 
 describe('runCreateTasksAgent quota fallback', () => {
@@ -40,6 +51,8 @@ describe('runCreateTasksAgent quota fallback', () => {
     closeSessionMock.mockReset();
     quotaRecoveryMock.mockReset();
     openAiResponsesCreateMock.mockReset();
+    loadPersistedPossibleTaskCarryOverDraftsMock.mockReset();
+    loadPersistedPossibleTaskCarryOverDraftsMock.mockResolvedValue([]);
     process.env.OPENAI_API_KEY = 'test-openai-key';
     openAiResponsesCreateMock.mockImplementation(async (request?: { input?: string }) => {
       const raw = String(request?.input || '').trim();
@@ -82,6 +95,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-1',
                     name: 'Recovered task',
                     description: 'Created after backend fallback',
+                    candidate_class: 'deliverable_task',
                     priority: 'P2',
                   },
                 ],
@@ -113,7 +127,7 @@ describe('runCreateTasksAgent quota fallback', () => {
     ]);
   });
 
-  it('completes explicit numbered task cues without a second generative repair pass', async () => {
+  it('keeps explicit numbered cue extraction bounded to model-produced deliverables without extra lexical backfill', async () => {
     initializeSessionMock.mockResolvedValueOnce({ sessionId: 'primary-gap-session' });
     closeSessionMock.mockResolvedValue(undefined);
     callToolMock
@@ -132,6 +146,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-JABULA-NAV',
                     name: 'Собрать схему навигации Jabula mainpage',
                     description: 'Диаграмма переходов по mainpage.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P2',
                   },
                   {
@@ -139,6 +154,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-UI-CATALOG',
                     name: 'Составить каталог UI-элементов по страницам',
                     description: 'Каталог UI с маппингом на Ant Design.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P3',
                   },
                   {
@@ -146,6 +162,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-YURA-THESES',
                     name: 'Свести клиентские комментарии в технические тезисы',
                     description: 'Пак тезисов для Юры: что можем и что не можем.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P3',
                   },
                 ],
@@ -174,19 +191,23 @@ describe('runCreateTasksAgent quota fallback', () => {
 
     expect(callToolMock).toHaveBeenCalledTimes(1);
     expect(closeSessionMock).toHaveBeenCalledTimes(1);
-    expect(tasks).toHaveLength(5);
+    expect(tasks).toHaveLength(3);
     expect(tasks.map((task) => String(task.name))).toEqual(
       expect.arrayContaining([
-        'Финализировать комментарии по главной странице Jabula',
-        'Разобрать навигацию трейдинг-платформы',
         'Собрать схему навигации Jabula mainpage',
         'Составить каталог UI-элементов по страницам',
         'Свести клиентские комментарии в технические тезисы',
       ])
     );
+    expect(tasks.map((task) => String(task.name))).not.toEqual(
+      expect.arrayContaining([
+        'Финализировать комментарии по главной странице Jabula',
+        'Разобрать навигацию трейдинг-платформы',
+      ])
+    );
   });
 
-  it('materializes a structural analysis task when the object appears before `показал` in a numbered transcript', async () => {
+  it('does not synthesize a structural-analysis task from coordination wording in numbered transcript', async () => {
     initializeSessionMock.mockResolvedValueOnce({ sessionId: 'primary-structural-before-verb-session' });
     closeSessionMock.mockResolvedValue(undefined);
     callToolMock.mockResolvedValueOnce({
@@ -204,6 +225,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   row_id: 'TASK-NAV',
                   name: 'Собрать схему навигации Jabula mainpage',
                   description: 'Диаграмма переходов по mainpage.',
+                  candidate_class: 'deliverable_task',
                   priority: 'P2',
                 },
                 {
@@ -211,6 +233,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   row_id: 'TASK-UI-CATALOG',
                   name: 'Составить каталог UI-элементов по страницам',
                   description: 'Каталог UI с маппингом на Ant Design.',
+                  candidate_class: 'deliverable_task',
                   priority: 'P3',
                 },
                 {
@@ -218,6 +241,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   row_id: 'TASK-YURA-THESES',
                   name: 'Свести клиентские комментарии в технические тезисы',
                   description: 'Пак тезисов для Юры: что можем и что не можем.',
+                  candidate_class: 'deliverable_task',
                   priority: 'P3',
                 },
               ],
@@ -247,14 +271,18 @@ describe('runCreateTasksAgent quota fallback', () => {
     });
 
     expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(3);
     expect(tasks.map((task) => String(task.name))).toEqual(
       expect.arrayContaining([
-        'Разобрать навигацию трейдинг-платформы',
+        'Собрать схему навигации Jabula mainpage',
+        'Составить каталог UI-элементов по страницам',
+        'Свести клиентские комментарии в технические тезисы',
       ])
     );
+    expect(tasks.map((task) => String(task.name))).not.toContain('Разобрать навигацию трейдинг-платформы');
   });
 
-  it('runs task-gap repair for generic structural coordination cues outside the Jabula wording', async () => {
+  it('does not start a generic task-gap second pass from structural coordination cues alone', async () => {
     initializeSessionMock
       .mockResolvedValueOnce({ sessionId: 'primary-structural-session' })
       .mockResolvedValueOnce({ sessionId: 'repair-structural-session' });
@@ -275,6 +303,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-CHECKLIST',
                     name: 'Собрать чеклист требований',
                     description: 'Собрать список требований по релизу.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P3',
                   },
                 ],
@@ -301,6 +330,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-FLOW-WALKTHROUGH',
                     name: 'Описать пользовательский путь оплаты',
                     description: 'Собрать walkthrough с точками входа и ветвлениями.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P2',
                   },
                 ],
@@ -325,18 +355,12 @@ describe('runCreateTasksAgent quota fallback', () => {
       rawText: transcript,
     });
 
-    expect(callToolMock).toHaveBeenCalledTimes(2);
-    expect(tasks).toHaveLength(2);
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(1);
     expect(tasks.map((task) => String(task.name))).toEqual(
-      expect.arrayContaining(['Собрать чеклист требований', 'Описать пользовательский путь оплаты'])
+      expect.arrayContaining(['Собрать чеклист требований'])
     );
-
-    const repairEnvelopeRaw = callToolMock.mock.calls[1]?.[1]?.message as string;
-    const repairEnvelope = JSON.parse(repairEnvelopeRaw) as Record<string, unknown>;
-    expect(String(repairEnvelope.raw_text || '')).toContain('Режим добора задач');
-    expect(String(repairEnvelope.raw_text || '')).toContain('Уже извлечено в первичном проходе');
-    expect(String(repairEnvelope.raw_text || '')).toContain('платежный сценарий');
-    expect(String(repairEnvelope.raw_text || '')).toContain('walkthrough');
+    expect(tasks.map((task) => String(task.name))).not.toContain('Описать пользовательский путь оплаты');
   });
 
   it('does not trigger task-gap repair for generic after-demo remarks without structural confusion', async () => {
@@ -357,6 +381,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-LOGIN-CHECK',
                     name: 'Собрать список шагов воспроизведения для ошибки логина',
                     description: 'Собрать список воспроизводимых шагов и наблюдений по ошибке логина после демо.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P3',
                   },
                 ],
@@ -410,6 +435,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-COMMENTS',
                     name: 'Подфиналить комментарии по главной странице',
                     description: 'Подфиналить комментарии по mainpage.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P2',
                   },
                   {
@@ -417,6 +443,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-NAV',
                     name: 'Собрать диаграмму навигации Jabula',
                     description: 'Диаграмма навигации.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P2',
                   },
                   {
@@ -424,6 +451,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-UI',
                     name: 'Составить каталог UI-элементов',
                     description: 'Каталог UI.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P3',
                   },
                 ],
@@ -450,6 +478,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-THESES',
                     name: 'Свести комментарии в технические тезисы',
                     description: 'Подготовить тезисы для Юры.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P3',
                   },
                 ],
@@ -488,7 +517,7 @@ describe('runCreateTasksAgent quota fallback', () => {
     );
   });
 
-  it('adds a deterministic literal-cue task when explicit numbered task cues stay uncovered after primary extraction', async () => {
+  it('does not add deterministic literal-cue tasks when extraction already returned deliverables', async () => {
     initializeSessionMock.mockResolvedValueOnce({ sessionId: 'primary-literal-session' });
     closeSessionMock.mockResolvedValue(undefined);
     callToolMock
@@ -507,6 +536,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-NAV',
                     name: 'Собрать диаграмму навигации Jabula',
                     description: 'Диаграмма навигации.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P2',
                   },
                   {
@@ -514,6 +544,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-UI',
                     name: 'Составить каталог UI-элементов',
                     description: 'Каталог UI.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P3',
                   },
                   {
@@ -521,6 +552,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-THESES',
                     name: 'Свести комментарии в технические тезисы',
                     description: 'Подготовить тезисы для Юры.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P3',
                   },
                 ],
@@ -547,18 +579,18 @@ describe('runCreateTasksAgent quota fallback', () => {
     });
 
     expect(callToolMock).toHaveBeenCalledTimes(1);
-    expect(tasks).toHaveLength(4);
+    expect(tasks).toHaveLength(3);
     expect(tasks.map((task) => String(task.name))).toEqual(
       expect.arrayContaining([
-        'Финализировать комментарии по главной странице',
         'Собрать диаграмму навигации Jabula',
         'Составить каталог UI-элементов',
         'Свести комментарии в технические тезисы',
       ])
     );
+    expect(tasks.map((task) => String(task.name))).not.toContain('Финализировать комментарии по главной странице');
   });
 
-  it('normalizes colloquial numbered literal cues before deterministic fallback materialization', async () => {
+  it('does not materialize colloquial numbered literal cues into additional fallback tasks', async () => {
     initializeSessionMock.mockResolvedValueOnce({ sessionId: 'primary-colloquial-session' });
     closeSessionMock.mockResolvedValue(undefined);
     callToolMock
@@ -577,6 +609,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-NAV',
                     name: 'Собрать диаграмму навигации Jabula',
                     description: 'Диаграмма навигации.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P2',
                   },
                   {
@@ -584,6 +617,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-UI',
                     name: 'Составить каталог UI-элементов',
                     description: 'Каталог UI.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P3',
                   },
                   {
@@ -591,6 +625,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-THESES',
                     name: 'Свести комментарии в технические тезисы',
                     description: 'Подготовить тезисы для Юры.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P3',
                   },
                 ],
@@ -617,17 +652,19 @@ describe('runCreateTasksAgent quota fallback', () => {
     });
 
     expect(callToolMock).toHaveBeenCalledTimes(1);
-    expect(tasks).toHaveLength(4);
+    expect(tasks).toHaveLength(3);
     expect(tasks.map((task) => String(task.name))).toEqual(
       expect.arrayContaining([
         'Собрать диаграмму навигации Jabula',
         'Составить каталог UI-элементов',
         'Свести комментарии в технические тезисы',
-        'Финализировать комментарии по главной странице',
       ])
     );
     expect(tasks.map((task) => String(task.name))).not.toContain(
       'Ну, тогда первая задача у нас подфиналить комментарии относительно мейнпэйджи'
+    );
+    expect(tasks.map((task) => String(task.name))).not.toContain(
+      'Финализировать комментарии по главной странице'
     );
   });
 
@@ -652,6 +689,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-COMMENTS',
                     name: 'Финализировать комментарии по главной странице Jabula',
                     description: 'Подфиналить комментарии по mainpage Jabula.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P2',
                   },
                   {
@@ -659,6 +697,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-NAV',
                     name: 'Построить схему навигации главной страницы Jabula',
                     description: 'Диаграмма переходов по mainpage.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P2',
                   },
                   {
@@ -666,6 +705,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-UI',
                     name: 'Собрать каталог UI-элементов по страницам Jabula',
                     description: 'Каталог уникальных элементов интерфейса.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P3',
                   },
                   {
@@ -673,6 +713,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-THESES',
                     name: 'Подготовить тезисный пакет трёх комментариев для Юры',
                     description: 'Пак тезисов для Юры: что можем и что не можем.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P3',
                   },
                 ],
@@ -744,6 +785,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   row_id: 'TASK-UI',
                   name: 'Собрать каталог UI-элементов по всем страницам',
                   description: 'Каталог уникальных элементов интерфейса.',
+                  candidate_class: 'deliverable_task',
                   priority: 'P3',
                 },
               ],
@@ -794,6 +836,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   row_id: 'TASK-COMMENTS',
                   name: 'Финализировать комментарии по главной странице Jabula',
                   description: 'Подфиналить комментарии по mainpage Jabula.',
+                  candidate_class: 'deliverable_task',
                   priority: 'P2',
                 },
                 {
@@ -801,6 +844,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   row_id: 'TASK-NAV',
                   name: 'Построить схему навигации главной страницы Jabula',
                   description: 'Диаграмма переходов по mainpage.',
+                  candidate_class: 'deliverable_task',
                   priority: 'P2',
                 },
                 {
@@ -808,6 +852,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   row_id: 'TASK-UI',
                   name: 'Собрать каталог UI-элементов по страницам Jabula',
                   description: 'Каталог уникальных элементов интерфейса.',
+                  candidate_class: 'deliverable_task',
                   priority: 'P3',
                 },
               ],
@@ -860,6 +905,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   row_id: 'TASK-C1',
                   name: 'Composite draft task',
                   description: 'Composite task description',
+                  candidate_class: 'deliverable_task',
                   priority: 'P3',
                 },
               ],
@@ -927,6 +973,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   row_id: 'TASK-TEMPLATE-1',
                   name: 'Template draft task',
                   description: 'Сделать короткий executor-ready черновик.',
+                  candidate_class: 'deliverable_task',
                   priority: 'P3',
                 },
               ],
@@ -1097,6 +1144,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   task_id_from_ai: 'task-1',
                   name: 'Насытить карточку проекта контекстным словарём для матчинга',
                   description: 'Добавить предметный словарь и context markers для project binding.',
+                  candidate_class: 'deliverable_task',
                   priority: 'P2',
                   dialogue_reference: 'Нужно насытить project card словарём.',
                 },
@@ -1184,6 +1232,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   row_id: 'TASK-WINDOW-1',
                   name: 'Windowed task',
                   description: 'Task from bounded window context',
+                  candidate_class: 'deliverable_task',
                   priority: 'P3',
                 },
               ],
@@ -1288,6 +1337,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                       row_id: 'TASK-LOOKBACK-1',
                       name: 'Lookback task',
                       description: 'Envelope validation task',
+                      candidate_class: 'deliverable_task',
                       priority: 'P3',
                     },
                   ],
@@ -1417,6 +1467,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   row_id: 'TASK-LANG-1',
                   name: 'Language sample task',
                   description: 'Envelope language selection task',
+                  candidate_class: 'deliverable_task',
                   priority: 'P3',
                 },
               ],
@@ -1440,7 +1491,7 @@ describe('runCreateTasksAgent quota fallback', () => {
     expect(envelope.preferred_output_language).toBe('ru');
   });
 
-  it('repairs mixed-language russian review artifacts before returning composite metadata', async () => {
+  it('does not invoke OpenAI language-repair pass for mixed-language review artifacts', async () => {
     initializeSessionMock.mockResolvedValue({ sessionId: 'repair-session' });
     closeSessionMock.mockResolvedValue(undefined);
     callToolMock.mockResolvedValue({
@@ -1459,6 +1510,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                   row_id: 'TASK-REPAIR-1',
                   name: 'Подготовить разговор с DBI',
                   description: '## description\nСобрать позицию и тезисы.\n\n## object_locators\nНе указано',
+                  candidate_class: 'deliverable_task',
                   priority: 'P2',
                 },
               ],
@@ -1481,6 +1533,7 @@ describe('runCreateTasksAgent quota fallback', () => {
             row_id: 'TASK-REPAIR-1',
             name: 'Подготовить разговор с DBI',
             description: '## description\nСобрать позицию и тезисы.\n\n## object_locators\nНе указано',
+            candidate_class: 'deliverable_task',
             priority: 'P2',
           },
         ],
@@ -1499,12 +1552,10 @@ describe('runCreateTasksAgent quota fallback', () => {
       | Record<string, unknown>
       | undefined;
 
-    expect(openAiResponsesCreateMock.mock.calls.length).toBeGreaterThanOrEqual(1);
-    expect(openAiResponsesCreateMock.mock.calls.length).toBeLessThanOrEqual(2);
-    expect(String(compositeMeta?.scholastic_review_md || '')).toContain('## Термины');
-    expect(String(compositeMeta?.scholastic_review_md || '')).not.toContain('## Terms');
-    expect(String(compositeMeta?.scholastic_review_md || '')).not.toContain('renegotiation');
-    expect(String(compositeMeta?.scholastic_review_md || '')).not.toContain('lead-pipeline');
+    expect(openAiResponsesCreateMock).not.toHaveBeenCalled();
+    expect(String(compositeMeta?.scholastic_review_md || '')).toContain('## Terms');
+    expect(String(compositeMeta?.scholastic_review_md || '')).toContain('renegotiation');
+    expect(String(compositeMeta?.scholastic_review_md || '')).toContain('lead-pipeline');
   });
 
   it('retries once with reduced raw_text context after string_above_max_length overflow and strips top-level session_id', async () => {
@@ -1576,6 +1627,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-R1',
                     name: 'Recovered after reduced retry',
                     description: 'Executor-ready description after reduced retry.',
+                    candidate_class: 'deliverable_task',
                     priority: 'P2',
                   },
                 ],
@@ -1941,6 +1993,7 @@ describe('runCreateTasksAgent quota fallback', () => {
                     row_id: 'TASK-2',
                     name: 'Recovered after auth refresh',
                     description: 'Created after invalid-auth recovery',
+                    candidate_class: 'deliverable_task',
                     priority: 'P2',
                   },
                 ],
@@ -1972,80 +2025,671 @@ describe('runCreateTasksAgent quota fallback', () => {
     ]);
   });
 
-  it('drops coordination, input, reference, and status rows from task_draft while preserving deliverables', async () => {
-    initializeSessionMock.mockResolvedValue({ sessionId: 'ontology-session' });
+  it('retries once with runtime_rejections when mixed valid/invalid classes appear in task_draft', async () => {
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'transition-primary-session' })
+      .mockResolvedValueOnce({ sessionId: 'transition-retry-session' });
     closeSessionMock.mockResolvedValue(undefined);
-    callToolMock.mockResolvedValue({
-      success: true,
-      data: {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              summary_md_text: 'Есть и summary, и review.',
-              scholastic_review_md: 'Есть review.',
-              task_draft: [
-                {
-                  id: 'TASK-DELIVERABLE',
-                  row_id: 'TASK-DELIVERABLE',
-                  name: 'Описать навигационную структуру Jabula mainpage',
-                  description: 'Сделать схему entry point, разделов и переходов.',
-                  priority: 'P2',
-                },
-                {
-                  id: 'TASK-COORD',
-                  row_id: 'TASK-COORD',
-                  name: 'Созвониться с Юрой после колла',
-                  description: 'После созвона показать платформу и обсудить позже.',
-                  priority: 'P3',
-                },
-                {
-                  id: 'TASK-INPUT',
-                  row_id: 'TASK-INPUT',
-                  name: 'Скинуть логины и пароли Jabula',
-                  description: 'Передать креды и доступы.',
-                  priority: 'P3',
-                },
-                {
-                  id: 'TASK-REF',
-                  row_id: 'TASK-REF',
-                  name: 'Посмотреть кайфовый референс impact',
-                  description: 'Можно бы потом использовать как пример.',
-                  priority: 'P4',
-                },
-                {
-                  id: 'TASK-STATUS',
-                  row_id: 'TASK-STATUS',
-                  name: 'Посмотрю это позже и отпишусь',
-                  description: 'Это просто статус-апдейт без deliverable.',
-                  priority: 'P4',
-                },
-              ],
-              enrich_ready_task_comments: [],
-              session_name: '',
-              project_id: 'proj-ontology',
-            }),
-          },
-        ],
-      },
-    });
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: 'Primary summary',
+                scholastic_review_md: 'Primary review',
+                task_draft: [
+                  {
+                    id: 'TASK-VALID',
+                    row_id: 'TASK-VALID',
+                    name: 'Собрать итоговый план',
+                    description: 'Подготовить итоговый артефакт.',
+                    candidate_class: 'deliverable_task',
+                    priority: 'P2',
+                  },
+                  {
+                    id: 'TASK-INVALID',
+                    row_id: 'TASK-INVALID',
+                    name: 'Созвониться позже',
+                    description: 'Координация без артефакта.',
+                    candidate_class: 'coordination_only',
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-transition',
+              }),
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: 'Retried summary',
+                scholastic_review_md: 'Retried review',
+                task_draft: [
+                  {
+                    id: 'TASK-VALID-RETRY',
+                    row_id: 'TASK-VALID-RETRY',
+                    name: 'Собрать итоговый план',
+                    description: 'Подготовить итоговый артефакт.',
+                    candidate_class: 'deliverable_task',
+                    priority: 'P2',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-transition',
+              }),
+            },
+          ],
+        },
+      });
 
     const tasks = await runCreateTasksAgent({
-      sessionId: 'session-ontology',
-      projectId: 'proj-ontology',
+      sessionId: 'session-transition-mixed',
+      projectId: 'proj-transition',
     });
 
+    expect(callToolMock).toHaveBeenCalledTimes(2);
+    const retryEnvelopeRaw = callToolMock.mock.calls[1]?.[1]?.message as string;
+    const retryEnvelope = JSON.parse(retryEnvelopeRaw) as Record<string, unknown>;
+    const runtimeRejections = Array.isArray(retryEnvelope.runtime_rejections)
+      ? (retryEnvelope.runtime_rejections as Array<Record<string, unknown>>)
+      : [];
+    expect(runtimeRejections).toHaveLength(1);
+    expect(runtimeRejections[0]).toEqual(
+      expect.objectContaining({
+        candidate_id: 'TASK-INVALID',
+        attempted_surface: 'task_draft',
+        candidate_class: 'coordination_only',
+        violated_invariant_code: 'task_draft_class_not_materializable',
+      })
+    );
     expect(tasks).toHaveLength(1);
     expect(tasks[0]).toEqual(
       expect.objectContaining({
-        id: 'TASK-DELIVERABLE',
-        name: 'Описать навигационную структуру Jabula mainpage',
+        id: 'TASK-VALID-RETRY',
       })
     );
   });
 
-  it('keeps bounded preparation tasks that end in a presentable artifact', async () => {
-    initializeSessionMock.mockResolvedValue({ sessionId: 'ontology-prep-session' });
+  it('treats explicit unknown candidate_class as invalid transition and requests reclassification', async () => {
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'unknown-primary-session' })
+      .mockResolvedValueOnce({ sessionId: 'unknown-retry-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [
+                  {
+                    id: 'TASK-UNKNOWN',
+                    row_id: 'TASK-UNKNOWN',
+                    name: 'Непонятная сущность',
+                    description: 'Класс не определен.',
+                    candidate_class: 'unknown',
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-unknown',
+              }),
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [
+                  {
+                    id: 'TASK-DELIVERABLE',
+                    row_id: 'TASK-DELIVERABLE',
+                    name: 'Собрать итоговый документ',
+                    description: 'Подготовить итоговый документ.',
+                    candidate_class: 'deliverable_task',
+                    priority: 'P2',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-unknown',
+              }),
+            },
+          ],
+        },
+      });
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-unknown-class',
+      projectId: 'proj-unknown',
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(2);
+    const retryEnvelope = JSON.parse(String(callToolMock.mock.calls[1]?.[1]?.message || '{}')) as Record<
+      string,
+      unknown
+    >;
+    const runtimeRejections = Array.isArray(retryEnvelope.runtime_rejections)
+      ? (retryEnvelope.runtime_rejections as Array<Record<string, unknown>>)
+      : [];
+    expect(runtimeRejections[0]).toEqual(
+      expect.objectContaining({
+        candidate_id: 'TASK-UNKNOWN',
+        candidate_class: 'unknown',
+        violated_invariant_code: 'task_draft_class_unknown',
+      })
+    );
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toEqual(expect.objectContaining({ id: 'TASK-DELIVERABLE' }));
+  });
+
+  it('rejects missing candidate_class in task_draft and requests explicit reclassification', async () => {
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'missing-class-primary-session' })
+      .mockResolvedValueOnce({ sessionId: 'missing-class-retry-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [
+                  {
+                    id: 'TASK-MISSING-CLASS',
+                    row_id: 'TASK-MISSING-CLASS',
+                    name: 'Собрать документ решения',
+                    description: 'Класс кандидата в ответе отсутствует.',
+                    candidate_class: '',
+                    priority: 'P2',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-missing-class',
+              }),
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [
+                  {
+                    id: 'TASK-DELIVERABLE-RETRY',
+                    row_id: 'TASK-DELIVERABLE-RETRY',
+                    name: 'Собрать документ решения',
+                    description: 'Класс явно указан после runtime_rejections.',
+                    candidate_class: 'deliverable_task',
+                    priority: 'P2',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-missing-class',
+              }),
+            },
+          ],
+        },
+      });
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-missing-class',
+      projectId: 'proj-missing-class',
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(2);
+    const retryEnvelope = JSON.parse(String(callToolMock.mock.calls[1]?.[1]?.message || '{}')) as Record<
+      string,
+      unknown
+    >;
+    const runtimeRejections = Array.isArray(retryEnvelope.runtime_rejections)
+      ? (retryEnvelope.runtime_rejections as Array<Record<string, unknown>>)
+      : [];
+    expect(runtimeRejections).toHaveLength(1);
+    expect(runtimeRejections[0]).toEqual(
+      expect.objectContaining({
+        candidate_id: 'TASK-MISSING-CLASS',
+        candidate_class: 'missing',
+        violated_invariant_code: 'task_draft_class_missing',
+        recovery_action: 'reclassify',
+      })
+    );
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toEqual(expect.objectContaining({ id: 'TASK-DELIVERABLE-RETRY' }));
+  });
+
+  it('discards unresolved missing-class candidates after bounded retry while preserving deliverables', async () => {
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'missing-class-discard-primary-session' })
+      .mockResolvedValueOnce({ sessionId: 'missing-class-discard-retry-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: 'Summary before discard',
+                scholastic_review_md: 'Review before discard',
+                task_draft: [
+                  {
+                    id: 'TASK-VALID-KEEP',
+                    row_id: 'TASK-VALID-KEEP',
+                    name: 'Собрать релизный артефакт',
+                    description: 'Deliverable with explicit class.',
+                    candidate_class: 'deliverable_task',
+                    priority: 'P2',
+                  },
+                  {
+                    id: 'TASK-MISSING-RETRY',
+                    row_id: 'TASK-MISSING-RETRY',
+                    name: 'Кандидат без класса',
+                    description: 'Класс не указан и не заполнен.',
+                    task_class: null,
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-missing-discard',
+              }),
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: 'Summary after retry',
+                scholastic_review_md: 'Review after retry',
+                task_draft: [
+                  {
+                    id: 'TASK-VALID-KEEP',
+                    row_id: 'TASK-VALID-KEEP',
+                    name: 'Собрать релизный артефакт',
+                    description: 'Deliverable with explicit class.',
+                    candidate_class: 'deliverable_task',
+                    priority: 'P2',
+                  },
+                  {
+                    id: 'TASK-MISSING-RETRY',
+                    row_id: 'TASK-MISSING-RETRY',
+                    name: 'Кандидат без класса',
+                    description: 'Класс не указан повторно.',
+                    task_class: null,
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-missing-discard',
+              }),
+            },
+          ],
+        },
+      });
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-missing-class-discard',
+      projectId: 'proj-missing-discard',
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(2);
+    const retryEnvelope = JSON.parse(String(callToolMock.mock.calls[1]?.[1]?.message || '{}')) as Record<
+      string,
+      unknown
+    >;
+    const runtimeRejections = Array.isArray(retryEnvelope.runtime_rejections)
+      ? (retryEnvelope.runtime_rejections as Array<Record<string, unknown>>)
+      : [];
+    expect(runtimeRejections).toHaveLength(1);
+    expect(runtimeRejections[0]).toEqual(
+      expect.objectContaining({
+        candidate_id: 'TASK-MISSING-RETRY',
+        candidate_class: 'missing',
+        violated_invariant_code: 'task_draft_class_missing',
+        recovery_action: 'reclassify',
+      })
+    );
+
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toEqual(expect.objectContaining({ id: 'TASK-VALID-KEEP' }));
+    const compositeMeta = (tasks as unknown as Record<string, unknown>).__create_tasks_composite_meta as
+      | Record<string, unknown>
+      | undefined;
+    const runtimeTransitionDiscards = Array.isArray(compositeMeta?.runtime_transition_discards)
+      ? (compositeMeta?.runtime_transition_discards as Array<Record<string, unknown>>)
+      : [];
+    expect(runtimeTransitionDiscards).toHaveLength(1);
+    expect(runtimeTransitionDiscards[0]).toEqual(
+      expect.objectContaining({
+        candidate_id: 'TASK-MISSING-RETRY',
+        violated_invariant_code: 'task_draft_class_missing',
+        recovery_action: 'discard',
+      })
+    );
+  });
+
+  it('converges to persisted carry-over drafts when bounded retry ends with only missing-class discards', async () => {
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'missing-class-carry-over-primary-session' })
+      .mockResolvedValueOnce({ sessionId: 'missing-class-carry-over-retry-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: 'Summary before carry-over',
+                scholastic_review_md: 'Review before carry-over',
+                task_draft: [
+                  {
+                    id: 'TASK-MISSING-A',
+                    row_id: 'TASK-MISSING-A',
+                    name: 'Первый кандидат без класса',
+                    description: 'Класс отсутствует.',
+                    candidate_class: '',
+                    priority: 'P3',
+                  },
+                  {
+                    id: 'TASK-MISSING-B',
+                    row_id: 'TASK-MISSING-B',
+                    name: 'Второй кандидат без класса',
+                    description: 'Класс также отсутствует.',
+                    task_class: null,
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-missing-carry-over',
+              }),
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: 'Summary after retry',
+                scholastic_review_md: 'Review after retry',
+                task_draft: [
+                  {
+                    id: 'TASK-MISSING-A',
+                    row_id: 'TASK-MISSING-A',
+                    name: 'Первый кандидат без класса',
+                    description: 'Класс отсутствует повторно.',
+                    candidate_class: '',
+                    priority: 'P3',
+                  },
+                  {
+                    id: 'TASK-MISSING-B',
+                    row_id: 'TASK-MISSING-B',
+                    name: 'Второй кандидат без класса',
+                    description: 'Класс всё ещё отсутствует.',
+                    task_class: null,
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-missing-carry-over',
+              }),
+            },
+          ],
+        },
+      });
+
+    loadPersistedPossibleTaskCarryOverDraftsMock.mockResolvedValue([
+      {
+        row_id: 'TASK-CARRY-1',
+        id: 'TASK-CARRY-1',
+        name: 'Carry-over task 1',
+        description: 'Existing persisted task',
+        project_id: 'proj-missing-carry-over',
+        candidate_class: 'deliverable_task',
+      },
+      {
+        row_id: 'TASK-CARRY-2',
+        id: 'TASK-CARRY-2',
+        name: 'Carry-over task 2',
+        description: 'Existing persisted task',
+        project_id: 'proj-missing-carry-over',
+        candidate_class: 'deliverable_task',
+      },
+      {
+        row_id: 'TASK-CARRY-3',
+        id: 'TASK-CARRY-3',
+        name: 'Carry-over task 3',
+        description: 'Existing persisted task',
+        project_id: 'proj-missing-carry-over',
+        candidate_class: 'deliverable_task',
+      },
+      {
+        row_id: 'TASK-CARRY-4',
+        id: 'TASK-CARRY-4',
+        name: 'Carry-over task 4',
+        description: 'Existing persisted task',
+        project_id: 'proj-missing-carry-over',
+        candidate_class: 'deliverable_task',
+      },
+      {
+        row_id: 'TASK-CARRY-5',
+        id: 'TASK-CARRY-5',
+        name: 'Carry-over task 5',
+        description: 'Existing persisted task',
+        project_id: 'proj-missing-carry-over',
+        candidate_class: 'deliverable_task',
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: async () => null,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: async () => null,
+            find: () => ({
+              sort: () => ({
+                limit: () => ({
+                  toArray: async () => [],
+                }),
+              }),
+            }),
+          };
+        }
+        return {
+          findOne: async () => null,
+        };
+      },
+    } as unknown as import('mongodb').Db;
+    const tasks = await runCreateTasksAgent({
+      sessionId: '69cf65712a7446295ac67771',
+      projectId: 'proj-missing-carry-over',
+      db: dbStub,
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(2);
+    expect(loadPersistedPossibleTaskCarryOverDraftsMock).toHaveBeenCalledTimes(1);
+    expect(loadPersistedPossibleTaskCarryOverDraftsMock).toHaveBeenCalledWith({
+      db: dbStub,
+      sessionId: '69cf65712a7446295ac67771',
+      defaultProjectId: 'proj-missing-carry-over',
+    });
+
+    expect(tasks).toHaveLength(5);
+    expect(tasks.map((task) => String(task.id))).toEqual([
+      'TASK-CARRY-1',
+      'TASK-CARRY-2',
+      'TASK-CARRY-3',
+      'TASK-CARRY-4',
+      'TASK-CARRY-5',
+    ]);
+
+    const compositeMeta = (tasks as unknown as Record<string, unknown>).__create_tasks_composite_meta as
+      | Record<string, unknown>
+      | undefined;
+    const runtimeTransitionDiscards = Array.isArray(compositeMeta?.runtime_transition_discards)
+      ? (compositeMeta.runtime_transition_discards as Array<Record<string, unknown>>)
+      : [];
+    expect(runtimeTransitionDiscards).toHaveLength(2);
+    expect(runtimeTransitionDiscards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          candidate_id: 'TASK-MISSING-A',
+          violated_invariant_code: 'task_draft_class_missing',
+          recovery_action: 'discard',
+        }),
+        expect.objectContaining({
+          candidate_id: 'TASK-MISSING-B',
+          violated_invariant_code: 'task_draft_class_missing',
+          recovery_action: 'discard',
+        }),
+      ])
+    );
+    expect(compositeMeta?.runtime_transition_carry_over).toEqual(
+      expect.objectContaining({
+        carry_over_code: 'missing_class_discarded',
+        source: 'persisted_possible_tasks',
+        discarded_count: 2,
+        carried_over_count: 5,
+      })
+    );
+  });
+
+  it('fails fast with machine-readable transition error after one reformulation retry', async () => {
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'exhaust-primary-session' })
+      .mockResolvedValueOnce({ sessionId: 'exhaust-retry-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [
+                  {
+                    id: 'TASK-INVALID-1',
+                    row_id: 'TASK-INVALID-1',
+                    name: 'Созвон',
+                    description: 'Coordination only',
+                    candidate_class: 'coordination_only',
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-exhaust',
+              }),
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [
+                  {
+                    id: 'TASK-INVALID-2',
+                    row_id: 'TASK-INVALID-2',
+                    name: 'Референс',
+                    description: 'Still not deliverable',
+                    candidate_class: 'reference_or_idea',
+                    priority: 'P4',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-exhaust',
+              }),
+            },
+          ],
+        },
+      });
+
+    await expect(
+      runCreateTasksAgent({
+        sessionId: 'session-transition-exhaust',
+        projectId: 'proj-exhaust',
+      })
+    ).rejects.toMatchObject({
+      details: expect.objectContaining({
+        code: 'create_tasks_transition_retries_exhausted',
+        retry_budget: expect.objectContaining({
+          transition_reformulation_attempts: 1,
+          transition_reformulation_limit: 1,
+        }),
+      }),
+    });
+    expect(callToolMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not reject a deliverable candidate solely because the name is stopword-like', async () => {
+    initializeSessionMock.mockResolvedValue({ sessionId: 'stopword-name-session' });
     closeSessionMock.mockResolvedValue(undefined);
     callToolMock.mockResolvedValue({
       success: true,
@@ -2058,16 +2702,17 @@ describe('runCreateTasksAgent quota fallback', () => {
               scholastic_review_md: '',
               task_draft: [
                 {
-                  id: 'TASK-PREP',
-                  row_id: 'TASK-PREP',
-                  name: 'Подготовить демо и тезисы для показа клиенту',
-                  description: 'Собрать документ с тезисами и демо-сценарием, затем показать клиенту.',
+                  id: 'TASK-STOPWORD-NAME',
+                  row_id: 'TASK-STOPWORD-NAME',
+                  name: 'Сделать',
+                  description: 'Собрать исполнительный артефакт по релизу.',
+                  candidate_class: 'deliverable_task',
                   priority: 'P2',
                 },
               ],
               enrich_ready_task_comments: [],
               session_name: '',
-              project_id: 'proj-ontology',
+              project_id: 'proj-stopword',
             }),
           },
         ],
@@ -2075,15 +2720,62 @@ describe('runCreateTasksAgent quota fallback', () => {
     });
 
     const tasks = await runCreateTasksAgent({
-      sessionId: 'session-ontology-prep',
-      projectId: 'proj-ontology',
+      sessionId: 'session-stopword-name',
+      projectId: 'proj-stopword',
     });
 
+    expect(callToolMock).toHaveBeenCalledTimes(1);
     expect(tasks).toHaveLength(1);
     expect(tasks[0]).toEqual(
       expect.objectContaining({
-        id: 'TASK-PREP',
-        name: 'Подготовить демо и тезисы для показа клиенту',
+        id: 'TASK-STOPWORD-NAME',
+        name: 'Сделать',
+      })
+    );
+  });
+
+  it('does not rewrite colloquial deliverable task names in runtime write path', async () => {
+    initializeSessionMock.mockResolvedValue({ sessionId: 'no-runtime-lexical-rewrite-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: '',
+              scholastic_review_md: '',
+              task_draft: [
+                {
+                  id: 'TASK-RAW-NAME',
+                  row_id: 'TASK-RAW-NAME',
+                  name: 'Ну, тогда первая задача у нас подфиналить комментарии относительно мейнпэйджи',
+                  description: 'Сохранить имя как прислал prompt.',
+                  candidate_class: 'deliverable_task',
+                  priority: 'P2',
+                },
+              ],
+              enrich_ready_task_comments: [],
+              session_name: '',
+              project_id: 'proj-raw-name',
+            }),
+          },
+        ],
+      },
+    });
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-raw-name',
+      projectId: 'proj-raw-name',
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toEqual(
+      expect.objectContaining({
+        id: 'TASK-RAW-NAME',
+        name: 'Ну, тогда первая задача у нас подфиналить комментарии относительно мейнпэйджи',
       })
     );
   });

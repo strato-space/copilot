@@ -76,6 +76,7 @@ These decisions are part of the current platform contract and must be preserved 
   - canonical Draft reads come from session-linked `DRAFT_10` task docs and may expose `discussion_sessions[]` / `discussion_count`; `source_kind` and stale refresh markers are compatibility metadata, not the semantic draft gate,
   - user-owned Draft fields follow a `user wins` collision policy against concurrent `CREATE_TASKS` recompute writes until the user explicitly releases the override,
   - stale `CREATE_TASKS` repair marker precedence is explicit: processor-level timestamps (`job_queued_timestamp`, request timestamps, finish timestamps) dominate stale-age evaluation; session `_id` timestamp is fallback-only when explicit markers are absent.
+  - transition reformulation for `CREATE_TASKS` is bounded to one retry with machine-readable failures (`create_tasks_transition_retries_exhausted` / `create_tasks_runtime_rejections_malformed`); when the unresolved set is only `task_draft_class_missing`, runtime may discard those candidates and carry over persisted draft rows with explicit `runtime_transition_carry_over` evidence instead of silent zero-generation fallback.
   - the default Transcription/Categorization reading flow is operator-first: raw attachment projection/debug metadata does not belong in the normal row body; metadata signatures must render after the corresponding text block (never before it), and only actionable skip/error state may surface inline with the transcript/fallback body.
 
 ## Critical Interfaces To Preserve [RULE]

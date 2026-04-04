@@ -9,6 +9,7 @@ import { getVoicebotQueues } from '../../../services/voicebotQueues.js';
 import { getLogger } from '../../../utils/logger.js';
 import { runtimeQuery } from './shared/sharedRuntime.js';
 import {
+  extractCreateTasksRuntimeFailure,
   runCreateTasksAgent,
 } from '../../../services/voicebot/createTasksAgent.js';
 import {
@@ -47,6 +48,7 @@ type CreateTasksFromChunksResult = {
   reason?: string;
   no_task_decision?: CreateTasksNoTaskDecision;
   error?: string;
+  error_details?: Record<string, unknown>;
 };
 
 type SessionRecord = {
@@ -69,6 +71,36 @@ const toProjectId = (value: ObjectId | string | null | undefined): string => {
   if (!value) return '';
   if (typeof value === 'string') return value.trim();
   return value.toString().trim();
+};
+
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+};
+
+const toSerializableRuntimeFailure = (value: unknown): Record<string, unknown> | null => {
+  const parsed = extractCreateTasksRuntimeFailure(value);
+  if (parsed) {
+    return {
+      code: parsed.code,
+      message: parsed.message,
+      runtime_rejections: parsed.runtime_rejections,
+      retry_budget: parsed.retry_budget,
+    };
+  }
+
+  const record = asRecord(value);
+  if (!record) return null;
+  const details = asRecord(record.details);
+  if (!details) return null;
+  const nestedParsed = extractCreateTasksRuntimeFailure(details);
+  if (!nestedParsed) return null;
+  return {
+    code: nestedParsed.code,
+    message: nestedParsed.message,
+    runtime_rejections: nestedParsed.runtime_rejections,
+    retry_budget: nestedParsed.retry_budget,
+  };
 };
 
 
@@ -211,7 +243,10 @@ export const handleCreateTasksFromChunksJob = async (
         : {}),
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const runtimeFailure = toSerializableRuntimeFailure(error);
+    const message =
+      (runtimeFailure?.message as string | undefined) ||
+      (error instanceof Error ? error.message : String(error));
     await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
       runtimeQuery({ _id: sessionObjectId }),
       {
@@ -219,7 +254,7 @@ export const handleCreateTasksFromChunksJob = async (
           'processors_data.CREATE_TASKS.job_finished_timestamp': Date.now(),
           'processors_data.CREATE_TASKS.is_processing': false,
           'processors_data.CREATE_TASKS.is_processed': false,
-          'processors_data.CREATE_TASKS.error': message,
+          'processors_data.CREATE_TASKS.error': runtimeFailure || message,
           'processors_data.CREATE_TASKS.error_message': message,
           'processors_data.CREATE_TASKS.error_timestamp': new Date(),
           updated_at: new Date(),
@@ -233,6 +268,7 @@ export const handleCreateTasksFromChunksJob = async (
     return {
       ok: false,
       error: message,
+      ...(runtimeFailure ? { error_details: runtimeFailure } : {}),
       session_id,
     };
   }
