@@ -192,6 +192,8 @@ const TASK_NAME_STOPWORDS = new Set([
 ]);
 
 const TASK_SHORT_COVERAGE_TOKENS = new Set(['ui', 'ux']);
+const TASK_OBJECT_ACTION_TOKEN_RE =
+  /^(?:собрат|состав|описат|разобрат|подготов|сделат|финализир|подфинал|выделит)$/u;
 
 type TaskOntologyBucket =
   | 'deliverable_task'
@@ -218,6 +220,11 @@ type TaskGapRepairPayload = {
 type LiteralCueCoverage = {
   literalCues: string[];
   uncoveredLiteralCues: string[];
+};
+
+type StructuralAnalysisCue = {
+  taskName: string;
+  dialogueReference: string;
 };
 
 type TaskSemanticKind =
@@ -431,7 +438,7 @@ const pickDistributedCueIndexes = (indexes: number[], limit: number): number[] =
   for (let slot = 0; slot < limit; slot += 1) {
     const sampledPosition = Math.round((slot * lastPosition) / lastSlot);
     const cueIndex = indexes[sampledPosition];
-    if (Number.isInteger(cueIndex)) {
+    if (typeof cueIndex === 'number' && Number.isInteger(cueIndex)) {
       picked.add(cueIndex);
     }
   }
@@ -584,6 +591,7 @@ const objectCoverageTokens = (value: string): string[] => {
   const kind = inferTaskSemanticKind(value);
   return coverageTokens(value).filter((token) => {
     if (!token) return false;
+    if (TASK_OBJECT_ACTION_TOKEN_RE.test(token)) return false;
     if (['structure', 'navigation', 'catalog', 'finalize'].includes(token)) return false;
     if (kind === 'communication_packet' && ['тезис', 'пакет', 'ответ'].includes(token)) return false;
     return true;
@@ -622,28 +630,6 @@ const extractLiteralCueCandidates = (units: string[]): string[] => {
   }
 
   return literalCues;
-};
-
-const isStructuralGapRepairCueUnit = (value: string): boolean => {
-  const normalized = normalizeWhitespace(value);
-  if (!normalized) return false;
-  return (
-    TASK_GAP_REPAIR_STRUCTURAL_OBJECT_RE.test(normalized) &&
-    TASK_GAP_REPAIR_STRUCTURAL_RECOVERY_RE.test(normalized) &&
-    TASK_GAP_REPAIR_CONFUSION_RE.test(normalized)
-  );
-};
-
-const collectUncoveredStructuralRecoveryCues = ({
-  transcriptText,
-  tasks,
-}: {
-  transcriptText: string;
-  tasks: Array<Record<string, unknown>>;
-}): string[] => {
-  const units = splitTranscriptIntoUnits(normalizeWhitespace(transcriptText));
-  const cues = units.filter((unit) => isStructuralGapRepairCueUnit(unit));
-  return cues.filter((cue) => !tasks.some((task) => hasCueCoverageInTask(cue, task)));
 };
 
 const hasCueCoverageInTask = (cue: string, task: Record<string, unknown>): boolean => {
@@ -694,6 +680,101 @@ const collectLiteralCueCoverage = ({
   );
 
   return { literalCues, uncoveredLiteralCues };
+};
+
+const normalizeStructuralObjectPhrase = (value: string): string => {
+  const normalized = normalizeWhitespace(value)
+    .replace(/^(?:ты\s+|мне\s+|нам\s+|эту\s+самую\s+|эту\s+|этот\s+|эти\s+)/iu, '')
+    .replace(/\s+(?:пожалуйста|сейчас|потом)$/iu, '')
+    .trim();
+  if (!normalized) return '';
+
+  if (/у$/iu.test(normalized)) {
+    return normalized.replace(/у$/iu, 'ы');
+  }
+  if (/ю$/iu.test(normalized)) {
+    return normalized.replace(/ю$/iu, 'и');
+  }
+  return normalized;
+};
+
+const extractStructuralAnalysisCues = (transcriptText: string): StructuralAnalysisCue[] => {
+  const units = splitTranscriptIntoUnits(normalizeWhitespace(transcriptText));
+  const cues: StructuralAnalysisCue[] = [];
+  const seen = new Set<string>();
+
+  for (let index = 0; index < units.length; index += 1) {
+    const currentUnit = normalizeWhitespace(units[index] || '');
+    if (!currentUnit) continue;
+    if (!TASK_GAP_REPAIR_STRUCTURAL_RECOVERY_RE.test(currentUnit)) continue;
+
+    const objectPhrase = normalizeStructuralObjectPhrase(
+      currentUnit.match(
+        /(?:покаж(?:и|ем|ете?)|разобрат(?:ь|ка)?|разбер(?:ем|емся)?)\s+(?:мне\s+|нам\s+)?([A-Za-zА-Яа-яЁё0-9-]+(?:\s+[A-Za-zА-Яа-яЁё0-9-]+){0,2})/iu
+      )?.[1] ||
+        currentUnit.match(
+          /(?:ты\s+)?(?:мне\s+|нам\s+)?([A-Za-zА-Яа-яЁё0-9-]+(?:\s+[A-Za-zА-Яа-яЁё0-9-]+){0,2})\s+показал/iu
+        )?.[1] ||
+        currentUnit.match(
+          /(?:ты\s+)?(?:мне\s+|нам\s+)?([A-Za-zА-Яа-яЁё0-9-]+(?:\s+[A-Za-zА-Яа-яЁё0-9-]+){0,2})\s+показать/iu
+        )?.[1] ||
+        ''
+    );
+    if (!objectPhrase) continue;
+
+    const excerpt = normalizeWhitespace(units.slice(index, index + 5).join(' '));
+    if (!excerpt) continue;
+    if (!TASK_GAP_REPAIR_CONFUSION_RE.test(excerpt)) continue;
+    if (!TASK_GAP_REPAIR_STRUCTURAL_OBJECT_RE.test(excerpt)) continue;
+
+    const taskName = `Разобрать навигацию ${objectPhrase}`;
+    const key = normalizeTaskNameKey(taskName);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    cues.push({
+      taskName,
+      dialogueReference: excerpt,
+    });
+  }
+
+  return cues;
+};
+
+const buildDeterministicStructuralAnalysisTasks = ({
+  cues,
+  existingTasks,
+  defaultProjectId,
+}: {
+  cues: StructuralAnalysisCue[];
+  existingTasks: Array<Record<string, unknown>>;
+  defaultProjectId: string;
+}): Array<Record<string, unknown>> => {
+  const built: Array<Record<string, unknown>> = [];
+
+  for (const cue of cues) {
+    if (
+      existingTasks.some((task) => hasCueCoverageInTask(cue.taskName, task)) ||
+      built.some((task) => hasCueCoverageInTask(cue.taskName, task))
+    ) {
+      continue;
+    }
+
+    const normalized = normalizeTaskShape(
+      {
+        name: clipText(cue.taskName, 120),
+        description: cue.taskName,
+        dialogue_reference: cue.dialogueReference,
+        priority: 'P3',
+        project_id: defaultProjectId,
+      },
+      existingTasks.length + built.length,
+      defaultProjectId
+    );
+    if (!normalized) continue;
+    built.push(normalized);
+  }
+
+  return built;
 };
 
 const normalizeDraftDescription = (name: string, description: string): string => {
@@ -2066,68 +2147,49 @@ export const runCreateTasksCompositeAgent = async ({
       return deterministicComposite;
     };
 
+    const maybeRecoverDeterministicStructuralTasks = (
+      currentComposite: CreateTasksCompositeResult
+    ): CreateTasksCompositeResult => {
+      const deterministicStructuralTasks = buildDeterministicStructuralAnalysisTasks({
+        cues: extractStructuralAnalysisCues(transcriptText),
+        existingTasks: currentComposite.task_draft,
+        defaultProjectId: normalizedProjectId,
+      });
+      if (deterministicStructuralTasks.length === 0) {
+        return currentComposite;
+      }
+
+      const deterministicComposite = mergeCompositeResults({
+        primary: currentComposite,
+        supplemental: {
+          ...toEmptyCompositeResult(normalizedProjectId),
+          task_draft: deterministicStructuralTasks,
+        },
+      });
+      logger.warn('[voicebot-worker] create_tasks structural deterministic fallback applied', {
+        profile_run_id: profileRunId,
+        session_id: sessionId,
+        fallback_task_count: deterministicStructuralTasks.length,
+        merged_tasks_count: deterministicComposite.task_draft.length,
+      });
+      return deterministicComposite;
+    };
+
     if (hasExplicitLiteralTaskCues) {
       const literalCompletedComposite = await maybeRecoverUncoveredLiteralCues(composite);
-      const uncoveredStructuralRecoveryCues = collectUncoveredStructuralRecoveryCues({
-        transcriptText,
-        tasks: literalCompletedComposite.task_draft,
-      });
-      if (uncoveredStructuralRecoveryCues.length === 0) {
-        logger.info('[voicebot-worker] create_tasks skipped generic task-gap repair because transcript already enumerates tasks', {
+      const structurallyCompletedComposite =
+        maybeRecoverDeterministicStructuralTasks(literalCompletedComposite);
+      logger.info(
+        '[voicebot-worker] create_tasks skipped generic task-gap repair because transcript already enumerates tasks',
+        {
           profile_run_id: profileRunId,
           session_id: sessionId,
           literal_cue_count: initialLiteralCoverage.literalCues.length,
           current_tasks_count: composite.task_draft.length,
-          final_tasks_count: literalCompletedComposite.task_draft.length,
-        });
-        return literalCompletedComposite;
-      }
-
-      const repairPayload = buildTaskGapRepairPayload({
-        transcriptText,
-        existingTasks: literalCompletedComposite.task_draft,
-        allowAtHigherTaskCount: true,
-      });
-      if (!repairPayload) {
-        return literalCompletedComposite;
-      }
-
-      logger.warn('[voicebot-worker] create_tasks task-gap repair started after explicit literal coverage', {
-        profile_run_id: profileRunId,
-        session_id: sessionId,
-        current_tasks_count: literalCompletedComposite.task_draft.length,
-        cue_excerpt_count: repairPayload.excerptCount,
-        cue_count: repairPayload.cueCount,
-        uncovered_structural_recovery_cue_count: uncoveredStructuralRecoveryCues.length,
-      });
-      try {
-        const recoveredComposite = await executeAgentCall(buildEnvelope(repairPayload.rawText));
-        const mergedComposite = mergeCompositeResults({
-          primary: literalCompletedComposite,
-          supplemental: recoveredComposite,
-        });
-        logger.info('[voicebot-worker] create_tasks task-gap repair completed after explicit literal coverage', {
-          profile_run_id: profileRunId,
-          session_id: sessionId,
-          primary_tasks_count: literalCompletedComposite.task_draft.length,
-          recovered_tasks_count: recoveredComposite.task_draft.length,
-          merged_tasks_count: mergedComposite.task_draft.length,
-          cue_excerpt_count: repairPayload.excerptCount,
-          cue_count: repairPayload.cueCount,
-          uncovered_structural_recovery_cue_count: uncoveredStructuralRecoveryCues.length,
-        });
-        return mergedComposite;
-      } catch (error) {
-        logger.warn('[voicebot-worker] create_tasks task-gap repair failed after explicit literal coverage', {
-          profile_run_id: profileRunId,
-          session_id: sessionId,
-          cue_excerpt_count: repairPayload.excerptCount,
-          cue_count: repairPayload.cueCount,
-          uncovered_structural_recovery_cue_count: uncoveredStructuralRecoveryCues.length,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return literalCompletedComposite;
-      }
+          final_tasks_count: structurallyCompletedComposite.task_draft.length,
+        }
+      );
+      return structurallyCompletedComposite;
     }
 
     const repairPayload = buildTaskGapRepairPayload({

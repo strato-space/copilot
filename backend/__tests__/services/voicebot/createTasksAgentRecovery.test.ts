@@ -172,16 +172,84 @@ describe('runCreateTasksAgent quota fallback', () => {
       rawText: transcript,
     });
 
-    expect(callToolMock).toHaveBeenCalledTimes(2);
-    expect(closeSessionMock).toHaveBeenCalledTimes(2);
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(closeSessionMock).toHaveBeenCalledTimes(1);
     expect(tasks).toHaveLength(5);
     expect(tasks.map((task) => String(task.name))).toEqual(
       expect.arrayContaining([
         'Финализировать комментарии по главной странице Jabula',
+        'Разобрать навигацию трейдинг-платформы',
         'Собрать схему навигации Jabula mainpage',
         'Составить каталог UI-элементов по страницам',
-        'Сделать схему навигации трейдинг-платформы',
         'Свести клиентские комментарии в технические тезисы',
+      ])
+    );
+  });
+
+  it('materializes a structural analysis task when the object appears before `показал` in a numbered transcript', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'primary-structural-before-verb-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: 'Primary summary',
+              scholastic_review_md: 'Primary review',
+              task_draft: [
+                {
+                  id: 'TASK-NAV',
+                  row_id: 'TASK-NAV',
+                  name: 'Собрать схему навигации Jabula mainpage',
+                  description: 'Диаграмма переходов по mainpage.',
+                  priority: 'P2',
+                },
+                {
+                  id: 'TASK-UI-CATALOG',
+                  row_id: 'TASK-UI-CATALOG',
+                  name: 'Составить каталог UI-элементов по страницам',
+                  description: 'Каталог UI с маппингом на Ant Design.',
+                  priority: 'P3',
+                },
+                {
+                  id: 'TASK-YURA-THESES',
+                  row_id: 'TASK-YURA-THESES',
+                  name: 'Свести клиентские комментарии в технические тезисы',
+                  description: 'Пак тезисов для Юры: что можем и что не можем.',
+                  priority: 'P3',
+                },
+              ],
+              enrich_ready_task_comments: [],
+              session_name: 'Primary session',
+              project_id: 'proj-gap',
+            }),
+          },
+        ],
+      },
+    });
+
+    const transcript = [
+      'Первая задача — подфиналить комментарии по mainpage Jabula.',
+      'Нужно сделать две задачи. Описать навигационную структуру Jabula mainpage в виде диаграммы.',
+      'Вторая задача — по всем страницам выделить список UI элементов и соотнести их с Ant Design.',
+      'А можем мы после созвона остаться, чтобы ты мне трейдинг-платформу показал?',
+      'Потому что я вообще не понял, как там работает эта навигация.',
+      'Как там эти три уровня и точки входа.',
+      'Тебе нужно просто собрать пак комментариев в тезисы для Юры: что можем, а что не можем.',
+    ].join('\n\n');
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-structural-before-verb',
+      projectId: 'proj-gap',
+      rawText: transcript,
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks.map((task) => String(task.name))).toEqual(
+      expect.arrayContaining([
+        'Разобрать навигацию трейдинг-платформы',
       ])
     );
   });
