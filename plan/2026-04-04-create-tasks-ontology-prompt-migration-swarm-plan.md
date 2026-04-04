@@ -173,36 +173,36 @@ T1 ──┬── T2 ──┬── T7a ─┐
 - **location**: runtime session ops + backend logs
 - **description**: Perform clean-slate replay on `69cf65712a7446295ac67771` (soft-delete active Draft rows), rerun create_tasks, compare with incremental rerun stability.
 - **validation**: No material divergence between clean and incremental task surfaces; evidence captured.
-- **status**: Not Completed
-- **log**:
-- **files edited/created**:
+- **status**: Completed
+- **log**: Replayed session `69cf65712a7446295ac67771` (post-crash) with clean+incremental sequence and captured deterministic equality: initial active Draft `0`, clean `generated=0/active=0`, incremental `generated=0/active=0`, diff `equal=true` with empty key deltas. Runtime still shows bounded transition rejection/discard markers (`task_draft_class_missing`, unresolved missing-class discard) without hard-fail. Evidence posted in `bd` (`copilot-2bd3` comment `580`, `copilot-j7dp` comment `579`).
+- **files edited/created**: `plan/2026-04-04-create-tasks-ontology-prompt-migration-swarm-plan.md`
 
 ### T12: Replay Gate non-RU
 - **depends_on**: [T10b]
 - **location**: runtime session ops + backend logs
 - **description**: Run at least one non-Russian replay session to verify portability after lexical ownership migration.
 - **validation**: No regression in task materialization semantics for non-Russian input.
-- **status**: Not Completed
-- **log**:
-- **files edited/created**:
+- **status**: Completed
+- **log**: Non-RU portability replay executed on session `69a0602939db445661944552`; non-RU evidence from transcript text (`Streamlining local graph development with LocalStack & TypeDB`, Latin-only). Clean+incremental runs both produced `generated=0/active=0` with `equal=true` and no hard-fail. Evidence posted in `bd` (`copilot-j7dp` comment `579`).
+- **files edited/created**: `plan/2026-04-04-create-tasks-ontology-prompt-migration-swarm-plan.md`
 
 ### T13: Deploy And Smoke
 - **depends_on**: [T11, T12]
 - **location**: backend deploy target + `/api/health`
 - **description**: Deploy merged patchset and run smoke checks.
 - **validation**: `/api/health` green; create_tasks flow smoke verified.
-- **status**: Not Completed
-- **log**:
-- **files edited/created**:
+- **status**: Completed
+- **log**: Production deploy executed via `./scripts/pm2-backend.sh prod`. Mandatory smokes passed: `./scripts/pm2-runtime-readiness.sh prod` returned `ok=true` with all 5 required runtimes online; `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production` returned `ok=true` and `http_status=200`; `curl -fsS http://127.0.0.1:3002/api/health` returned backend `status=ok`.
+- **files edited/created**: `plan/2026-04-04-create-tasks-ontology-prompt-migration-swarm-plan.md`
 
 ### T14: BD Closure Evidence
 - **depends_on**: [T13]
 - **location**: `bd` issue `copilot-j7dp`
 - **description**: Post full evidence set (tests, replay, review, smoke), mark issue status accordingly.
 - **validation**: `bd show copilot-j7dp --json` reflects final state and closure rationale.
-- **status**: Not Completed
-- **log**:
-- **files edited/created**:
+- **status**: Completed
+- **log**: Posted closure evidence in `bd` for `copilot-j7dp` (comments `579`/`581`; `580` on `copilot-2bd3`) including replay outputs, test pack, and deploy smoke results; superseded malformed shell-escaped comments (`577`/`578`) explicitly. Closed `copilot-j7dp` with reason: migration delivered; residual quality tracked in `copilot-grzr` and `copilot-2bd3`.
+- **files edited/created**: `plan/2026-04-04-create-tasks-ontology-prompt-migration-swarm-plan.md`
 
 ## Parallel Execution Groups
 
