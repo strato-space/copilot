@@ -29,4 +29,17 @@ describe('create_tasks agent card language contract', () => {
     expect(source).toContain('`status_or_report`');
     expect(source).toContain('Только `deliverable_task` может попасть в `task_draft`');
   });
+
+  it('keeps distinct-deliverable rules generalized instead of transcript-specific', () => {
+    const cardPath = path.resolve(process.cwd(), '../agents/agent-cards/create_tasks.md');
+    const source = readFileSync(cardPath, 'utf8');
+
+    expect(source).toContain('Не схлопывай task про локальную surface-доработку и task про communication artifact');
+    expect(source).toContain('Не схлопывай structural mapping / walkthrough задачи по разным объектам работы');
+    expect(source).not.toContain('Jabula mainpage');
+    expect(source).not.toContain('трейдинг-платформы');
+    expect(source).not.toContain('для Юры');
+    expect(source).not.toContain('после созвона');
+    expect(source).not.toContain('подрассказать/пройтись');
+  });
 });

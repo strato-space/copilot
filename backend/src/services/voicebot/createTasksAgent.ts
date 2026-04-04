@@ -145,8 +145,11 @@ const TASK_GAP_REPAIR_ORDINAL_RE =
   /(перв(?:ая|ую|ой)|втор(?:ая|ую|ой)|треть(?:я|ю|ей)|четверт(?:ая|ую|ой)|пят(?:ая|ую|ой)|шест(?:ая|ую|ой)|седьм(?:ая|ую|ой)|восьм(?:ая|ую|ой)|девят(?:ая|ую|ой)|десят(?:ая|ую|ой))\s+задач/i;
 const TASK_GAP_REPAIR_CARDINAL_RE =
   /(одн(?:а|у)|две|три|четыре|пять)\s+задач/i;
-const TASK_GAP_REPAIR_NAVIGATION_RECOVERY_RE =
-  /(после\s+созвона|после\s+колла|показа(?:ть|л)|пройдемся|подрасскажу).*(навигац|три\s+уровн|точки\s+входа|куда\s+переход)|((не\s+понял|не\s+понимаю).*(навигац|три\s+уровн|точки\s+входа))/i;
+const TASK_GAP_REPAIR_STRUCTURAL_OBJECT_RE =
+  /навигац|уровн|точки\s+входа|куда\s+переход|структур|сценари|flow\b|флоу|walkthrough\b|путь\s+пользователя|user\s+journey|ветк|переход/u;
+const TASK_GAP_REPAIR_STRUCTURAL_RECOVERY_RE =
+  /после\s+созвона|после\s+колла|после\s+демо|после\s+встречи|показат(?:ь|ься|л)|пройдемся|подрасскажу|разберем|разобрать/iu;
+const TASK_GAP_REPAIR_CONFUSION_RE = /не\s+понял|не\s+понимаю|непонятно|не\s+ясно|запутал(?:ся|ись|о)|теряюсь/iu;
 const TASK_GAP_REPAIR_MAX_EXCERPTS = 6;
 const TASK_GAP_REPAIR_CONTEXT_WINDOW = 1;
 const TASK_GAP_REPAIR_MIN_EXCERPTS = 2;
@@ -346,7 +349,13 @@ const isTaskGapRepairCueUnit = (value: string): boolean => {
   if (TASK_GAP_REPAIR_CARDINAL_RE.test(normalized) && TASK_ONTOLOGY_DELIVERABLE_RE.test(normalized)) {
     return true;
   }
-  if (TASK_GAP_REPAIR_NAVIGATION_RECOVERY_RE.test(normalized)) return true;
+  if (
+    TASK_GAP_REPAIR_STRUCTURAL_OBJECT_RE.test(normalized) &&
+    TASK_GAP_REPAIR_STRUCTURAL_RECOVERY_RE.test(normalized) &&
+    TASK_GAP_REPAIR_CONFUSION_RE.test(normalized)
+  ) {
+    return true;
+  }
   return TASK_GAP_REPAIR_INTRO_RE.test(normalized) && TASK_ONTOLOGY_DELIVERABLE_RE.test(normalized);
 };
 

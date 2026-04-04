@@ -228,6 +228,139 @@ describe('runCreateTasksAgent quota fallback', () => {
     expect(String(repairEnvelope.raw_text || '')).toContain('Уже извлечённые deliverable-задачи');
   });
 
+  it('runs task-gap repair for generic structural coordination cues outside the Jabula wording', async () => {
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'primary-structural-session' })
+      .mockResolvedValueOnce({ sessionId: 'repair-structural-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: 'Primary summary',
+                scholastic_review_md: 'Primary review',
+                task_draft: [
+                  {
+                    id: 'TASK-CHECKLIST',
+                    row_id: 'TASK-CHECKLIST',
+                    name: 'Собрать чеклист требований',
+                    description: 'Собрать список требований по релизу.',
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: 'Структурный разбор продукта',
+                project_id: 'proj-structural',
+              }),
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [
+                  {
+                    id: 'TASK-FLOW-WALKTHROUGH',
+                    row_id: 'TASK-FLOW-WALKTHROUGH',
+                    name: 'Описать пользовательский путь оплаты',
+                    description: 'Собрать walkthrough с точками входа и ветвлениями.',
+                    priority: 'P2',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-structural',
+              }),
+            },
+          ],
+        },
+      });
+
+    const transcript = [
+      'Первая задача — собрать чеклист требований по релизу.',
+      'После демо покажи платежный сценарий, потому что я не понимаю, где вход пользователя, какие ветки и как он проходит путь до оплаты.',
+      'Нужно это разложить в понятный walkthrough, чтобы потом отдать команде.',
+    ].join('\n\n');
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-structural-repair',
+      projectId: 'proj-structural',
+      rawText: transcript,
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(2);
+    expect(tasks).toHaveLength(2);
+    expect(tasks.map((task) => String(task.name))).toEqual(
+      expect.arrayContaining(['Собрать чеклист требований', 'Описать пользовательский путь оплаты'])
+    );
+
+    const repairEnvelopeRaw = callToolMock.mock.calls[1]?.[1]?.message as string;
+    const repairEnvelope = JSON.parse(repairEnvelopeRaw) as Record<string, unknown>;
+    expect(String(repairEnvelope.raw_text || '')).toContain('Task-gap repair mode');
+    expect(String(repairEnvelope.raw_text || '')).toContain('walkthrough');
+  });
+
+  it('does not trigger task-gap repair for generic after-demo remarks without structural confusion', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'primary-nonrepair-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: 'Primary summary',
+              scholastic_review_md: 'Primary review',
+                task_draft: [
+                  {
+                    id: 'TASK-LOGIN-CHECK',
+                    row_id: 'TASK-LOGIN-CHECK',
+                    name: 'Собрать список шагов воспроизведения для ошибки логина',
+                    description: 'Собрать список воспроизводимых шагов и наблюдений по ошибке логина после демо.',
+                    priority: 'P3',
+                  },
+                ],
+              enrich_ready_task_comments: [],
+              session_name: 'Тест без structural repair',
+              project_id: 'proj-nonrepair',
+            }),
+          },
+        ],
+      },
+    });
+
+    const transcript = [
+      'После демо на экране была ошибка с логином.',
+      'Нужно проверить форму логина и собрать список воспроизводимых шагов.',
+    ].join('\n\n');
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-nonrepair',
+      projectId: 'proj-nonrepair',
+      rawText: transcript,
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toEqual(
+      expect.objectContaining({
+        name: 'Собрать список шагов воспроизведения для ошибки логина',
+      })
+    );
+  });
+
   it('extracts composite create_tasks payload and attaches non-enumerable metadata to draft rows', async () => {
     initializeSessionMock.mockResolvedValue({ sessionId: 'meta-session' });
     closeSessionMock.mockResolvedValue(undefined);
