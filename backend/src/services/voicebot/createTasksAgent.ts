@@ -353,8 +353,8 @@ const isTaskGapRepairCueUnit = (value: string): boolean => {
 const collectTaskGapRepairCueIndexes = (units: string[]): number[] => {
   const indexes: number[] = [];
   for (let index = 0; index < units.length; index += 1) {
-    const current = normalizeWhitespace(units[index]);
-    const previous = index > 0 ? normalizeWhitespace(units[index - 1]) : '';
+    const current = normalizeWhitespace(units[index] || '');
+    const previous = index > 0 ? normalizeWhitespace(units[index - 1] || '') : '';
     const currentIsDirectCue = isTaskGapRepairCueUnit(current);
     const followsIntroCue =
       Boolean(previous) &&
