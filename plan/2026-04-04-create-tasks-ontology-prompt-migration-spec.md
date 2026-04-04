@@ -1,8 +1,10 @@
 # 2026-04-04 Create Tasks Ontology/Morphology Prompt Migration Spec
 
 ## Status
-- Spec status: `Draft`
-- BD issue: `copilot-j7dp`
+- Spec status: `Implemented` (primary scope delivered)
+- Primary BD issue: `copilot-j7dp` (`closed`, 2026-04-04)
+- Residual quality issue: `copilot-2bd3` (`in_progress`)
+- Closed residual blocker: `copilot-grzr` (`closed`, 2026-04-04)
 - Related issue: `copilot-52pj` (runtime transition exceptions for LLM reformulation)
 - Scope:
   - [createTasksAgent.ts](/home/strato-space/copilot/backend/src/services/voicebot/createTasksAgent.ts)
