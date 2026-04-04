@@ -113,6 +113,121 @@ describe('runCreateTasksAgent quota fallback', () => {
     ]);
   });
 
+  it('runs a focused task-gap repair pass when transcript cues show more deliverables than the primary result', async () => {
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'primary-gap-session' })
+      .mockResolvedValueOnce({ sessionId: 'repair-gap-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: 'Primary summary',
+                scholastic_review_md: 'Primary review',
+                task_draft: [
+                  {
+                    id: 'TASK-JABULA-NAV',
+                    row_id: 'TASK-JABULA-NAV',
+                    name: 'Собрать схему навигации Jabula mainpage',
+                    description: 'Диаграмма переходов по mainpage.',
+                    priority: 'P2',
+                  },
+                  {
+                    id: 'TASK-UI-CATALOG',
+                    row_id: 'TASK-UI-CATALOG',
+                    name: 'Составить каталог UI-элементов по страницам',
+                    description: 'Каталог UI с маппингом на Ant Design.',
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: 'Навигация Джабулы и каталог элементов интерфейса',
+                project_id: 'proj-gap',
+              }),
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [
+                  {
+                    id: 'TASK-COMMENTS',
+                    row_id: 'TASK-COMMENTS',
+                    name: 'Финализировать комментарии по главной странице Jabula',
+                    description: 'Подфиналить комментарии по mainpage.',
+                    priority: 'P2',
+                  },
+                  {
+                    id: 'TASK-TRADING-NAV',
+                    row_id: 'TASK-TRADING-NAV',
+                    name: 'Сделать схему навигации трейдинг-платформы',
+                    description: 'Разобрать три уровня и точки входа.',
+                    priority: 'P2',
+                  },
+                  {
+                    id: 'TASK-YURA-THESES',
+                    row_id: 'TASK-YURA-THESES',
+                    name: 'Свести клиентские комментарии в технические тезисы',
+                    description: 'Пак тезисов для Юры: что можем и что не можем.',
+                    priority: 'P3',
+                  },
+                ],
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-gap',
+              }),
+            },
+          ],
+        },
+      });
+
+    const transcript = [
+      'Первая задача — подфиналить комментарии по mainpage Jabula.',
+      'Нужно сделать две задачи. Описать навигационную структуру Jabula mainpage в виде диаграммы.',
+      'Вторая задача — по всем страницам выделить список UI элементов и соотнести их с Ant Design.',
+      'После созвона покажи трейдинг-платформу, потому что я не понимаю, как там работает навигация, какие три уровня и точки входа.',
+      'Тебе нужно просто собрать пак комментариев в тезисы для Юры: что можем, а что не можем.',
+    ].join('\n\n');
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-gap-repair',
+      projectId: 'proj-gap',
+      rawText: transcript,
+    });
+
+    expect(callToolMock).toHaveBeenCalledTimes(2);
+    expect(closeSessionMock).toHaveBeenCalledTimes(2);
+    expect(tasks).toHaveLength(5);
+    expect(tasks.map((task) => String(task.name))).toEqual(
+      expect.arrayContaining([
+        'Финализировать комментарии по главной странице Jabula',
+        'Собрать схему навигации Jabula mainpage',
+        'Составить каталог UI-элементов по страницам',
+        'Сделать схему навигации трейдинг-платформы',
+        'Свести клиентские комментарии в технические тезисы',
+      ])
+    );
+
+    const repairEnvelopeRaw = callToolMock.mock.calls[1]?.[1]?.message as string;
+    const repairEnvelope = JSON.parse(repairEnvelopeRaw) as Record<string, unknown>;
+    expect(repairEnvelope.mode).toBe('raw_text');
+    expect(repairEnvelope.session_id).toBe('session-gap-repair');
+    expect(String(repairEnvelope.raw_text || '')).toContain('Task-gap repair mode');
+    expect(String(repairEnvelope.raw_text || '')).toContain('Уже извлечённые deliverable-задачи');
+  });
+
   it('extracts composite create_tasks payload and attaches non-enumerable metadata to draft rows', async () => {
     initializeSessionMock.mockResolvedValue({ sessionId: 'meta-session' });
     closeSessionMock.mockResolvedValue(undefined);
@@ -877,7 +992,7 @@ describe('runCreateTasksAgent quota fallback', () => {
     expect(String(secondEnvelope.raw_text || '')).toContain('Reduced create_tasks context for session');
     const secondSerializedMessage = String(callToolMock.mock.calls[1]?.[1]?.message || '');
     expect(secondSerializedMessage).not.toContain('"mode":"session_id"');
-    expect(secondSerializedMessage).not.toMatch(/"session_id"\s*:/);
+    expect(secondSerializedMessage).toMatch(/"session_id"\s*:/);
     expect(String(secondEnvelope.raw_text || '').length).toBeLessThanOrEqual(12000);
     expect(Buffer.byteLength(secondSerializedMessage, 'utf8')).toBeLessThanOrEqual(14000);
     expect(tasks).toEqual([
@@ -978,7 +1093,7 @@ describe('runCreateTasksAgent quota fallback', () => {
     const reducedText = String(secondEnvelope.raw_text || '');
 
     expect(secondEnvelope.mode).toBe('raw_text');
-    expect(secondSerializedMessage).not.toMatch(/"session_id"\s*:/);
+    expect(secondSerializedMessage).toMatch(/"session_id"\s*:/);
     expect(reducedText.length).toBeLessThanOrEqual(12000);
     expect(Buffer.byteLength(secondSerializedMessage, 'utf8')).toBeLessThanOrEqual(14000);
     expect(reducedText).toContain('START_MARKER');

@@ -139,6 +139,46 @@ const TASK_ONTOLOGY_REFERENCE_RE =
   /референс|reference\b|пример|образец|идея|inspiration\b|для вдохновения|можно бы|было бы неплохо|нравится как пример/i;
 const TASK_ONTOLOGY_DELIVERABLE_RE =
   /подготов(?:ить|ка)|описат(?:ь|ие)|собрат(?:ь|ь)|состав(?:ить|ление)|сделат(?:ь|ь)|доработ(?:ать|ка)|подфинал(?:ить|ка)|оформ(?:ить|ление)|разобрат(?:ь|ка)|проработ(?:ать|ка)|нарис(?:овать|овка)|зафиксир(?:овать|овка)|постро(?:ить|ение)|схем[ауые]?|каталог|тезис(?:ы)?|список|документ|таблиц(?:а|ы)|карт[ауые]?|структур[ауые]?|навигац(?:ию|ия|ионн)|инвентаризац(?:ию|ия)|маппинг|mapping\b|комментари|walkthrough\b|гайд|brief\b|отчет|прототип|prototype\b|диаграмм[ауые]?|канвас/i;
+const TASK_GAP_REPAIR_INTRO_RE =
+  /(задач[аеиуы]|нужно|надо|нам бы|тебе нужно|отдельная задача|еще одна задача)/i;
+const TASK_GAP_REPAIR_ORDINAL_RE =
+  /(перв(?:ая|ую|ой)|втор(?:ая|ую|ой)|треть(?:я|ю|ей)|четверт(?:ая|ую|ой)|пят(?:ая|ую|ой)|шест(?:ая|ую|ой)|седьм(?:ая|ую|ой)|восьм(?:ая|ую|ой)|девят(?:ая|ую|ой)|десят(?:ая|ую|ой))\s+задач/i;
+const TASK_GAP_REPAIR_CARDINAL_RE =
+  /(одн(?:а|у)|две|три|четыре|пять)\s+задач/i;
+const TASK_GAP_REPAIR_NAVIGATION_RECOVERY_RE =
+  /(после\s+созвона|после\s+колла|показа(?:ть|л)|пройдемся|подрасскажу).*(навигац|три\s+уровн|точки\s+входа|куда\s+переход)|((не\s+понял|не\s+понимаю).*(навигац|три\s+уровн|точки\s+входа))/i;
+const TASK_GAP_REPAIR_MAX_EXCERPTS = 6;
+const TASK_GAP_REPAIR_CONTEXT_WINDOW = 1;
+const TASK_GAP_REPAIR_MIN_EXCERPTS = 2;
+const TASK_GAP_REPAIR_MAX_CHARS = 12000;
+const TASK_NAME_STOPWORDS = new Set([
+  'сделать',
+  'собрать',
+  'подготовить',
+  'описать',
+  'разобрать',
+  'составить',
+  'подфиналить',
+  'задача',
+  'задачи',
+  'нужно',
+  'надо',
+  'нам',
+  'тебе',
+  'для',
+  'по',
+  'и',
+  'в',
+  'на',
+  'с',
+  'из',
+  'или',
+  'это',
+  'тот',
+  'эта',
+  'этот',
+  'пак',
+]);
 
 type TaskOntologyBucket =
   | 'deliverable_task'
@@ -154,6 +194,12 @@ type ProjectCrmWindow = {
   anchor_from: string;
   anchor_to: string;
   source: 'message_bounds' | 'session_bounds';
+};
+
+type TaskGapRepairPayload = {
+  rawText: string;
+  excerptCount: number;
+  cueCount: number;
 };
 
 const measureTextPayload = (value: string): { chars: number; bytes: number } => ({
@@ -174,6 +220,9 @@ const toText = (value: unknown): string => {
 
 const normalizeWhitespace = (value: string): string =>
   value.replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
+const truncateStructuredText = (value: string, limit: number): string =>
+  value.length <= limit ? value : `${value.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
 
 const normalizeSummaryMarkdown = (value: unknown): string =>
   normalizeWhitespace(toText(value));
@@ -282,6 +331,81 @@ const stripTaskMarkdownScaffold = (value: string): string =>
     })
     .join('\n')
     .trim();
+
+const splitTranscriptIntoUnits = (value: string): string[] =>
+  value
+    .replace(/\r\n/g, '\n')
+    .split(/\n{2,}|(?<=[.!?])\s+(?=[A-ZА-ЯЁ])/u)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+const isTaskGapRepairCueUnit = (value: string): boolean => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) return false;
+  if (TASK_GAP_REPAIR_ORDINAL_RE.test(normalized)) return true;
+  if (TASK_GAP_REPAIR_CARDINAL_RE.test(normalized) && TASK_ONTOLOGY_DELIVERABLE_RE.test(normalized)) {
+    return true;
+  }
+  if (TASK_GAP_REPAIR_NAVIGATION_RECOVERY_RE.test(normalized)) return true;
+  return TASK_GAP_REPAIR_INTRO_RE.test(normalized) && TASK_ONTOLOGY_DELIVERABLE_RE.test(normalized);
+};
+
+const collectTaskGapRepairCueIndexes = (units: string[]): number[] => {
+  const indexes: number[] = [];
+  for (let index = 0; index < units.length; index += 1) {
+    const current = normalizeWhitespace(units[index]);
+    const previous = index > 0 ? normalizeWhitespace(units[index - 1]) : '';
+    const currentIsDirectCue = isTaskGapRepairCueUnit(current);
+    const followsIntroCue =
+      Boolean(previous) &&
+      (TASK_GAP_REPAIR_ORDINAL_RE.test(previous) ||
+        TASK_GAP_REPAIR_CARDINAL_RE.test(previous) ||
+        TASK_GAP_REPAIR_INTRO_RE.test(previous)) &&
+      TASK_ONTOLOGY_DELIVERABLE_RE.test(current);
+    if (currentIsDirectCue || followsIntroCue) {
+      indexes.push(index);
+    }
+  }
+  return indexes;
+};
+
+const extractTaskGapRepairExcerpts = (value: string): string[] => {
+  const units = splitTranscriptIntoUnits(value);
+  if (units.length === 0) return [];
+
+  const excerpts: string[] = [];
+  const seen = new Set<string>();
+  for (const index of collectTaskGapRepairCueIndexes(units)) {
+    const start = Math.max(0, index - TASK_GAP_REPAIR_CONTEXT_WINDOW);
+    const end = Math.min(units.length - 1, index + TASK_GAP_REPAIR_CONTEXT_WINDOW);
+    const excerpt = normalizeWhitespace(units.slice(start, end + 1).join(' '));
+    if (!excerpt || seen.has(excerpt)) {
+      continue;
+    }
+    seen.add(excerpt);
+    excerpts.push(excerpt);
+    if (excerpts.length >= TASK_GAP_REPAIR_MAX_EXCERPTS) {
+      break;
+    }
+  }
+
+  return excerpts;
+};
+
+const normalizeTaskNameKey = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^a-zа-я0-9]+/giu, ' ')
+    .split(/\s+/)
+    .map((token) =>
+      token.replace(
+        /(иями|ями|ами|ого|его|ому|ему|иях|ях|ах|ов|ев|ий|ый|ой|ая|яя|ое|ее|ую|юю|ых|их|ам|ям|ом|ем|ах|ях|ы|и|а|я|у|ю|е|о)$/u,
+        ''
+      )
+    )
+    .filter((token) => token.length > 2 && !TASK_NAME_STOPWORDS.has(token))
+    .join(' ');
 
 const normalizeDraftDescription = (name: string, description: string): string => {
   const normalized = normalizeWhitespace(description);
@@ -740,6 +864,173 @@ const derivePreferredOutputLanguage = async ({
   }
 
   return inferPreferredOutputLanguageFromText(samples.join('\n'));
+};
+
+const loadSessionTranscriptText = async ({
+  db,
+  sessionId,
+}: {
+  db: Db;
+  sessionId: string;
+}): Promise<string> => {
+  if (!ObjectId.isValid(sessionId)) {
+    return '';
+  }
+
+  const sessionObjectId = new ObjectId(sessionId);
+  const messagesCollection = db.collection(VOICEBOT_COLLECTIONS.MESSAGES) as {
+    find?: (
+      query: Record<string, unknown>,
+      options: { projection: Record<string, number> }
+    ) => {
+      sort: (value: Record<string, number>) => {
+        toArray?: () => Promise<unknown[]>;
+      };
+    };
+  };
+  if (typeof messagesCollection.find !== 'function') {
+    return '';
+  }
+
+  const messageCursor = messagesCollection.find(
+    {
+      session_id: { $in: [sessionId, sessionObjectId] },
+      is_deleted: { $ne: true },
+    },
+    {
+      projection: {
+        _id: 1,
+        message_timestamp: 1,
+        transcription_text: 1,
+        text: 1,
+      },
+    }
+  );
+  const sortedCursor = messageCursor.sort({ message_timestamp: 1, _id: 1 });
+  if (typeof sortedCursor.toArray !== 'function') {
+    return '';
+  }
+  const messageDocs = await sortedCursor.toArray();
+
+  return messageDocs
+    .map((doc) => {
+      const record = asRecord(doc);
+      if (!record) return '';
+      return toText(record.transcription_text) || toText(record.text);
+    })
+    .filter(Boolean)
+    .join('\n\n')
+    .trim();
+};
+
+const buildTaskGapRepairPayload = ({
+  transcriptText,
+  existingTasks,
+}: {
+  transcriptText: string;
+  existingTasks: Array<Record<string, unknown>>;
+}): TaskGapRepairPayload | null => {
+  const normalizedTranscript = normalizeWhitespace(transcriptText);
+  if (!normalizedTranscript) return null;
+
+  const cueCount = collectTaskGapRepairCueIndexes(splitTranscriptIntoUnits(normalizedTranscript)).length;
+  const excerpts = extractTaskGapRepairExcerpts(normalizedTranscript);
+  if (excerpts.length < TASK_GAP_REPAIR_MIN_EXCERPTS || existingTasks.length >= 4) {
+    return null;
+  }
+
+  const existingTaskNames = existingTasks
+    .map((task) => toText(task.name))
+    .filter(Boolean)
+    .slice(0, 12);
+
+  const parts = [
+    'Task-gap repair mode.',
+    'Ниже только transcript-фрагменты, где явно формулируются deliverable-задачи или coordination должна быть преобразована в deliverable с проверяемым артефактом.',
+    'Не объединяй разные deliverable между собой только потому, что они относятся к одному проекту или одному тематическому кластеру.',
+    existingTaskNames.length > 0
+      ? `Уже извлечённые deliverable-задачи (не повторяй их, используй только для duplicate suppression):\n${existingTaskNames
+          .map((name) => `- ${name}`)
+          .join('\n')}`
+      : '',
+    `Фрагменты transcript:\n${excerpts.map((excerpt, index) => `${index + 1}. ${excerpt}`).join('\n\n')}`,
+  ].filter(Boolean);
+
+  return {
+    rawText: truncateStructuredText(parts.join('\n\n'), TASK_GAP_REPAIR_MAX_CHARS),
+    excerptCount: excerpts.length,
+    cueCount,
+  };
+};
+
+const mergeCompositeTaskDrafts = (
+  primary: Array<Record<string, unknown>>,
+  supplemental: Array<Record<string, unknown>>
+): Array<Record<string, unknown>> => {
+  const merged = [...primary];
+  const seenKeys = new Set(
+    primary
+      .flatMap((task) => [toText(task.row_id), toText(task.id), normalizeTaskNameKey(toText(task.name))])
+      .filter(Boolean)
+  );
+
+  for (const candidate of supplemental) {
+    const keys = [toText(candidate.row_id), toText(candidate.id), normalizeTaskNameKey(toText(candidate.name))].filter(
+      Boolean
+    );
+    if (keys.some((key) => seenKeys.has(key))) {
+      continue;
+    }
+    merged.push(candidate);
+    for (const key of keys) {
+      seenKeys.add(key);
+    }
+  }
+
+  return merged;
+};
+
+const mergeCommentDrafts = (
+  primary: CreateTasksCompositeEnrichmentDraft[],
+  supplemental: CreateTasksCompositeEnrichmentDraft[]
+): CreateTasksCompositeEnrichmentDraft[] => {
+  const merged = [...primary];
+  const seen = new Set(primary.map((entry) => `${entry.lookup_id}::${entry.comment}`));
+  for (const candidate of supplemental) {
+    const key = `${candidate.lookup_id}::${candidate.comment}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(candidate);
+  }
+  return merged;
+};
+
+const mergeCompositeResults = ({
+  primary,
+  supplemental,
+}: {
+  primary: CreateTasksCompositeResult;
+  supplemental: CreateTasksCompositeResult;
+}): CreateTasksCompositeResult => {
+  const taskDraft = mergeCompositeTaskDrafts(primary.task_draft, supplemental.task_draft);
+  const enrichReadyTaskComments = mergeCommentDrafts(
+    primary.enrich_ready_task_comments,
+    supplemental.enrich_ready_task_comments
+  );
+  const noTaskDecision =
+    taskDraft.length > 0
+      ? null
+      : primary.no_task_decision || supplemental.no_task_decision;
+
+  return {
+    summary_md_text: primary.summary_md_text || supplemental.summary_md_text,
+    scholastic_review_md: primary.scholastic_review_md || supplemental.scholastic_review_md,
+    task_draft: taskDraft,
+    enrich_ready_task_comments: enrichReadyTaskComments,
+    no_task_decision: noTaskDecision,
+    session_name: primary.session_name || supplemental.session_name,
+    project_id: primary.project_id || supplemental.project_id,
+  };
 };
 
 const scrubLanguageCheckText = (value: string): string =>
@@ -1219,6 +1510,7 @@ export const runCreateTasksCompositeAgent = async ({
       ? {
           mode: 'raw_text',
           raw_text: text.trim(),
+          session_id: sessionId,
           session_url: canonicalSessionUrl,
           project_id: normalizedProjectId,
           preferred_output_language: preferredOutputLanguage,
@@ -1283,12 +1575,73 @@ export const runCreateTasksCompositeAgent = async ({
           error: error instanceof Error ? error.message : String(error),
         });
       });
+      }
+  };
+
+  const maybeRecoverMissingDeliverables = async (
+    composite: CreateTasksCompositeResult
+  ): Promise<CreateTasksCompositeResult> => {
+    const transcriptText =
+      toText(rawText) ||
+      (contextDb
+        ? await loadSessionTranscriptText({
+            db: contextDb,
+            sessionId,
+          })
+        : '');
+    if (!transcriptText) {
+      return composite;
+    }
+
+    const repairPayload = buildTaskGapRepairPayload({
+      transcriptText,
+      existingTasks: composite.task_draft,
+    });
+    if (!repairPayload) {
+      return composite;
+    }
+
+    logger.warn('[voicebot-worker] create_tasks task-gap repair started', {
+      profile_run_id: profileRunId,
+      session_id: sessionId,
+      current_tasks_count: composite.task_draft.length,
+      cue_excerpt_count: repairPayload.excerptCount,
+      cue_count: repairPayload.cueCount,
+    });
+    try {
+      const recoveredComposite = await executeAgentCall(buildEnvelope(repairPayload.rawText));
+      const mergedComposite = mergeCompositeResults({
+        primary: composite,
+        supplemental: recoveredComposite,
+      });
+
+      logger.info('[voicebot-worker] create_tasks task-gap repair completed', {
+        profile_run_id: profileRunId,
+        session_id: sessionId,
+        primary_tasks_count: composite.task_draft.length,
+        recovered_tasks_count: recoveredComposite.task_draft.length,
+        merged_tasks_count: mergedComposite.task_draft.length,
+        cue_excerpt_count: repairPayload.excerptCount,
+        cue_count: repairPayload.cueCount,
+      });
+
+      return mergedComposite;
+    } catch (error) {
+      logger.warn('[voicebot-worker] create_tasks task-gap repair failed', {
+        profile_run_id: profileRunId,
+        session_id: sessionId,
+        cue_excerpt_count: repairPayload.excerptCount,
+        cue_count: repairPayload.cueCount,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return composite;
     }
   };
 
   try {
-    const composite = await executeAgentCall(buildEnvelope(rawText));
-      logger.info('[voicebot-worker] create_tasks agent completed', {
+    const primaryComposite = await executeAgentCall(buildEnvelope(rawText));
+    const composite = await maybeRecoverMissingDeliverables(primaryComposite);
+    logger.info('[voicebot-worker] create_tasks agent completed', {
         profile_run_id: profileRunId,
         session_id: sessionId,
         tasks_count: composite.task_draft.length,
@@ -1323,7 +1676,8 @@ export const runCreateTasksCompositeAgent = async ({
           reduced_chars: reducedRawText.length,
           reduced_bytes: Buffer.byteLength(reducedRawText, 'utf8'),
         });
-        const composite = await executeAgentCall(buildEnvelope(reducedRawText));
+        const reducedComposite = await executeAgentCall(buildEnvelope(reducedRawText));
+        const composite = await maybeRecoverMissingDeliverables(reducedComposite);
         logger.info('[voicebot-worker] create_tasks agent completed with reduced context', {
           profile_run_id: profileRunId,
           session_id: sessionId,
@@ -1352,7 +1706,8 @@ export const runCreateTasksCompositeAgent = async ({
       mcp_server: mcpServerUrl,
     });
 
-    const composite = await executeAgentCall(buildEnvelope(rawText));
+    const primaryComposite = await executeAgentCall(buildEnvelope(rawText));
+    const composite = await maybeRecoverMissingDeliverables(primaryComposite);
     logger.info('[voicebot-worker] create_tasks agent completed after quota recovery', {
       profile_run_id: profileRunId,
       session_id: sessionId,
