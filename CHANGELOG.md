@@ -20,6 +20,12 @@
 - **07:23** Verification:
   - `cd backend && npm run test:parallel-safe -- --runTestsByPath __tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts __tests__/services/voicebot/createTasksAgentRecovery.test.ts __tests__/services/voicebot/createTasksAgentCardContract.test.ts __tests__/voicebot/runtime/generatePossibleTasksRoute.test.ts`
   - live replay check: `4x` consecutive `handleCreateTasksFromChunksJob({ session_id: '69cf65712a7446295ac67771', chunks_to_process: [] })` runs in `raw_text` mode, stable `tasks_count=6` and stable Draft `row_id` set.
+- **07:29** Production deploy/smoke:
+  - `./scripts/pm2-backend.sh prod`
+  - `./scripts/pm2-runtime-readiness.sh prod`
+  - `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production`
+  - `curl -fsS http://127.0.0.1:3002/api/health`
+  - `POST /api/voicebot/session_tasks` unauthenticated smoke returned expected `401 Unauthorized`.
 
 ## 2026-04-04
 ### PROBLEM SOLVED
