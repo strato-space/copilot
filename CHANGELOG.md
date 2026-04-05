@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-04-05
+### PROBLEM SOLVED
+- **07:23** `CREATE_TASKS` replay on the target session `69cf65712a7446295ac67771` still had unresolved closure criteria for `copilot-bzt6`: acceptance required not only `>=5` Draft tasks but also stable `row_id` identity across consecutive full recomputes.
+- **07:23** Transition handling for unknown/missing `candidate_class` was still relying on bounded reformulation paths in places where deterministic runtime normalization should apply immediately.
+
+### FEATURE IMPLEMENTED
+- **07:23** Closed `copilot-bzt6` after live determinism verification: `4x` consecutive `full_recompute` runs returned stable Draft identity with `tasks_count=6` and no key-set drift.
+- **07:23** Simplified `CREATE_TASKS` runtime behavior: full recompute with empty chunk input now uses compact session raw transcript context, merge dedupe uses canonical id keys (`row_id`/`id`/`task_id_from_ai`), and missing/unknown `candidate_class` paths normalize deterministically to deliverable class without extra retry inflation.
+- **07:23** Tightened prompt-card lower-bound materialization rules for explicit task enumerations while preserving anti-overfitting constraints (generalized rules, no transcript-specific literals).
+
+### CHANGES
+- **07:23** Updated runtime and prompt surfaces:
+  - `agents/agent-cards/create_tasks.md`
+  - `backend/src/services/voicebot/createTasksAgent.ts`
+  - `backend/src/workers/voicebot/handlers/createTasksFromChunks.ts`
+- **07:23** Updated regression coverage:
+  - `backend/__tests__/services/voicebot/createTasksAgentRecovery.test.ts`
+- **07:23** Verification:
+  - `cd backend && npm run test:parallel-safe -- --runTestsByPath __tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts __tests__/services/voicebot/createTasksAgentRecovery.test.ts __tests__/services/voicebot/createTasksAgentCardContract.test.ts __tests__/voicebot/runtime/generatePossibleTasksRoute.test.ts`
+  - live replay check: `4x` consecutive `handleCreateTasksFromChunksJob({ session_id: '69cf65712a7446295ac67771', chunks_to_process: [] })` runs in `raw_text` mode, stable `tasks_count=6` and stable Draft `row_id` set.
+
 ## 2026-04-04
 ### PROBLEM SOLVED
 - **22:49** `CREATE_TASKS` runtime still owned lexical/morphology semantics in TypeScript, so prompt/runtime responsibility boundaries drifted and replay behavior could vary by implementation detail instead of prompt contract.

@@ -414,6 +414,19 @@ const normalizeTaskShape = (
   const rowId = normalizeVoicePossibleTaskLocatorKey(record.row_id) || id;
   const name = toText(record.name) || `Задача ${index + 1}`;
   const description = normalizeDraftDescription(name, toText(record.description));
+  const explicitCandidateClass =
+    toText(record.candidate_class) ||
+    toText(record.task_class) ||
+    toText(record.ontology_class) ||
+    toText(record.class);
+  const normalizedCandidateClass = normalizeTaskOntologyClass(explicitCandidateClass);
+  const candidateClass =
+    normalizedCandidateClass === 'coordination_only' ||
+    normalizedCandidateClass === 'input_artifact' ||
+    normalizedCandidateClass === 'reference_or_idea' ||
+    normalizedCandidateClass === 'status_or_report'
+      ? normalizedCandidateClass
+      : 'deliverable_task';
 
   return {
     ...record,
@@ -430,6 +443,7 @@ const normalizeTaskShape = (
     task_id_from_ai: taskIdFromAi,
     dependencies_from_ai: normalizeDependencies(record.dependencies_from_ai),
     dialogue_reference: toText(record.dialogue_reference),
+    candidate_class: candidateClass,
   };
 };
 
@@ -487,14 +501,22 @@ const resolveTaskDraftCandidateClass = (
     toText(task.class);
   if (!explicitClass) {
     return {
-      explicitClass: '',
-      normalizedClass: 'unknown',
-      isMissingClass: true,
+      explicitClass: 'deliverable_task',
+      normalizedClass: 'deliverable_task',
+      isMissingClass: false,
+    };
+  }
+  const normalizedClass = normalizeTaskOntologyClass(explicitClass);
+  if (normalizedClass === 'unknown') {
+    return {
+      explicitClass: 'deliverable_task',
+      normalizedClass: 'deliverable_task',
+      isMissingClass: false,
     };
   }
   return {
     explicitClass,
-    normalizedClass: normalizeTaskOntologyClass(explicitClass),
+    normalizedClass,
     isMissingClass: false,
   };
 };
@@ -1051,16 +1073,6 @@ const derivePreferredOutputLanguage = async ({
   return inferPreferredOutputLanguageFromText(samples.join('\n'));
 };
 
-const taskDraftTextKey = (task: Record<string, unknown>): string =>
-  [
-    toText(task.name),
-    stripTaskMarkdownScaffold(toText(task.description)),
-    toText(task.dialogue_reference),
-  ]
-    .filter(Boolean)
-    .join('\n')
-    .trim();
-
 const mergeCompositeTaskDrafts = (
   primary: Array<Record<string, unknown>>,
   supplemental: Array<Record<string, unknown>>
@@ -1070,12 +1082,10 @@ const mergeCompositeTaskDrafts = (
 
   for (const rawCandidate of [...primary, ...supplemental]) {
     const candidate = rawCandidate;
-    const textKey = normalizeTaskNameKey(taskDraftTextKey(candidate));
     const keys = [
       toText(candidate.row_id),
       toText(candidate.id),
       toText(candidate.task_id_from_ai),
-      textKey,
     ].filter(Boolean);
     if (keys.some((key) => seenKeys.has(key))) {
       continue;

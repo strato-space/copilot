@@ -67,6 +67,7 @@ These decisions are part of the current platform contract and must be preserved 
 - Voice/OperOps integration remains canonical:
   - `CREATE_TASKS` payload shape is `id/name/description/priority/...`,
   - `CREATE_TASKS` extraction is ontology-first: only bounded deliverables may materialize into `task_draft`; coordination, inputs/accesses, references/ideas, and status/report statements must stay out of Draft materialization unless they are explicitly transformed into supporting context or comment enrichment,
+  - `CREATE_TASKS` full recompute with no explicit chunk payload must use compact session raw transcript context (not session-id-only under-context fallback), and replay acceptance requires stable Draft `row_id` identity across consecutive recompute runs for unchanged semantics,
   - `task_type_id` is optional in Possible Tasks UI,
   - possible tasks are master records in `automation_tasks` with `task_status=DRAFT_10`,
   - Draft task editing is autosave-first across both inline row edits and the right-hand detail card; the primary manual action is `Run`, not `Save`, and `Run` must not materialize a row to `READY_10` if autosave failed,

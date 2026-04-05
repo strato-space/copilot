@@ -2122,372 +2122,197 @@ describe('runCreateTasksAgent quota fallback', () => {
     );
   });
 
-  it('treats explicit unknown candidate_class as invalid transition and requests reclassification', async () => {
-    initializeSessionMock
-      .mockResolvedValueOnce({ sessionId: 'unknown-primary-session' })
-      .mockResolvedValueOnce({ sessionId: 'unknown-retry-session' });
+  it('normalizes explicit unknown candidate_class to deliverable without transition retry', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'unknown-primary-session' });
     closeSessionMock.mockResolvedValue(undefined);
-    callToolMock
-      .mockResolvedValueOnce({
-        success: true,
-        data: {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary_md_text: '',
-                scholastic_review_md: '',
-                task_draft: [
-                  {
-                    id: 'TASK-UNKNOWN',
-                    row_id: 'TASK-UNKNOWN',
-                    name: 'Непонятная сущность',
-                    description: 'Класс не определен.',
-                    candidate_class: 'unknown',
-                    priority: 'P3',
-                  },
-                ],
-                enrich_ready_task_comments: [],
-                session_name: '',
-                project_id: 'proj-unknown',
-              }),
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        data: {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary_md_text: '',
-                scholastic_review_md: '',
-                task_draft: [
-                  {
-                    id: 'TASK-DELIVERABLE',
-                    row_id: 'TASK-DELIVERABLE',
-                    name: 'Собрать итоговый документ',
-                    description: 'Подготовить итоговый документ.',
-                    candidate_class: 'deliverable_task',
-                    priority: 'P2',
-                  },
-                ],
-                enrich_ready_task_comments: [],
-                session_name: '',
-                project_id: 'proj-unknown',
-              }),
-            },
-          ],
-        },
-      });
+    callToolMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: '',
+              scholastic_review_md: '',
+              task_draft: [
+                {
+                  id: 'TASK-UNKNOWN',
+                  row_id: 'TASK-UNKNOWN',
+                  name: 'Непонятная сущность',
+                  description: 'Класс не определен.',
+                  candidate_class: 'unknown',
+                  priority: 'P3',
+                },
+              ],
+              enrich_ready_task_comments: [],
+              session_name: '',
+              project_id: 'proj-unknown',
+            }),
+          },
+        ],
+      },
+    });
 
     const tasks = await runCreateTasksAgent({
       sessionId: 'session-unknown-class',
       projectId: 'proj-unknown',
     });
 
-    expect(callToolMock).toHaveBeenCalledTimes(2);
-    const retryEnvelope = JSON.parse(String(callToolMock.mock.calls[1]?.[1]?.message || '{}')) as Record<
-      string,
-      unknown
-    >;
-    const runtimeRejections = Array.isArray(retryEnvelope.runtime_rejections)
-      ? (retryEnvelope.runtime_rejections as Array<Record<string, unknown>>)
-      : [];
-    expect(runtimeRejections[0]).toEqual(
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toEqual(
       expect.objectContaining({
-        candidate_id: 'TASK-UNKNOWN',
-        candidate_class: 'unknown',
-        violated_invariant_code: 'task_draft_class_unknown',
+        id: 'TASK-UNKNOWN',
+        candidate_class: 'deliverable_task',
       })
     );
-    expect(tasks).toHaveLength(1);
-    expect(tasks[0]).toEqual(expect.objectContaining({ id: 'TASK-DELIVERABLE' }));
   });
 
-  it('rejects missing candidate_class in task_draft and requests explicit reclassification', async () => {
-    initializeSessionMock
-      .mockResolvedValueOnce({ sessionId: 'missing-class-primary-session' })
-      .mockResolvedValueOnce({ sessionId: 'missing-class-retry-session' });
+  it('defaults missing candidate_class to deliverable without transition retry', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'missing-class-primary-session' });
     closeSessionMock.mockResolvedValue(undefined);
-    callToolMock
-      .mockResolvedValueOnce({
-        success: true,
-        data: {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary_md_text: '',
-                scholastic_review_md: '',
-                task_draft: [
-                  {
-                    id: 'TASK-MISSING-CLASS',
-                    row_id: 'TASK-MISSING-CLASS',
-                    name: 'Собрать документ решения',
-                    description: 'Класс кандидата в ответе отсутствует.',
-                    candidate_class: '',
-                    priority: 'P2',
-                  },
-                ],
-                enrich_ready_task_comments: [],
-                session_name: '',
-                project_id: 'proj-missing-class',
-              }),
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        data: {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary_md_text: '',
-                scholastic_review_md: '',
-                task_draft: [
-                  {
-                    id: 'TASK-DELIVERABLE-RETRY',
-                    row_id: 'TASK-DELIVERABLE-RETRY',
-                    name: 'Собрать документ решения',
-                    description: 'Класс явно указан после runtime_rejections.',
-                    candidate_class: 'deliverable_task',
-                    priority: 'P2',
-                  },
-                ],
-                enrich_ready_task_comments: [],
-                session_name: '',
-                project_id: 'proj-missing-class',
-              }),
-            },
-          ],
-        },
-      });
+    callToolMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: '',
+              scholastic_review_md: '',
+              task_draft: [
+                {
+                  id: 'TASK-MISSING-CLASS',
+                  row_id: 'TASK-MISSING-CLASS',
+                  name: 'Собрать документ решения',
+                  description: 'Класс кандидата в ответе отсутствует.',
+                  candidate_class: '',
+                  priority: 'P2',
+                },
+              ],
+              enrich_ready_task_comments: [],
+              session_name: '',
+              project_id: 'proj-missing-class',
+            }),
+          },
+        ],
+      },
+    });
 
     const tasks = await runCreateTasksAgent({
       sessionId: 'session-missing-class',
       projectId: 'proj-missing-class',
     });
 
-    expect(callToolMock).toHaveBeenCalledTimes(2);
-    const retryEnvelope = JSON.parse(String(callToolMock.mock.calls[1]?.[1]?.message || '{}')) as Record<
-      string,
-      unknown
-    >;
-    const runtimeRejections = Array.isArray(retryEnvelope.runtime_rejections)
-      ? (retryEnvelope.runtime_rejections as Array<Record<string, unknown>>)
-      : [];
-    expect(runtimeRejections).toHaveLength(1);
-    expect(runtimeRejections[0]).toEqual(
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toEqual(
       expect.objectContaining({
-        candidate_id: 'TASK-MISSING-CLASS',
-        candidate_class: 'missing',
-        violated_invariant_code: 'task_draft_class_missing',
-        recovery_action: 'reclassify',
+        id: 'TASK-MISSING-CLASS',
+        candidate_class: 'deliverable_task',
       })
     );
-    expect(tasks).toHaveLength(1);
-    expect(tasks[0]).toEqual(expect.objectContaining({ id: 'TASK-DELIVERABLE-RETRY' }));
   });
 
-  it('discards unresolved missing-class candidates after bounded retry while preserving deliverables', async () => {
-    initializeSessionMock
-      .mockResolvedValueOnce({ sessionId: 'missing-class-discard-primary-session' })
-      .mockResolvedValueOnce({ sessionId: 'missing-class-discard-retry-session' });
+  it('keeps mixed deliverable and missing-class candidates without discard retry', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'missing-class-discard-primary-session' });
     closeSessionMock.mockResolvedValue(undefined);
-    callToolMock
-      .mockResolvedValueOnce({
-        success: true,
-        data: {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary_md_text: 'Summary before discard',
-                scholastic_review_md: 'Review before discard',
-                task_draft: [
-                  {
-                    id: 'TASK-VALID-KEEP',
-                    row_id: 'TASK-VALID-KEEP',
-                    name: 'Собрать релизный артефакт',
-                    description: 'Deliverable with explicit class.',
-                    candidate_class: 'deliverable_task',
-                    priority: 'P2',
-                  },
-                  {
-                    id: 'TASK-MISSING-RETRY',
-                    row_id: 'TASK-MISSING-RETRY',
-                    name: 'Кандидат без класса',
-                    description: 'Класс не указан и не заполнен.',
-                    task_class: null,
-                    priority: 'P3',
-                  },
-                ],
-                enrich_ready_task_comments: [],
-                session_name: '',
-                project_id: 'proj-missing-discard',
-              }),
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        data: {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary_md_text: 'Summary after retry',
-                scholastic_review_md: 'Review after retry',
-                task_draft: [
-                  {
-                    id: 'TASK-VALID-KEEP',
-                    row_id: 'TASK-VALID-KEEP',
-                    name: 'Собрать релизный артефакт',
-                    description: 'Deliverable with explicit class.',
-                    candidate_class: 'deliverable_task',
-                    priority: 'P2',
-                  },
-                  {
-                    id: 'TASK-MISSING-RETRY',
-                    row_id: 'TASK-MISSING-RETRY',
-                    name: 'Кандидат без класса',
-                    description: 'Класс не указан повторно.',
-                    task_class: null,
-                    priority: 'P3',
-                  },
-                ],
-                enrich_ready_task_comments: [],
-                session_name: '',
-                project_id: 'proj-missing-discard',
-              }),
-            },
-          ],
-        },
-      });
+    callToolMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: 'Summary before discard',
+              scholastic_review_md: 'Review before discard',
+              task_draft: [
+                {
+                  id: 'TASK-VALID-KEEP',
+                  row_id: 'TASK-VALID-KEEP',
+                  name: 'Собрать релизный артефакт',
+                  description: 'Deliverable with explicit class.',
+                  candidate_class: 'deliverable_task',
+                  priority: 'P2',
+                },
+                {
+                  id: 'TASK-MISSING-RETRY',
+                  row_id: 'TASK-MISSING-RETRY',
+                  name: 'Кандидат без класса',
+                  description: 'Класс не указан и не заполнен.',
+                  task_class: null,
+                  priority: 'P3',
+                },
+              ],
+              enrich_ready_task_comments: [],
+              session_name: '',
+              project_id: 'proj-missing-discard',
+            }),
+          },
+        ],
+      },
+    });
 
     const tasks = await runCreateTasksAgent({
       sessionId: 'session-missing-class-discard',
       projectId: 'proj-missing-discard',
     });
 
-    expect(callToolMock).toHaveBeenCalledTimes(2);
-    const retryEnvelope = JSON.parse(String(callToolMock.mock.calls[1]?.[1]?.message || '{}')) as Record<
-      string,
-      unknown
-    >;
-    const runtimeRejections = Array.isArray(retryEnvelope.runtime_rejections)
-      ? (retryEnvelope.runtime_rejections as Array<Record<string, unknown>>)
-      : [];
-    expect(runtimeRejections).toHaveLength(1);
-    expect(runtimeRejections[0]).toEqual(
-      expect.objectContaining({
-        candidate_id: 'TASK-MISSING-RETRY',
-        candidate_class: 'missing',
-        violated_invariant_code: 'task_draft_class_missing',
-        recovery_action: 'reclassify',
-      })
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toHaveLength(2);
+    expect(tasks.map((task) => String(task.id))).toEqual(
+      expect.arrayContaining(['TASK-VALID-KEEP', 'TASK-MISSING-RETRY'])
     );
-
-    expect(tasks).toHaveLength(1);
-    expect(tasks[0]).toEqual(expect.objectContaining({ id: 'TASK-VALID-KEEP' }));
+    expect(tasks.find((task) => String(task.id) === 'TASK-MISSING-RETRY')).toEqual(
+      expect.objectContaining({ candidate_class: 'deliverable_task' })
+    );
     const compositeMeta = (tasks as unknown as Record<string, unknown>).__create_tasks_composite_meta as
       | Record<string, unknown>
       | undefined;
     const runtimeTransitionDiscards = Array.isArray(compositeMeta?.runtime_transition_discards)
       ? (compositeMeta?.runtime_transition_discards as Array<Record<string, unknown>>)
       : [];
-    expect(runtimeTransitionDiscards).toHaveLength(1);
-    expect(runtimeTransitionDiscards[0]).toEqual(
-      expect.objectContaining({
-        candidate_id: 'TASK-MISSING-RETRY',
-        violated_invariant_code: 'task_draft_class_missing',
-        recovery_action: 'discard',
-      })
-    );
+    expect(runtimeTransitionDiscards).toHaveLength(0);
   });
 
-  it('converges to persisted carry-over drafts when bounded retry ends with only missing-class discards', async () => {
-    initializeSessionMock
-      .mockResolvedValueOnce({ sessionId: 'missing-class-carry-over-primary-session' })
-      .mockResolvedValueOnce({ sessionId: 'missing-class-carry-over-retry-session' });
+  it('does not use persisted carry-over when missing classes are normalized to deliverable', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'missing-class-carry-over-primary-session' });
     closeSessionMock.mockResolvedValue(undefined);
-    callToolMock
-      .mockResolvedValueOnce({
-        success: true,
-        data: {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary_md_text: 'Summary before carry-over',
-                scholastic_review_md: 'Review before carry-over',
-                task_draft: [
-                  {
-                    id: 'TASK-MISSING-A',
-                    row_id: 'TASK-MISSING-A',
-                    name: 'Первый кандидат без класса',
-                    description: 'Класс отсутствует.',
-                    candidate_class: '',
-                    priority: 'P3',
-                  },
-                  {
-                    id: 'TASK-MISSING-B',
-                    row_id: 'TASK-MISSING-B',
-                    name: 'Второй кандидат без класса',
-                    description: 'Класс также отсутствует.',
-                    task_class: null,
-                    priority: 'P3',
-                  },
-                ],
-                enrich_ready_task_comments: [],
-                session_name: '',
-                project_id: 'proj-missing-carry-over',
-              }),
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        data: {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary_md_text: 'Summary after retry',
-                scholastic_review_md: 'Review after retry',
-                task_draft: [
-                  {
-                    id: 'TASK-MISSING-A',
-                    row_id: 'TASK-MISSING-A',
-                    name: 'Первый кандидат без класса',
-                    description: 'Класс отсутствует повторно.',
-                    candidate_class: '',
-                    priority: 'P3',
-                  },
-                  {
-                    id: 'TASK-MISSING-B',
-                    row_id: 'TASK-MISSING-B',
-                    name: 'Второй кандидат без класса',
-                    description: 'Класс всё ещё отсутствует.',
-                    task_class: null,
-                    priority: 'P3',
-                  },
-                ],
-                enrich_ready_task_comments: [],
-                session_name: '',
-                project_id: 'proj-missing-carry-over',
-              }),
-            },
-          ],
-        },
-      });
+    callToolMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: 'Summary before carry-over',
+              scholastic_review_md: 'Review before carry-over',
+              task_draft: [
+                {
+                  id: 'TASK-MISSING-A',
+                  row_id: 'TASK-MISSING-A',
+                  name: 'Первый кандидат без класса',
+                  description: 'Класс отсутствует.',
+                  candidate_class: '',
+                  priority: 'P3',
+                },
+                {
+                  id: 'TASK-MISSING-B',
+                  row_id: 'TASK-MISSING-B',
+                  name: 'Второй кандидат без класса',
+                  description: 'Класс также отсутствует.',
+                  task_class: null,
+                  priority: 'P3',
+                },
+              ],
+              enrich_ready_task_comments: [],
+              session_name: '',
+              project_id: 'proj-missing-carry-over',
+            }),
+          },
+        ],
+      },
+    });
 
     loadPersistedPossibleTaskCarryOverDraftsMock.mockResolvedValue([
       {
@@ -2562,22 +2387,14 @@ describe('runCreateTasksAgent quota fallback', () => {
       db: dbStub,
     });
 
-    expect(callToolMock).toHaveBeenCalledTimes(2);
-    expect(loadPersistedPossibleTaskCarryOverDraftsMock).toHaveBeenCalledTimes(1);
-    expect(loadPersistedPossibleTaskCarryOverDraftsMock).toHaveBeenCalledWith({
-      db: dbStub,
-      sessionId: '69cf65712a7446295ac67771',
-      defaultProjectId: 'proj-missing-carry-over',
-    });
-
-    expect(tasks).toHaveLength(5);
+    expect(callToolMock).toHaveBeenCalledTimes(1);
+    expect(loadPersistedPossibleTaskCarryOverDraftsMock).toHaveBeenCalledTimes(0);
+    expect(tasks).toHaveLength(2);
     expect(tasks.map((task) => String(task.id))).toEqual([
-      'TASK-CARRY-1',
-      'TASK-CARRY-2',
-      'TASK-CARRY-3',
-      'TASK-CARRY-4',
-      'TASK-CARRY-5',
+      'TASK-MISSING-A',
+      'TASK-MISSING-B',
     ]);
+    expect(tasks.every((task) => String(task.candidate_class) === 'deliverable_task')).toBe(true);
 
     const compositeMeta = (tasks as unknown as Record<string, unknown>).__create_tasks_composite_meta as
       | Record<string, unknown>
@@ -2585,29 +2402,8 @@ describe('runCreateTasksAgent quota fallback', () => {
     const runtimeTransitionDiscards = Array.isArray(compositeMeta?.runtime_transition_discards)
       ? (compositeMeta.runtime_transition_discards as Array<Record<string, unknown>>)
       : [];
-    expect(runtimeTransitionDiscards).toHaveLength(2);
-    expect(runtimeTransitionDiscards).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          candidate_id: 'TASK-MISSING-A',
-          violated_invariant_code: 'task_draft_class_missing',
-          recovery_action: 'discard',
-        }),
-        expect.objectContaining({
-          candidate_id: 'TASK-MISSING-B',
-          violated_invariant_code: 'task_draft_class_missing',
-          recovery_action: 'discard',
-        }),
-      ])
-    );
-    expect(compositeMeta?.runtime_transition_carry_over).toEqual(
-      expect.objectContaining({
-        carry_over_code: 'missing_class_discarded',
-        source: 'persisted_possible_tasks',
-        discarded_count: 2,
-        carried_over_count: 5,
-      })
-    );
+    expect(runtimeTransitionDiscards).toHaveLength(0);
+    expect(compositeMeta?.runtime_transition_carry_over ?? null).toBeNull();
   });
 
   it('fails fast with machine-readable transition error after one reformulation retry', async () => {

@@ -28,6 +28,8 @@ import {
 
 const logger = getLogger();
 
+const FULL_RECOMPUTE_RAW_TEXT_MAX_CHARS = 60000;
+
 export type CreateTasksFromChunksJobData = {
   session_id?: string;
   refresh_mode?: PossibleTasksRefreshMode;
@@ -65,6 +67,64 @@ const normalizeChunkText = (value: unknown): string => {
     if (typeof text === 'string') return text;
   }
   return '';
+};
+
+const collectSessionRawTextForCreateTasks = async ({
+  db,
+  sessionId,
+}: {
+  db: ReturnType<typeof getDb>;
+  sessionId: string;
+}): Promise<string> => {
+  if (!ObjectId.isValid(sessionId)) return '';
+  const sessionObjectId = new ObjectId(sessionId);
+  const messagesCollection = db.collection(VOICEBOT_COLLECTIONS.MESSAGES) as {
+    find?: (
+      query: Record<string, unknown>,
+      options: { projection: Record<string, number> }
+    ) => {
+      sort: (value: Record<string, number>) => {
+        toArray: () => Promise<Array<Record<string, unknown>>>;
+      };
+    };
+  };
+  if (typeof messagesCollection.find !== 'function') return '';
+
+  const rows = await messagesCollection
+    .find(
+      {
+        session_id: { $in: [sessionId, sessionObjectId] },
+        is_deleted: { $ne: true },
+      },
+      {
+        projection: {
+          _id: 1,
+          transcription_text: 1,
+          text: 1,
+          message_timestamp: 1,
+          created_at: 1,
+        },
+      }
+    )
+    .sort({ message_timestamp: 1, created_at: 1, _id: 1 })
+    .toArray();
+
+  const rawText = rows
+    .map(
+      (row) =>
+        normalizeChunkText((row as { transcription_text?: unknown }).transcription_text) ||
+        normalizeChunkText(row)
+    )
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join('\n\n')
+    .trim();
+
+  if (rawText.length <= FULL_RECOMPUTE_RAW_TEXT_MAX_CHARS) {
+    return rawText;
+  }
+
+  return rawText.slice(0, FULL_RECOMPUTE_RAW_TEXT_MAX_CHARS).trim();
 };
 
 const toProjectId = (value: ObjectId | string | null | undefined): string => {
@@ -176,13 +236,20 @@ export const handleCreateTasksFromChunksJob = async (
     : [];
   const refreshMode =
     normalizeRefreshMode(payload.refresh_mode) ?? (chunkTexts.length > 0 ? 'incremental_refresh' : 'full_recompute');
+  const effectiveRawText =
+    chunkTexts.length > 0
+      ? chunkTexts.join('\n\n')
+      : await collectSessionRawTextForCreateTasks({
+          db,
+          sessionId: session_id,
+        });
 
   try {
     const tasks = await runCreateTasksAgent({
       sessionId: session_id,
       projectId: toProjectId(session.project_id),
       db,
-      ...(chunkTexts.length > 0 ? { rawText: chunkTexts.join('\n\n') } : {}),
+      ...(effectiveRawText ? { rawText: effectiveRawText } : {}),
     });
     const compositeMeta = extractCreateTasksCompositeMeta(tasks);
     const resolvedContext = resolveCreateTasksCompositeSessionContext({

@@ -23,6 +23,7 @@ Use this as a fast guardrail before implementing anything:
 - Possible Tasks contract:
   - canonical payload shape `id/name/description/priority/...`,
   - task extraction is ontology-first: only bounded deliverables should become Draft rows; coordination-only actions, input/access handoffs, references/ideas, and status updates are not canonical tasks by themselves,
+  - full recompute with no chunk payload must use compact session raw transcript context, and replay acceptance requires stable Draft `row_id` identity across consecutive recompute runs for unchanged semantics,
   - `task_type_id` stays optional,
   - master store is `automation_tasks` with draft status `DRAFT_10`,
   - draft editing is autosave-first across both inline table edits and the right-hand detail editor,
@@ -588,6 +589,10 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-04-05 07:23):
+  - Closed `copilot-bzt6` after live replay determinism verification on target session `69cf65712a7446295ac67771`: `4x` consecutive full recompute runs remained stable and produced a consistent Draft `row_id` key-set with `tasks_count=6`.
+  - Simplified extraction behavior without prompt/code inflation: full recompute now runs from compact raw transcript context, dedupe is id-key based (`row_id`/`id`/`task_id_from_ai`), and unknown/missing `candidate_class` paths normalize deterministically.
+  - Validation passed: `cd backend && npm run test:parallel-safe -- --runTestsByPath __tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts __tests__/services/voicebot/createTasksAgentRecovery.test.ts __tests__/services/voicebot/createTasksAgentCardContract.test.ts __tests__/voicebot/runtime/generatePossibleTasksRoute.test.ts` (`56/56`).
 - Close-session refresh (2026-04-04 22:49):
   - Landed the ontology/morphology migration wave for `CREATE_TASKS` prompt/runtime boundaries (`copilot-j7dp`, related `copilot-52pj`): prompt card now owns semantic/lexical policy and explicit `runtime_rejections` handling, while runtime enforces deterministic transition legality.
   - Added structured transition failure propagation through worker/API surfaces (`error_code`, `error_details`) so invalid `task_draft` transitions are observable without flattening to opaque strings.
