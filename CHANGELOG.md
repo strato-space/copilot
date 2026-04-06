@@ -21,6 +21,12 @@
 - **22:48** Verification:
   - `cd backend && NODE_OPTIONS='--experimental-vm-modules --disable-warning=ExperimentalWarning --disable-warning=DEP0040' npx jest --runInBand __tests__/services/voicebot/persistPossibleTasks.test.ts __tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts`
   - `cd backend && npm run build`
+- **22:53** Production deploy/smoke:
+  - `./scripts/pm2-backend.sh prod`
+  - `./scripts/pm2-runtime-readiness.sh prod`
+  - `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production`
+  - `curl -fsS http://127.0.0.1:3002/api/health`
+  - `POST /api/voicebot/session_tasks` unauthenticated smoke returned expected `401 Unauthorized`
 
 ## 2026-04-05
 ### PROBLEM SOLVED
