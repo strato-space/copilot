@@ -35,6 +35,7 @@ agents/.fast-agent/
 .playwright/
 test-results/
 playwright-report/
+.omx/
 
 tools/
 

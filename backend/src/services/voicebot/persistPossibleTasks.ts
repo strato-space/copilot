@@ -1045,26 +1045,28 @@ const markPossibleTaskMasterRowsStale = async ({
       doc.source_data && typeof doc.source_data === 'object'
         ? (doc.source_data as Record<string, unknown>)
         : {};
+    const {
+      superseded_at: _ignoredSupersededAt,
+      ...persistedSourceData
+    } = sourceData;
 
     const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
       previousUpdatedAt: doc.updated_at,
       mutationEffectiveAt: staleAt,
     });
+    const nextSourceData = {
+      ...persistedSourceData,
+      refresh_state: 'stale',
+      stale_since: staleAt.toISOString(),
+      last_refresh_mode: 'incremental_refresh',
+    };
     await db.collection(COLLECTIONS.TASKS).updateOne(
       { _id: docObjectId },
       {
         $set: adapter.toMongoDocument({
-          source_data: {
-            ...sourceData,
-            refresh_state: 'stale',
-            stale_since: staleAt.toISOString(),
-            last_refresh_mode: 'incremental_refresh',
-          },
+          source_data: nextSourceData,
           updated_at: nextUpdatedAt,
         }),
-        $unset: {
-          'source_data.superseded_at': 1,
-        },
       }
     );
   }

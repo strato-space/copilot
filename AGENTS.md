@@ -158,6 +158,7 @@ Preferred engineering principles for this repo:
 ## Host Maintenance Notes [RULE]
 
 - Disk cleanup guardrail: do **not** delete or prune `/root/.codex/sessions` during routine free-space cleanup. Treat it as retained session history unless the user gives an explicit purge instruction for that path.
+- Local OMX state guardrail: treat repo-root `.omx/` as ephemeral agent/session state and keep it out of version control unless the user explicitly asks to persist those artifacts.
 
 ## Subagent Execution Policy [RULE]
 

@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-04-06
+### PROBLEM SOLVED
+- **22:47** Draft stale-cleanup writes still relied on a parallel `$unset` for `source_data.superseded_at` even when the same mutation rewrote `source_data` as a full object, which made the cleanup path less explicit and harder to verify.
+- **22:47** Repo close-session flow kept surfacing local `.omx/` agent state as untracked work, adding version-control noise unrelated to product/runtime artifacts.
+
+### FEATURE IMPLEMENTED
+- **22:47** `persistPossibleTasks` stale cleanup now rebuilds `source_data` without `superseded_at`, and the focused persist/runtime tests assert the cleaned object shape directly.
+- **22:47** Repo hygiene now treats `.omx/` as local-only OMX state and keeps it out of version control.
+
+### CHANGES
+- **22:47** Updated stale-cleanup implementation and regression coverage:
+  - `backend/src/services/voicebot/persistPossibleTasks.ts`
+  - `backend/__tests__/services/voicebot/persistPossibleTasks.test.ts`
+  - `backend/__tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts`
+- **22:47** Updated repo hygiene/docs:
+  - `.gitignore`
+  - `AGENTS.md`
+  - `README.md`
+- **22:48** Verification:
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules --disable-warning=ExperimentalWarning --disable-warning=DEP0040' npx jest --runInBand __tests__/services/voicebot/persistPossibleTasks.test.ts __tests__/voicebot/runtime/sessionUtilityRuntimeBehavior.validation.test.ts`
+  - `cd backend && npm run build`
+
 ## 2026-04-05
 ### PROBLEM SOLVED
 - **07:23** `CREATE_TASKS` replay on the target session `69cf65712a7446295ac67771` still had unresolved closure criteria for `copilot-bzt6`: acceptance required not only `>=5` Draft tasks but also stable `row_id` identity across consecutive full recomputes.

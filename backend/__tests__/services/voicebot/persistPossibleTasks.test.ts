@@ -793,6 +793,7 @@ describe('persistPossibleTasksForSession', () => {
         source_data: {
           session_id: sessionId,
           row_id: 'draft-b',
+          superseded_at: '2026-03-23T09:45:00.000Z',
           voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
         },
         created_at: new Date('2026-03-23T10:00:00.000Z'),
@@ -856,6 +857,7 @@ describe('persistPossibleTasksForSession', () => {
         }),
       })
     );
+    expect((staleDocB?.source_data as Record<string, unknown>).superseded_at).toBeUndefined();
   });
 
   it('incremental refresh stale cleanup prefers stale _id targets over colliding aliases', async () => {

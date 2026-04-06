@@ -2,6 +2,8 @@
 
 Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfaces. Deprecated code is archived in `old_code/`.
 
+Repo-root `.omx/` contains local OMX session/state artifacts and is intentionally ignored from version control.
+
 ## Critical Decisions For Future Agents
 
 Use this as a fast guardrail before implementing anything:

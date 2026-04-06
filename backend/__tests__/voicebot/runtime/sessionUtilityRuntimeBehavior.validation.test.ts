@@ -1975,11 +1975,15 @@ describe('Voicebot utility routes runtime behavior', () => {
             last_refresh_mode: 'incremental_refresh',
           }),
         }),
-        $unset: expect.objectContaining({
-          'source_data.superseded_at': 1,
-        }),
       })
     );
+    const staleUpdateCall = tasksUpdateOneSpy.mock.calls.find(
+      ([filter]) => String((filter as Record<string, unknown>)._id || '') === staleMasterId.toHexString()
+    );
+    expect(staleUpdateCall).toBeDefined();
+    const staleUpdate = (staleUpdateCall?.[1] ?? {}) as Record<string, unknown>;
+    const staleSourceData = ((staleUpdate.$set as Record<string, unknown> | undefined)?.source_data ?? {}) as Record<string, unknown>;
+    expect(staleSourceData.superseded_at).toBeUndefined();
     expect(insertManySpy).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ row_id: 'new-row', name: 'Fresh row' }),
