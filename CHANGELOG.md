@@ -3157,13 +3157,18 @@
 ### PROBLEM SOLVED
 - **11:49** The draft dedup/merge normalization rollout still had omission/CAS regressions immediately after landing.
 - **12:02** Voice session `69d49daf094a4f1dd8741042` had reproducible task-extraction failure and transcript-hygiene anomalies, but no incident-grade forensic trail or tracked follow-ups.
+- **18:08** The production voice incident package (`copilot-7fqt`, `copilot-bi99`, `copilot-w5sh`, `copilot-6ony`) still left `69d49daf094a4f1dd8741042` vulnerable to garbage-polluted extraction, contradictory garbage verdicts, and ffprobe duration blind spots.
 
 ### FEATURE IMPLEMENTED
 - **11:49** Landed the canonical draft dedup/merge normalization rollout and restored omission/CAS guards in the possible-tasks surface.
 - **12:04** Re-ran production deploy/smoke on the current `main` and registered the new voice forensic bug bundle without shipping additional runtime fixes.
+- **18:58** Deployed the completed voice incident fix wave and replayed session `69d49daf094a4f1dd8741042` through the production backend so `CREATE_TASKS` now settles on a deterministic no-task decision instead of `create_tasks_empty_mcp_result`.
 
 ### CHANGES
 - **11:39** Implemented the draft dedup/merge normalization rollout (`d05bd00`).
 - **11:49** Restored possible-task CAS handling and retain-on-omission guards (`416059c`).
 - **12:02** Added the forensic umbrella `copilot-uywf` plus follow-up bugs `copilot-7fqt`, `copilot-bi99`, `copilot-w5sh`, and `copilot-6ony` for session `69d49daf094a4f1dd8741042`.
 - **12:04** Production redeploy/smoke passed via `./scripts/pm2-backend.sh prod`, `./scripts/pm2-runtime-readiness.sh prod`, `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production`, `curl -fsS http://127.0.0.1:3002/api/health`, and unauthenticated `POST /api/voicebot/generate_possible_tasks` returning `401`.
+- **18:08** Hardened voice extraction against garbage and duration blind spots (`6a1f694`): create_tasks now filters garbage-tagged DB transcripts out of language sampling and recompute/retry contexts, semantically empty successful MCP composites normalize to the existing inferred `no_task_decision` contract, garbage detection catches repetitive multilingual loop hallucinations more aggressively, and ffprobe duration fallback now requests/reads format and stream tags.
+- **18:08** Synced bd closure state for the incident execution/planning issues (`b2651ed`).
+- **18:58** Production redeploy/smoke and replay passed for the completed incident wave via `./scripts/pm2-backend.sh prod`, `./scripts/pm2-runtime-readiness.sh prod`, `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production`, `curl -fsS http://127.0.0.1:3002/api/health`, unauthenticated `POST /api/voicebot/generate_possible_tasks` returning `401`, and `DOTENV_CONFIG_PATH=.env.production npx tsx -e "…handleCreateTasksFromChunksJob({ session_id: '69d49daf094a4f1dd8741042', chunks_to_process: [] })…"` returning `{ ok: true, tasks_count: 0, reason: 'no_tasks', no_task_decision.code: 'no_task_reason_missing' }` with persisted `CREATE_TASKS.is_processed=true`.

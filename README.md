@@ -591,6 +591,13 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-04-07 18:58):
+  - Closed the incident fix wave for `copilot-7fqt`, `copilot-bi99`, `copilot-w5sh`, `copilot-6ony`, and planning issue `copilot-yk0w`.
+  - Hardened create_tasks against garbage-polluted session context: preferred-language sampling, reduced retry context, and full-recompute raw-text assembly now all share `isCreateTasksMessageGarbageFlagged(...)`, and semantically empty successful MCP responses converge to the existing inferred `no_task_decision` contract instead of `create_tasks_empty_mcp_result`.
+  - Hardened transcript garbage detection for repetitive multilingual loop hallucinations and made ffprobe duration-tag fallback reachable in runtime by requesting `format_tags` / `stream_tags` during duration probes.
+  - Validation passed: `cd backend && npm test -- --runInBand` (`145/145` suites, `782/782` tests + smoke `3/3` suites, `5/5` tests), `cd backend && npm run build`, targeted 4-suite replay package, and `git diff --check`.
+  - Production deploy/smoke passed: `./scripts/pm2-backend.sh prod`, `./scripts/pm2-runtime-readiness.sh prod`, `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production`, `curl -fsS http://127.0.0.1:3002/api/health`, and unauthenticated `POST /api/voicebot/generate_possible_tasks` returned expected `401`.
+  - Production replay passed for session `69d49daf094a4f1dd8741042`: `DOTENV_CONFIG_PATH=.env.production npx tsx -e \"import 'dotenv/config'; … handleCreateTasksFromChunksJob({ session_id: '69d49daf094a4f1dd8741042', chunks_to_process: [] }) …\"` returned `{ ok: true, tasks_count: 0, reason: 'no_tasks', no_task_decision.code: 'no_task_reason_missing' }`, and the persisted session state now shows `processors_data.CREATE_TASKS.is_processed=true`, `is_processing=false`, with no remaining `create_tasks_empty_mcp_result`.
 - Close-session refresh (2026-04-05 07:23):
   - Closed `copilot-bzt6` after live replay determinism verification on target session `69cf65712a7446295ac67771`: `4x` consecutive full recompute runs remained stable and produced a consistent Draft `row_id` key-set with `tasks_count=6`.
   - Simplified extraction behavior without prompt/code inflation: full recompute now runs from compact raw transcript context, dedupe is id-key based (`row_id`/`id`/`task_id_from_ai`), and unknown/missing `candidate_class` paths normalize deterministically.
