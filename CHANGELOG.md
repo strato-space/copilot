@@ -3103,3 +3103,67 @@
 - **22:46** Updated `backend/src/workers/voicebot/handlers/transcribeHandler.ts` to stage video inputs to extracted audio, add hard chunk-cap enforcement with re-encode fallback, and persist `source_media_type` / `audio_extracted` / `asr_chunk_count` / `chunk_policy` / `chunk_cap_applied`.
 - **22:46** Extended `backend/__tests__/voicebot/workers/workerTranscribeHandler.test.ts` with regression coverage for video staging and safe failure when split output exceeds the hard chunk cap.
 - **22:46** Added the focused ASR contract spec in `plan/2026-03-31D-videoparser-video-input-efficiency-plan.md` and synced root/runtime docs (`AGENTS.md`, `README.md`, `RUNTIME.md`) to the new media-handling contract.
+
+## 2026-04-03
+### PROBLEM SOLVED
+- **16:06** `CREATE_TASKS` extraction still drifted away from the ontology-first deliverable contract, and production deploys could still boot from non-authoritative env paths.
+
+### FEATURE IMPLEMENTED
+- **16:06** Re-anchored `CREATE_TASKS` extraction to ontology-first task semantics and made the production PM2 env path authoritative.
+
+### CHANGES
+- **16:06** Enforced ontology-first draft extraction for `CREATE_TASKS` (`11c6cfc`).
+- **18:15** Made the backend production PM2 env authoritative (`0523be7`).
+- **19:02** Repaired coordination-to-deliverable extraction drift (`5b03d67`).
+- **19:10** Preserved numbered tasks as separate deliverables instead of collapsing them (`07e3485`).
+
+## 2026-04-04
+### PROBLEM SOLVED
+- **23:07** The `CREATE_TASKS` transition wave still overfit transcript cues, leaked prompt-contract drift, and lacked a closed status trail across the ontology migration gates.
+
+### FEATURE IMPLEMENTED
+- **23:07** Completed the ontology migration gate closure wave and hardened `CREATE_TASKS` structural extraction, transition carry-over, and prompt-contract enforcement.
+
+### CHANGES
+- **08:04** Rejected empty composite `CREATE_TASKS` results and recovered missing deliverables from transcript cues (`614d304`, `2cfeb9e`, `7f81c28`).
+- **11:36** Generalized anti-overfitting task extraction rules and simplified ontology-safe draft extraction (`e64748b`, `f206536`).
+- **18:35** Kept structural repair cue variants aligned and restored missing structural walkthrough tasks (`098b0ca`, `686ecaf`, `0858466`).
+- **22:51** Enforced transition contracts and carry-over convergence for `CREATE_TASKS` (`eea7f6b`).
+- **22:56** Recorded production deploy smoke and closed the wave-8/9/10 ontology migration docs/status loop (`2ad8222`, `0af1a2d`, `be7a5fe`, `3c999d9`).
+
+## 2026-04-05
+### PROBLEM SOLVED
+- **07:25** Replay determinism for `CREATE_TASKS` still produced unstable draft reuse and left the closeout without fresh deploy evidence.
+
+### FEATURE IMPLEMENTED
+- **07:25** Stabilized `CREATE_TASKS` replay determinism and completed the corresponding production close-session evidence.
+
+### CHANGES
+- **07:25** Stabilized replay determinism and closed `copilot-bzt6` (`8d93d9b`).
+- **07:29** Recorded the production deploy/smoke closeout for that wave (`32ed667`).
+
+## 2026-04-06
+### PROBLEM SOLVED
+- **22:50** Draft cleanup still relied on implicit stale deletion behavior, and the rollout needed an explicit production closeout record.
+
+### FEATURE IMPLEMENTED
+- **22:50** Made stale Draft cleanup explicit, ignored transient `.omx` state during cleanup decisions, and captured the production deploy evidence.
+
+### CHANGES
+- **22:50** Hardened stale Draft cleanup semantics and ignored `.omx` state during the cleanup path (`83646d5`).
+- **22:54** Recorded the 2026-04-06 production deploy/smoke evidence (`d860562`).
+
+## 2026-04-07
+### PROBLEM SOLVED
+- **11:49** The draft dedup/merge normalization rollout still had omission/CAS regressions immediately after landing.
+- **12:02** Voice session `69d49daf094a4f1dd8741042` had reproducible task-extraction failure and transcript-hygiene anomalies, but no incident-grade forensic trail or tracked follow-ups.
+
+### FEATURE IMPLEMENTED
+- **11:49** Landed the canonical draft dedup/merge normalization rollout and restored omission/CAS guards in the possible-tasks surface.
+- **12:04** Re-ran production deploy/smoke on the current `main` and registered the new voice forensic bug bundle without shipping additional runtime fixes.
+
+### CHANGES
+- **11:39** Implemented the draft dedup/merge normalization rollout (`d05bd00`).
+- **11:49** Restored possible-task CAS handling and retain-on-omission guards (`416059c`).
+- **12:02** Added the forensic umbrella `copilot-uywf` plus follow-up bugs `copilot-7fqt`, `copilot-bi99`, `copilot-w5sh`, and `copilot-6ony` for session `69d49daf094a4f1dd8741042`.
+- **12:04** Production redeploy/smoke passed via `./scripts/pm2-backend.sh prod`, `./scripts/pm2-runtime-readiness.sh prod`, `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production`, `curl -fsS http://127.0.0.1:3002/api/health`, and unauthenticated `POST /api/voicebot/generate_possible_tasks` returning `401`.

@@ -1,0 +1,2855 @@
+{
+  "generated_at": "2026-04-07T08:54:43.288Z",
+  "session": {
+    "session_id": "69d49daf094a4f1dd8741042",
+    "exists": true,
+    "session": {
+      "_id": "69d49daf094a4f1dd8741042",
+      "session_name": "",
+      "status": "",
+      "state": "",
+      "source_type": "",
+      "session_type": "multiprompt_voice_session",
+      "is_active": false,
+      "to_finalize": true,
+      "is_deleted": false,
+      "project_id": "6729d23834e1aad47395f941",
+      "has_summary_md_text": false,
+      "has_review_md_text": false,
+      "summary_saved_at": "",
+      "title_generated_at": "",
+      "user_id": "6863eab6a6d7b324e2df310a",
+      "chat_id": "3045664",
+      "created_at": "2026-04-07T06:01:19.750Z",
+      "updated_at": "2026-04-07T08:45:41.592Z",
+      "done_at": "2026-04-07T07:33:05.226Z"
+    },
+    "counters": {
+      "messages_total": 43,
+      "session_log_total": 15,
+      "linked_tasks_total": 0,
+      "linked_tasks_by_status": {},
+      "pm2_log_hits_total": 80,
+      "queue_job_matches_total": 0
+    },
+    "create_tasks_state": {
+      "is_processing": false,
+      "is_processed": false,
+      "has_payload_array": false,
+      "payload_items": 0,
+      "has_summary_md_text": false,
+      "has_review_md_text": false,
+      "job_queued_timestamp": "2026-04-07T08:45:37.401Z",
+      "job_finished_timestamp": "2026-04-07T08:45:41.592Z",
+      "auto_requested_at": "2026-04-07T08:45:36.995Z",
+      "error_message": "create_tasks_empty_mcp_result"
+    },
+    "session_surfaces": {
+      "has_summary_md_text": false,
+      "has_review_md_text": false,
+      "summary_saved_at": "",
+      "title_generated_at": ""
+    },
+    "diagnostics": {
+      "queue_snapshot_error": ""
+    },
+    "anomalies": [
+      "session_name_empty"
+    ],
+    "slices": {
+      "recent_messages": [
+        {
+          "_id": "69d4c42b094a4f1dd874106e",
+          "created_at": "2026-04-07T08:45:31.620Z",
+          "updated_at": "2026-04-07T08:45:31.620Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "045-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4c3b6094a4f1dd874106d",
+          "created_at": "2026-04-07T08:43:34.888Z",
+          "updated_at": "2026-04-07T08:43:34.888Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "044-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4c303094a4f1dd874106c",
+          "created_at": "2026-04-07T08:40:35.134Z",
+          "updated_at": "2026-04-07T08:40:35.134Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "043-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4bf79094a4f1dd874106b",
+          "created_at": "2026-04-07T08:25:29.658Z",
+          "updated_at": "2026-04-07T08:25:29.658Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "038-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4bebb094a4f1dd874106a",
+          "created_at": "2026-04-07T08:22:19.730Z",
+          "updated_at": "2026-04-07T08:22:19.730Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "037-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4bebb094a4f1dd8741069",
+          "created_at": "2026-04-07T08:22:19.592Z",
+          "updated_at": "2026-04-07T08:22:19.592Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "037-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4bdec094a4f1dd8741068",
+          "created_at": "2026-04-07T08:18:52.132Z",
+          "updated_at": "2026-04-07T08:18:52.132Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "036-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4bcc0094a4f1dd8741067",
+          "created_at": "2026-04-07T08:13:51.557Z",
+          "updated_at": "2026-04-07T08:13:51.557Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "035-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4bb3c094a4f1dd8741066",
+          "created_at": "2026-04-07T08:07:24.492Z",
+          "updated_at": "2026-04-07T08:07:24.492Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "034-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4b0a1094a4f1dd8741065",
+          "created_at": "2026-04-07T07:22:09.464Z",
+          "updated_at": "2026-04-07T07:22:09.464Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "019-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4b0a1094a4f1dd8741064",
+          "created_at": "2026-04-07T07:22:09.222Z",
+          "updated_at": "2026-04-07T07:22:09.222Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "019-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4afec094a4f1dd8741063",
+          "created_at": "2026-04-07T07:19:08.363Z",
+          "updated_at": "2026-04-07T07:19:08.363Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "018-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4afe0094a4f1dd8741062",
+          "created_at": "2026-04-07T07:18:56.405Z",
+          "updated_at": "2026-04-07T07:18:56.405Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "017-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4afe0094a4f1dd8741061",
+          "created_at": "2026-04-07T07:18:56.292Z",
+          "updated_at": "2026-04-07T07:18:56.292Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "017-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4af42094a4f1dd8741060",
+          "created_at": "2026-04-07T07:16:18.476Z",
+          "updated_at": "2026-04-07T07:16:18.476Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "016-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4af42094a4f1dd874105f",
+          "created_at": "2026-04-07T07:16:18.333Z",
+          "updated_at": "2026-04-07T07:16:18.333Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "016-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4aee5094a4f1dd874105e",
+          "created_at": "2026-04-07T07:14:45.266Z",
+          "updated_at": "2026-04-07T07:14:45.266Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "015-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4aee5094a4f1dd874105d",
+          "created_at": "2026-04-07T07:14:45.090Z",
+          "updated_at": "2026-04-07T07:14:45.090Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "015-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4addf094a4f1dd874105c",
+          "created_at": "2026-04-07T07:10:23.537Z",
+          "updated_at": "2026-04-07T07:10:23.537Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "014-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4addf094a4f1dd874105b",
+          "created_at": "2026-04-07T07:10:23.533Z",
+          "updated_at": "2026-04-07T07:10:23.533Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "014-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4acfe094a4f1dd874105a",
+          "created_at": "2026-04-07T07:06:38.313Z",
+          "updated_at": "2026-04-07T07:06:38.313Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "013-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4acfe094a4f1dd8741059",
+          "created_at": "2026-04-07T07:06:38.195Z",
+          "updated_at": "2026-04-07T07:06:38.195Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "013-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4abce094a4f1dd8741058",
+          "created_at": "2026-04-07T07:01:33.854Z",
+          "updated_at": "2026-04-07T07:01:33.854Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "012-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4abce094a4f1dd8741057",
+          "created_at": "2026-04-07T07:01:33.846Z",
+          "updated_at": "2026-04-07T07:01:33.846Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "012-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4aa8f094a4f1dd8741056",
+          "created_at": "2026-04-07T06:56:15.304Z",
+          "updated_at": "2026-04-07T06:56:15.304Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "011-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4aa8f094a4f1dd8741055",
+          "created_at": "2026-04-07T06:56:15.122Z",
+          "updated_at": "2026-04-07T06:56:15.122Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "011-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a966094a4f1dd8741054",
+          "created_at": "2026-04-07T06:51:18.549Z",
+          "updated_at": "2026-04-07T06:51:18.549Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "010-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a966094a4f1dd8741053",
+          "created_at": "2026-04-07T06:51:18.355Z",
+          "updated_at": "2026-04-07T06:51:18.355Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "010-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a7e0094a4f1dd8741052",
+          "created_at": "2026-04-07T06:44:47.758Z",
+          "updated_at": "2026-04-07T06:44:47.758Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "009-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a7df094a4f1dd8741051",
+          "created_at": "2026-04-07T06:44:47.756Z",
+          "updated_at": "2026-04-07T06:44:47.756Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "009-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a6ce094a4f1dd8741050",
+          "created_at": "2026-04-07T06:40:14.499Z",
+          "updated_at": "2026-04-07T06:40:14.499Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "008-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a5dc094a4f1dd874104f",
+          "created_at": "2026-04-07T06:36:12.223Z",
+          "updated_at": "2026-04-07T06:36:12.223Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "007-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a5dc094a4f1dd874104e",
+          "created_at": "2026-04-07T06:36:12.087Z",
+          "updated_at": "2026-04-07T06:36:12.087Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "007-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a48b094a4f1dd874104d",
+          "created_at": "2026-04-07T06:30:35.540Z",
+          "updated_at": "2026-04-07T06:30:35.540Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "006-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a48b094a4f1dd874104c",
+          "created_at": "2026-04-07T06:30:35.390Z",
+          "updated_at": "2026-04-07T06:30:35.390Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "006-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a366094a4f1dd874104b",
+          "created_at": "2026-04-07T06:25:42.566Z",
+          "updated_at": "2026-04-07T06:25:42.566Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "005-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a366094a4f1dd874104a",
+          "created_at": "2026-04-07T06:25:42.409Z",
+          "updated_at": "2026-04-07T06:25:42.409Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "005-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a1f5094a4f1dd8741048",
+          "created_at": "2026-04-07T06:19:32.830Z",
+          "updated_at": "2026-04-07T06:19:32.830Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "004-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a1f4094a4f1dd8741047",
+          "created_at": "2026-04-07T06:19:32.830Z",
+          "updated_at": "2026-04-07T06:19:32.830Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "004-2.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        },
+        {
+          "_id": "69d4a0ba094a4f1dd8741045",
+          "created_at": "2026-04-07T06:14:18.438Z",
+          "updated_at": "2026-04-07T06:14:18.438Z",
+          "message_type": "voice",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "003-1.webm",
+          "mime_type": "audio/webm",
+          "has_transcription": true,
+          "has_categorization": false,
+          "duration": 0,
+          "is_deleted": false
+        }
+      ],
+      "recent_session_log": [
+        {
+          "_id": "69d4c3d384b6c01353c994d0",
+          "event_time": "2026-04-07T08:44:03.301Z",
+          "event_name": "transcription_garbage_detected",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69d4b33184b6c01353c994c7",
+          "event_time": "2026-04-07T07:33:05.914Z",
+          "event_name": "notify_http_sent",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69d4b33184b6c01353c994c6",
+          "event_time": "2026-04-07T07:33:05.856Z",
+          "event_name": "notify_hook_started",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69d4b33184b6c01353c994c5",
+          "event_time": "2026-04-07T07:33:05.814Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69d4b33184b6c01353c994c4",
+          "event_time": "2026-04-07T07:33:05.773Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": "8b641990-ea92-4c9a-b9d2-f0496d5e7c08"
+        },
+        {
+          "_id": "69d4b33184b6c01353c994c3",
+          "event_time": "2026-04-07T07:33:05.736Z",
+          "event_name": "summary_save",
+          "status": "pending",
+          "reason": "",
+          "correlation_id": "8b641990-ea92-4c9a-b9d2-f0496d5e7c08"
+        },
+        {
+          "_id": "69d4b33184b6c01353c994c2",
+          "event_time": "2026-04-07T07:33:05.695Z",
+          "event_name": "notify_http_sent",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69d4b33184b6c01353c994c1",
+          "event_time": "2026-04-07T07:33:05.657Z",
+          "event_name": "summary_telegram_send",
+          "status": "done",
+          "reason": "",
+          "correlation_id": "8b641990-ea92-4c9a-b9d2-f0496d5e7c08"
+        },
+        {
+          "_id": "69d4b33184b6c01353c994c0",
+          "event_time": "2026-04-07T07:33:05.420Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69d4abf084b6c01353c994b2",
+          "event_time": "2026-04-07T07:02:08.119Z",
+          "event_name": "transcription_garbage_detected",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69d4aaa084b6c01353c994af",
+          "event_time": "2026-04-07T06:56:32.389Z",
+          "event_name": "transcription_garbage_detected",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69d4a37184b6c01353c994a2",
+          "event_time": "2026-04-07T06:25:53.099Z",
+          "event_name": "transcription_garbage_detected",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69d4a35384b6c01353c994a0",
+          "event_time": "2026-04-07T06:25:23.370Z",
+          "event_name": "notify_http_sent",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69d4a353094a4f1dd8741049",
+          "event_time": "2026-04-07T06:25:23.159Z",
+          "event_name": "notify_requested",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        },
+        {
+          "_id": "69d4a0c284b6c01353c9949c",
+          "event_time": "2026-04-07T06:14:26.507Z",
+          "event_name": "transcription_garbage_detected",
+          "status": "done",
+          "reason": "",
+          "correlation_id": ""
+        }
+      ],
+      "recent_linked_tasks": [],
+      "recent_pm2_log_hits": [
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235437",
+          "line": 0,
+          "text": "07:55 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d49f3b094a4f1dd8741043\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235438",
+          "line": 0,
+          "text": "07:55 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d49f3b094a4f1dd8741044\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235451",
+          "line": 0,
+          "text": "08:15 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d49f3b094a4f1dd8741044\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6284152,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235457",
+          "line": 0,
+          "text": "08:15 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"5770bb40-0e68-4c8d-a05d-34ba53c9adcb\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":2883,\"envelope_bytes\":4977}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235459",
+          "line": 0,
+          "text": "08:18 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d49f3b094a4f1dd8741043\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6286108,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235465",
+          "line": 0,
+          "text": "08:19 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235466",
+          "line": 0,
+          "text": "08:19 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks auto refresh requeued after newer transcription {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"started_at\":1775542095184,\"latest_requested_at\":1775542098428}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235477",
+          "line": 0,
+          "text": "08:33 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d49f3b094a4f1dd8741044\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":11}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235484",
+          "line": 0,
+          "text": "08:45 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d49f3b094a4f1dd8741043\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":5}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235646",
+          "line": 0,
+          "text": "14:19 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a0ba094a4f1dd8741045\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235647",
+          "line": 0,
+          "text": "14:19 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a0ba094a4f1dd8741046\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235652",
+          "line": 0,
+          "text": "14:26 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a0ba094a4f1dd8741045\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6328240,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235663",
+          "line": 0,
+          "text": "14:45 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a0ba094a4f1dd8741046\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6328240,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235669",
+          "line": 0,
+          "text": "14:45 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"363cb353-1976-4e39-ac43-34e585bb3f96\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":9805,\"envelope_bytes\":17235}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235678",
+          "line": 0,
+          "text": "14:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235693",
+          "line": 0,
+          "text": "15:12 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a0ba094a4f1dd8741046\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":13}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235819",
+          "line": 0,
+          "text": "19:33 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a1f4094a4f1dd8741047\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235820",
+          "line": 0,
+          "text": "19:33 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a1f5094a4f1dd8741048\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235829",
+          "line": 0,
+          "text": "19:57 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a1f5094a4f1dd8741048\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":5191705,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235835",
+          "line": 0,
+          "text": "19:58 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"d486e9f0-e3d7-4f67-bb9b-800f2dc0105a\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":10752,\"envelope_bytes\":18950}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235837",
+          "line": 0,
+          "text": "19:59 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a1f5094a4f1dd8741048\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":1}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235851",
+          "line": 0,
+          "text": "20:02 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235854",
+          "line": 0,
+          "text": "20:03 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a1f4094a4f1dd8741047\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":5191672,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235860",
+          "line": 0,
+          "text": "20:04 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"0a70cd86-c00e-4ff1-a813-cf1f7403c7a8\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":15090,\"envelope_bytes\":26573}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235865",
+          "line": 0,
+          "text": "20:10 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "235876",
+          "line": 0,
+          "text": "20:25 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a1f4094a4f1dd8741047\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":11}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236019",
+          "line": 0,
+          "text": "25:23 [\u001b[32minfo\u001b[39m]: [voicebot-worker] notify http sent {\"service\":\"copilot-backend\",\"event\":\"session_project_assigned\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"status\":200,\"semantic_ack_reason\":\"not_required\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236030",
+          "line": 0,
+          "text": "25:43 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a366094a4f1dd874104a\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236031",
+          "line": 0,
+          "text": "25:43 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a366094a4f1dd874104b\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236036",
+          "line": 0,
+          "text": "25:53 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a366094a4f1dd874104b\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6099756,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236047",
+          "line": 0,
+          "text": "26:02 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a366094a4f1dd874104a\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6099706,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236053",
+          "line": 0,
+          "text": "26:02 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"9245952d-9d28-40ca-9d5a-6f561ff1d1e6\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":20725,\"envelope_bytes\":36476}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236058",
+          "line": 0,
+          "text": "26:06 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236069",
+          "line": 0,
+          "text": "26:30 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a366094a4f1dd874104a\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":13}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236191",
+          "line": 0,
+          "text": "30:36 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a48b094a4f1dd874104c\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236192",
+          "line": 0,
+          "text": "30:36 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a48b094a4f1dd874104d\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236197",
+          "line": 0,
+          "text": "30:49 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a48b094a4f1dd874104c\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":4821876,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236203",
+          "line": 0,
+          "text": "30:49 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"834175ad-15f7-4e83-b5ca-92f8f8737f2c\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":21466,\"envelope_bytes\":37820}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236209",
+          "line": 0,
+          "text": "30:51 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a48b094a4f1dd874104c\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":1}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236215",
+          "line": 0,
+          "text": "30:53 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236218",
+          "line": 0,
+          "text": "30:59 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a48b094a4f1dd874104d\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":4821556,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236224",
+          "line": 0,
+          "text": "30:59 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"8e5cbf69-42fd-4b6d-b5fe-fe2a7824adab\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":25742,\"envelope_bytes\":45483}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236237",
+          "line": 0,
+          "text": "31:04 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236245",
+          "line": 0,
+          "text": "31:20 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a48b094a4f1dd874104d\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":11}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236387",
+          "line": 0,
+          "text": "36:12 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a5dc094a4f1dd874104e\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236388",
+          "line": 0,
+          "text": "36:12 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a5dc094a4f1dd874104f\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236397",
+          "line": 0,
+          "text": "36:32 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a5dc094a4f1dd874104e\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":5557738,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236403",
+          "line": 0,
+          "text": "36:32 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"6649633d-4448-4381-8c86-9b77aae91f9a\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":28801,\"envelope_bytes\":50914}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236408",
+          "line": 0,
+          "text": "36:37 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236415",
+          "line": 0,
+          "text": "36:42 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a5dc094a4f1dd874104f\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":5557724,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236421",
+          "line": 0,
+          "text": "36:43 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"68df3ebe-2efd-442a-b7bc-bb4b54e8720c\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":28952,\"envelope_bytes\":51289}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236426",
+          "line": 0,
+          "text": "36:48 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236433",
+          "line": 0,
+          "text": "36:56 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a5dc094a4f1dd874104e\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":13}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236444",
+          "line": 0,
+          "text": "37:01 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a5dc094a4f1dd874104f\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":3}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236538",
+          "line": 0,
+          "text": "40:15 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a6ce094a4f1dd8741050\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236543",
+          "line": 0,
+          "text": "40:27 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a6ce094a4f1dd8741050\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":4012337,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236549",
+          "line": 0,
+          "text": "40:27 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"764682c6-b00f-4ca0-bfc8-3b4ffbd66f4c\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":32519,\"envelope_bytes\":57637}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236558",
+          "line": 0,
+          "text": "40:32 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236565",
+          "line": 0,
+          "text": "40:42 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a6ce094a4f1dd8741050\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":7}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236680",
+          "line": 0,
+          "text": "44:48 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a7e0094a4f1dd8741052\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236681",
+          "line": 0,
+          "text": "44:48 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a7df094a4f1dd8741051\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236694",
+          "line": 0,
+          "text": "45:03 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a7e0094a4f1dd8741052\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":4500319,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236700",
+          "line": 0,
+          "text": "45:03 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"245c07cd-aa75-4f86-b4df-3852bbc55e56\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":33754,\"envelope_bytes\":59870}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236705",
+          "line": 0,
+          "text": "45:08 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236708",
+          "line": 0,
+          "text": "45:08 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a7df094a4f1dd8741051\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":4500316,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236714",
+          "line": 0,
+          "text": "45:08 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"45847a76-7509-4708-b2b3-e459effcb98d\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":35645,\"envelope_bytes\":63251}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236723",
+          "line": 0,
+          "text": "45:13 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236726",
+          "line": 0,
+          "text": "45:16 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a7e0094a4f1dd8741052\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":6}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236733",
+          "line": 0,
+          "text": "45:29 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a7df094a4f1dd8741051\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":7}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236903",
+          "line": 0,
+          "text": "51:19 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a966094a4f1dd8741053\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236904",
+          "line": 0,
+          "text": "51:19 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a966094a4f1dd8741054\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236909",
+          "line": 0,
+          "text": "51:28 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a966094a4f1dd8741053\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6439882,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236915",
+          "line": 0,
+          "text": "51:29 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"7a628644-7a47-4bc7-9b9d-996f4f5eec4a\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":35968,\"envelope_bytes\":63823}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236924",
+          "line": 0,
+          "text": "51:33 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236927",
+          "line": 0,
+          "text": "51:35 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a966094a4f1dd8741053\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":6}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236934",
+          "line": 0,
+          "text": "51:42 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a966094a4f1dd8741054\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6439631,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236940",
+          "line": 0,
+          "text": "51:42 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"c39c5ea1-2e06-4832-8a87-86fe15a1f2f8\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":40684,\"envelope_bytes\":72292}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236945",
+          "line": 0,
+          "text": "51:47 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "236960",
+          "line": 0,
+          "text": "52:03 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a966094a4f1dd8741054\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":8}"
+        },
+        {
+          "session_id": "69d49daf094a4f1dd8741042",
+          "file": "237083",
+          "line": 0,
+          "text": "56:15 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4aa8f094a4f1dd8741055\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      ],
+      "queue_snapshots": [
+        {
+          "queue": "voicebot--common",
+          "counts": {
+            "wait": 0,
+            "active": 1,
+            "delayed": 3,
+            "prioritized": 0,
+            "failed": 2,
+            "completed": 5
+          }
+        },
+        {
+          "queue": "voicebot--processors",
+          "counts": {
+            "wait": 0,
+            "active": 0,
+            "delayed": 0,
+            "prioritized": 0,
+            "failed": 7,
+            "completed": 2093
+          }
+        },
+        {
+          "queue": "voicebot--postprocessors",
+          "counts": {
+            "wait": 0,
+            "active": 0,
+            "delayed": 0,
+            "prioritized": 0,
+            "failed": 3,
+            "completed": 1614
+          }
+        },
+        {
+          "queue": "voicebot--voice",
+          "counts": {
+            "wait": 0,
+            "active": 0,
+            "delayed": 0,
+            "prioritized": 0,
+            "failed": 4,
+            "completed": 245
+          }
+        },
+        {
+          "queue": "voicebot--events",
+          "counts": {
+            "wait": 0,
+            "active": 0,
+            "delayed": 0,
+            "prioritized": 0,
+            "failed": 0,
+            "completed": 7377
+          }
+        },
+        {
+          "queue": "voicebot--notifies",
+          "counts": {
+            "wait": 0,
+            "active": 0,
+            "delayed": 0,
+            "prioritized": 0,
+            "failed": 0,
+            "completed": 480
+          }
+        }
+      ],
+      "recent_queue_jobs": []
+    },
+    "timeline": [
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235437",
+          "line": 0,
+          "text": "07:55 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d49f3b094a4f1dd8741043\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235438",
+          "line": 0,
+          "text": "07:55 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d49f3b094a4f1dd8741044\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235451",
+          "line": 0,
+          "text": "08:15 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d49f3b094a4f1dd8741044\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6284152,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235457",
+          "line": 0,
+          "text": "08:15 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"5770bb40-0e68-4c8d-a05d-34ba53c9adcb\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":2883,\"envelope_bytes\":4977}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235459",
+          "line": 0,
+          "text": "08:18 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d49f3b094a4f1dd8741043\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6286108,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235465",
+          "line": 0,
+          "text": "08:19 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235466",
+          "line": 0,
+          "text": "08:19 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks auto refresh requeued after newer transcription {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"started_at\":1775542095184,\"latest_requested_at\":1775542098428}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235477",
+          "line": 0,
+          "text": "08:33 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d49f3b094a4f1dd8741044\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":11}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235484",
+          "line": 0,
+          "text": "08:45 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d49f3b094a4f1dd8741043\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":5}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235646",
+          "line": 0,
+          "text": "14:19 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a0ba094a4f1dd8741045\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235647",
+          "line": 0,
+          "text": "14:19 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a0ba094a4f1dd8741046\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235652",
+          "line": 0,
+          "text": "14:26 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a0ba094a4f1dd8741045\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6328240,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235663",
+          "line": 0,
+          "text": "14:45 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a0ba094a4f1dd8741046\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6328240,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235669",
+          "line": 0,
+          "text": "14:45 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"363cb353-1976-4e39-ac43-34e585bb3f96\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":9805,\"envelope_bytes\":17235}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235678",
+          "line": 0,
+          "text": "14:51 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235693",
+          "line": 0,
+          "text": "15:12 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a0ba094a4f1dd8741046\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":13}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235819",
+          "line": 0,
+          "text": "19:33 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a1f4094a4f1dd8741047\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235820",
+          "line": 0,
+          "text": "19:33 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a1f5094a4f1dd8741048\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235829",
+          "line": 0,
+          "text": "19:57 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a1f5094a4f1dd8741048\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":5191705,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235835",
+          "line": 0,
+          "text": "19:58 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"d486e9f0-e3d7-4f67-bb9b-800f2dc0105a\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":10752,\"envelope_bytes\":18950}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235837",
+          "line": 0,
+          "text": "19:59 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a1f5094a4f1dd8741048\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":1}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235851",
+          "line": 0,
+          "text": "20:02 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235854",
+          "line": 0,
+          "text": "20:03 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a1f4094a4f1dd8741047\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":5191672,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235860",
+          "line": 0,
+          "text": "20:04 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"0a70cd86-c00e-4ff1-a813-cf1f7403c7a8\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":15090,\"envelope_bytes\":26573}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235865",
+          "line": 0,
+          "text": "20:10 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "235876",
+          "line": 0,
+          "text": "20:25 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a1f4094a4f1dd8741047\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":11}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236019",
+          "line": 0,
+          "text": "25:23 [\u001b[32minfo\u001b[39m]: [voicebot-worker] notify http sent {\"service\":\"copilot-backend\",\"event\":\"session_project_assigned\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"status\":200,\"semantic_ack_reason\":\"not_required\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236030",
+          "line": 0,
+          "text": "25:43 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a366094a4f1dd874104a\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236031",
+          "line": 0,
+          "text": "25:43 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a366094a4f1dd874104b\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236036",
+          "line": 0,
+          "text": "25:53 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a366094a4f1dd874104b\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6099756,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236047",
+          "line": 0,
+          "text": "26:02 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a366094a4f1dd874104a\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6099706,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236053",
+          "line": 0,
+          "text": "26:02 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"9245952d-9d28-40ca-9d5a-6f561ff1d1e6\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":20725,\"envelope_bytes\":36476}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236058",
+          "line": 0,
+          "text": "26:06 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236069",
+          "line": 0,
+          "text": "26:30 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a366094a4f1dd874104a\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":13}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236191",
+          "line": 0,
+          "text": "30:36 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a48b094a4f1dd874104c\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236192",
+          "line": 0,
+          "text": "30:36 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a48b094a4f1dd874104d\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236197",
+          "line": 0,
+          "text": "30:49 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a48b094a4f1dd874104c\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":4821876,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236203",
+          "line": 0,
+          "text": "30:49 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"834175ad-15f7-4e83-b5ca-92f8f8737f2c\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":21466,\"envelope_bytes\":37820}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236209",
+          "line": 0,
+          "text": "30:51 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a48b094a4f1dd874104c\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":1}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236215",
+          "line": 0,
+          "text": "30:53 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236218",
+          "line": 0,
+          "text": "30:59 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a48b094a4f1dd874104d\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":4821556,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236224",
+          "line": 0,
+          "text": "30:59 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"8e5cbf69-42fd-4b6d-b5fe-fe2a7824adab\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":25742,\"envelope_bytes\":45483}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236237",
+          "line": 0,
+          "text": "31:04 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236245",
+          "line": 0,
+          "text": "31:20 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a48b094a4f1dd874104d\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":11}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236387",
+          "line": 0,
+          "text": "36:12 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a5dc094a4f1dd874104e\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236388",
+          "line": 0,
+          "text": "36:12 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a5dc094a4f1dd874104f\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236397",
+          "line": 0,
+          "text": "36:32 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a5dc094a4f1dd874104e\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":5557738,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236403",
+          "line": 0,
+          "text": "36:32 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"6649633d-4448-4381-8c86-9b77aae91f9a\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":28801,\"envelope_bytes\":50914}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236408",
+          "line": 0,
+          "text": "36:37 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236415",
+          "line": 0,
+          "text": "36:42 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a5dc094a4f1dd874104f\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":5557724,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236421",
+          "line": 0,
+          "text": "36:43 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"68df3ebe-2efd-442a-b7bc-bb4b54e8720c\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":28952,\"envelope_bytes\":51289}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236426",
+          "line": 0,
+          "text": "36:48 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236433",
+          "line": 0,
+          "text": "36:56 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a5dc094a4f1dd874104e\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":13}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236444",
+          "line": 0,
+          "text": "37:01 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a5dc094a4f1dd874104f\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":3}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236538",
+          "line": 0,
+          "text": "40:15 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a6ce094a4f1dd8741050\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236543",
+          "line": 0,
+          "text": "40:27 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a6ce094a4f1dd8741050\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":4012337,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236549",
+          "line": 0,
+          "text": "40:27 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"764682c6-b00f-4ca0-bfc8-3b4ffbd66f4c\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":32519,\"envelope_bytes\":57637}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236558",
+          "line": 0,
+          "text": "40:32 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236565",
+          "line": 0,
+          "text": "40:42 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a6ce094a4f1dd8741050\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":7}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236680",
+          "line": 0,
+          "text": "44:48 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a7e0094a4f1dd8741052\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236681",
+          "line": 0,
+          "text": "44:48 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a7df094a4f1dd8741051\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236694",
+          "line": 0,
+          "text": "45:03 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a7e0094a4f1dd8741052\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":4500319,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236700",
+          "line": 0,
+          "text": "45:03 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"245c07cd-aa75-4f86-b4df-3852bbc55e56\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":33754,\"envelope_bytes\":59870}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236705",
+          "line": 0,
+          "text": "45:08 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236708",
+          "line": 0,
+          "text": "45:08 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a7df094a4f1dd8741051\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":4500316,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236714",
+          "line": 0,
+          "text": "45:08 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"45847a76-7509-4708-b2b3-e459effcb98d\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":35645,\"envelope_bytes\":63251}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236723",
+          "line": 0,
+          "text": "45:13 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236726",
+          "line": 0,
+          "text": "45:16 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a7e0094a4f1dd8741052\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":6}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236733",
+          "line": 0,
+          "text": "45:29 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a7df094a4f1dd8741051\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":7}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236903",
+          "line": 0,
+          "text": "51:19 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a966094a4f1dd8741053\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236904",
+          "line": 0,
+          "text": "51:19 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4a966094a4f1dd8741054\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236909",
+          "line": 0,
+          "text": "51:28 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a966094a4f1dd8741053\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6439882,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236915",
+          "line": 0,
+          "text": "51:29 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"7a628644-7a47-4bc7-9b9d-996f4f5eec4a\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":35968,\"envelope_bytes\":63823}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236924",
+          "line": 0,
+          "text": "51:33 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236927",
+          "line": 0,
+          "text": "51:35 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a966094a4f1dd8741053\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":6}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236934",
+          "line": 0,
+          "text": "51:42 [\u001b[32minfo\u001b[39m]: [voicebot-worker] transcribe handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a966094a4f1dd8741054\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"source\":\"openai_whisper\",\"method\":\"direct\",\"source_file_size_bytes\":6439631,\"chunks\":1,\"chunk_policy\":\"single_file_first\",\"chunk_cap_applied\":false}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236940",
+          "line": 0,
+          "text": "51:42 [\u001b[32minfo\u001b[39m]: [voicebot-worker] create_tasks agent run started {\"service\":\"copilot-backend\",\"profile_run_id\":\"c39c5ea1-2e06-4832-8a87-86fe15a1f2f8\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"mcp_server\":\"http://127.0.0.1:8722\",\"mode\":\"raw_text\",\"envelope_chars\":40684,\"envelope_bytes\":72292}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236945",
+          "line": 0,
+          "text": "51:47 [\u001b[31merror\u001b[39m]: [voicebot-worker] create_tasks_from_chunks failed {\"service\":\"copilot-backend\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"create_tasks_empty_mcp_result\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "236960",
+          "line": 0,
+          "text": "52:03 [\u001b[32minfo\u001b[39m]: [voicebot-worker] categorize handled {\"service\":\"copilot-backend\",\"message_id\":\"69d4a966094a4f1dd8741054\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"model\":\"gpt-4.1\",\"items\":8}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "1970-01-01T00:00:00.000Z",
+        "source": "pm2_log",
+        "kind": "pm2_log_hit",
+        "details": {
+          "file": "237083",
+          "line": 0,
+          "text": "56:15 [\u001b[33mwarn\u001b[39m]: [voicebot-worker] could not resolve duration via ffprobe {\"service\":\"copilot-backend\",\"message_id\":\"69d4aa8f094a4f1dd8741055\",\"session_id\":\"69d49daf094a4f1dd8741042\",\"error\":\"Duration is unavailable in ffprobe metadata\"}"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:01:19.750Z",
+        "source": "session",
+        "kind": "session_created",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:14:18.438Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a0ba094a4f1dd8741045",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "003-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:14:26.507Z",
+        "source": "session_log",
+        "kind": "transcription_garbage_detected",
+        "details": {
+          "_id": "69d4a0c284b6c01353c9949c",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:19:32.830Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a1f5094a4f1dd8741048",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "004-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:19:32.830Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a1f4094a4f1dd8741047",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "004-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:25:23.159Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69d4a353094a4f1dd8741049",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:25:23.370Z",
+        "source": "session_log",
+        "kind": "notify_http_sent",
+        "details": {
+          "_id": "69d4a35384b6c01353c994a0",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:25:42.409Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a366094a4f1dd874104a",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "005-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:25:42.566Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a366094a4f1dd874104b",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "005-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:25:53.099Z",
+        "source": "session_log",
+        "kind": "transcription_garbage_detected",
+        "details": {
+          "_id": "69d4a37184b6c01353c994a2",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:30:35.390Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a48b094a4f1dd874104c",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "006-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:30:35.540Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a48b094a4f1dd874104d",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "006-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:36:12.087Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a5dc094a4f1dd874104e",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "007-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:36:12.223Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a5dc094a4f1dd874104f",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "007-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:40:14.499Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a6ce094a4f1dd8741050",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "008-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:44:47.756Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a7df094a4f1dd8741051",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "009-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:44:47.758Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a7e0094a4f1dd8741052",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "009-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:51:18.355Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a966094a4f1dd8741053",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "010-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:51:18.549Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4a966094a4f1dd8741054",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "010-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:56:15.122Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4aa8f094a4f1dd8741055",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "011-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:56:15.304Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4aa8f094a4f1dd8741056",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "011-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T06:56:32.389Z",
+        "source": "session_log",
+        "kind": "transcription_garbage_detected",
+        "details": {
+          "_id": "69d4aaa084b6c01353c994af",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:01:33.846Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4abce094a4f1dd8741057",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "012-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:01:33.854Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4abce094a4f1dd8741058",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "012-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:02:08.119Z",
+        "source": "session_log",
+        "kind": "transcription_garbage_detected",
+        "details": {
+          "_id": "69d4abf084b6c01353c994b2",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:06:38.195Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4acfe094a4f1dd8741059",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "013-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:06:38.313Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4acfe094a4f1dd874105a",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "013-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:10:23.533Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4addf094a4f1dd874105b",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "014-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:10:23.537Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4addf094a4f1dd874105c",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "014-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:14:45.090Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4aee5094a4f1dd874105d",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "015-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:14:45.266Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4aee5094a4f1dd874105e",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "015-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:16:18.333Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4af42094a4f1dd874105f",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "016-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:16:18.476Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4af42094a4f1dd8741060",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "016-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:18:56.292Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4afe0094a4f1dd8741061",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "017-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:18:56.405Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4afe0094a4f1dd8741062",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "017-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:19:08.363Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4afec094a4f1dd8741063",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "018-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:22:09.222Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4b0a1094a4f1dd8741064",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "019-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:22:09.464Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4b0a1094a4f1dd8741065",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "019-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:33:05.226Z",
+        "source": "session",
+        "kind": "session_done",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:33:05.420Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69d4b33184b6c01353c994c0",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:33:05.657Z",
+        "source": "session_log",
+        "kind": "summary_telegram_send",
+        "details": {
+          "_id": "69d4b33184b6c01353c994c1",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:33:05.695Z",
+        "source": "session_log",
+        "kind": "notify_http_sent",
+        "details": {
+          "_id": "69d4b33184b6c01353c994c2",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:33:05.736Z",
+        "source": "session_log",
+        "kind": "summary_save",
+        "details": {
+          "_id": "69d4b33184b6c01353c994c3",
+          "status": "pending",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:33:05.773Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69d4b33184b6c01353c994c4",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:33:05.814Z",
+        "source": "session_log",
+        "kind": "notify_requested",
+        "details": {
+          "_id": "69d4b33184b6c01353c994c5",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:33:05.856Z",
+        "source": "session_log",
+        "kind": "notify_hook_started",
+        "details": {
+          "_id": "69d4b33184b6c01353c994c6",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T07:33:05.914Z",
+        "source": "session_log",
+        "kind": "notify_http_sent",
+        "details": {
+          "_id": "69d4b33184b6c01353c994c7",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T08:07:24.492Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4bb3c094a4f1dd8741066",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "034-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T08:13:51.557Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4bcc0094a4f1dd8741067",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "035-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T08:18:52.132Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4bdec094a4f1dd8741068",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "036-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T08:22:19.592Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4bebb094a4f1dd8741069",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "037-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T08:22:19.730Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4bebb094a4f1dd874106a",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "037-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T08:25:29.658Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4bf79094a4f1dd874106b",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "038-2.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T08:40:35.134Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4c303094a4f1dd874106c",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "043-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T08:43:34.888Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4c3b6094a4f1dd874106d",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "044-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T08:44:03.301Z",
+        "source": "session_log",
+        "kind": "transcription_garbage_detected",
+        "details": {
+          "_id": "69d4c3d384b6c01353c994d0",
+          "status": "done",
+          "reason": ""
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T08:45:31.620Z",
+        "source": "message",
+        "kind": "voice",
+        "details": {
+          "_id": "69d4c42b094a4f1dd874106e",
+          "source_type": "web",
+          "speaker": "",
+          "file_name": "045-1.webm"
+        }
+      },
+      {
+        "session_id": "69d49daf094a4f1dd8741042",
+        "ts": "2026-04-07T08:45:41.592Z",
+        "source": "session",
+        "kind": "session_updated",
+        "details": {
+          "status": "",
+          "state": ""
+        }
+      }
+    ]
+  }
+}

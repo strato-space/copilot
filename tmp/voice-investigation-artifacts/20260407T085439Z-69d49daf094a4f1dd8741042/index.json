@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-04-07T08:54:43.288Z",
+  "session_ids": [
+    "69d49daf094a4f1dd8741042"
+  ],
+  "session_summaries": [
+    {
+      "session_id": "69d49daf094a4f1dd8741042",
+      "exists": true,
+      "counters": {
+        "messages_total": 43,
+        "session_log_total": 15,
+        "linked_tasks_total": 0,
+        "linked_tasks_by_status": {},
+        "pm2_log_hits_total": 80,
+        "queue_job_matches_total": 0
+      },
+      "diagnostics": {
+        "queue_snapshot_error": ""
+      },
+      "anomalies": [
+        "session_name_empty"
+      ]
+    }
+  ]
+}
