@@ -26,6 +26,8 @@ Use this as a fast guardrail before implementing anything:
   - canonical payload shape `id/name/description/priority/...`,
   - task extraction is ontology-first: only bounded deliverables should become Draft rows; coordination-only actions, input/access handoffs, references/ideas, and status updates are not canonical tasks by themselves,
   - full recompute with no chunk payload must use compact session raw transcript context, and replay acceptance requires stable Draft `row_id` identity across consecutive recompute runs for unchanged semantics,
+  - successful-but-empty `CREATE_TASKS` MCP composites must resolve to structured `no_task_decision` output instead of surfacing `create_tasks_empty_mcp_result`,
+  - raw-text `CREATE_TASKS` context builders must exclude garbage-flagged transcript rows from language sampling and replay context assembly,
   - `task_type_id` stays optional,
   - master store is `automation_tasks` with draft status `DRAFT_10`,
   - draft editing is autosave-first across both inline table edits and the right-hand detail editor,
@@ -211,6 +213,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - WebRTC close path no longer emits `session_done` from browser Socket.IO; FAB/page/yesterday close flows use the same REST close endpoint for deterministic behavior across host/path variants.
 - WebRTC unload persistence now stores any non-recording state as `paused` to avoid stale auto-resume after refresh/unload races.
 - Full-track recording segments are represented as `full_track` in Monitor/UI with duration and timestamp metadata, but upload to backend is intentionally disabled until diarization workflow is enabled.
+- Duration recovery now requests `ffprobe` `format_tags` / `stream_tags` and parses duration-like tag fallbacks before accepting `duration=0`.
 - Voice workers schedule periodic `PROCESSING` scans in TS runtime; default background scans still skip ordinary waiting sessions, but prioritized scans must include waiting sessions when message rows carry retryable transcription/categorization work.
 - TS `processingLoop` now also prioritizes sessions inferred from pending message backlog (including rows with `is_messages_processed=true`), requeues categorization after quota cooldown via processors queue, and restores waiting-session transcription rows after balance recovery when they are marked with canonical retry reasons such as `insufficient_quota`.
 - TS transcribe handler deduplicates repeated uploads by file hash (`file_hash` / `file_unique_id` / `hash_sha256`) and reuses existing session transcription before new OpenAI requests.
@@ -598,6 +601,7 @@ Rule for updates:
   - Validation passed: `cd backend && npm test -- --runInBand` (`145/145` suites, `782/782` tests + smoke `3/3` suites, `5/5` tests), `cd backend && npm run build`, targeted 4-suite replay package, and `git diff --check`.
   - Production deploy/smoke passed: `./scripts/pm2-backend.sh prod`, `./scripts/pm2-runtime-readiness.sh prod`, `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production`, `curl -fsS http://127.0.0.1:3002/api/health`, and unauthenticated `POST /api/voicebot/generate_possible_tasks` returned expected `401`.
   - Production replay passed for session `69d49daf094a4f1dd8741042`: `DOTENV_CONFIG_PATH=.env.production npx tsx -e \"import 'dotenv/config'; … handleCreateTasksFromChunksJob({ session_id: '69d49daf094a4f1dd8741042', chunks_to_process: [] }) …\"` returned `{ ok: true, tasks_count: 0, reason: 'no_tasks', no_task_decision.code: 'no_task_reason_missing' }`, and the persisted session state now shows `processors_data.CREATE_TASKS.is_processed=true`, `is_processing=false`, with no remaining `create_tasks_empty_mcp_result`.
+  - Post-deploy forensics closed `copilot-4o6u`: the zero-task replay is no longer an operational failure, but the remaining root cause is tracked in `copilot-1ebu` because `session_id` mode still consumes the unfiltered `voice.fetch(..., mode='transcript')` path for this session.
 - Close-session refresh (2026-04-05 07:23):
   - Closed `copilot-bzt6` after live replay determinism verification on target session `69cf65712a7446295ac67771`: `4x` consecutive full recompute runs remained stable and produced a consistent Draft `row_id` key-set with `tasks_count=6`.
   - Simplified extraction behavior without prompt/code inflation: full recompute now runs from compact raw transcript context, dedupe is id-key based (`row_id`/`id`/`task_id_from_ai`), and unknown/missing `candidate_class` paths normalize deterministically.

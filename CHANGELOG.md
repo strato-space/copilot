@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-04-07
+### PROBLEM SOLVED
+- **12:08** The incident wave for session `69d49daf094a4f1dd8741042` had live forensic evidence but no checked-in repo artifact linking the production symptom, affected session, and first-response issue trail.
+- **18:08** `CREATE_TASKS` replay on session `69d49daf094a4f1dd8741042` could still terminate as `create_tasks_empty_mcp_result`, build replay context from garbage-flagged transcript rows, and lose media-duration signal because duration-tag fallbacks were not requested from `ffprobe`.
+- **20:25** After the production replay stopped failing operationally, the zero-task outcome still lacked a recorded root-cause decision, which made it hard to separate a valid no-task result from a remaining extraction bug.
+
+### FEATURE IMPLEMENTED
+- **12:08** Registered the live voice forensics bundle and linked issue state in repo history so the incident wave has a durable, inspectable evidence trail.
+- **18:08** Hardened Voice extraction against garbage and duration blind spots: successful-but-empty `CREATE_TASKS` composites now converge to structured `no_task_decision`, garbage-flagged rows are excluded from raw-text context builders, repetitive multilingual loop hallucinations are promoted to garbage, and ffprobe duration-tag fallback is reachable at runtime.
+- **19:00** Preserved the incident-wave closure state and deploy/replay evidence in `bd`/docs so the completed fixes and production proof stay synchronized.
+- **20:25** Closed the post-deploy forensic follow-up with a precise root-cause note and opened `copilot-1ebu` for the remaining `session_id -> voice.fetch(transcript)` garbage-path bug.
+
+### CHANGES
+- **12:08** Added the checked-in forensics artifact set for the affected session:
+  - `tmp/voice-investigation-artifacts/20260407T085439Z-69d49daf094a4f1dd8741042/index.{json,md}`
+  - `tmp/voice-investigation-artifacts/20260407T085439Z-69d49daf094a4f1dd8741042/69d49daf094a4f1dd8741042.{json,md}`
+  - `.beads/issues.jsonl`
+- **18:08** Updated Voice runtime and regression coverage:
+  - `backend/src/services/voicebot/createTasksAgent.ts`
+  - `backend/src/services/voicebot/transcriptionGarbageDetector.ts`
+  - `backend/src/utils/audioUtils.ts`
+  - `backend/src/workers/voicebot/handlers/createTasksFromChunks.ts`
+  - `backend/__tests__/services/voicebot/createTasksAgentRecovery.test.ts`
+  - `backend/__tests__/services/voicebot/transcriptionGarbageDetector.test.ts`
+  - `backend/__tests__/voicebot/audioUtils.test.ts`
+  - `backend/__tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts`
+- **19:00** Updated delivery records and closeout docs:
+  - `.beads/issues.jsonl`
+  - `README.md`
+  - `CHANGELOG.md`
+- **20:25** Synchronized final issue-state/export updates:
+  - `.beads/issues.jsonl`
+- **18:08** Verification:
+  - `cd backend && npm test -- --runInBand`
+  - `cd backend && npm run build`
+  - targeted replay/fix pack: `__tests__/services/voicebot/createTasksAgentRecovery.test.ts`, `__tests__/services/voicebot/transcriptionGarbageDetector.test.ts`, `__tests__/voicebot/audioUtils.test.ts`, `__tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts`
+- **19:00** Production replay evidence:
+  - `handleCreateTasksFromChunksJob({ session_id: '69d49daf094a4f1dd8741042', chunks_to_process: [] })` returned `{ ok: true, tasks_count: 0, reason: 'no_tasks', no_task_decision.code: 'no_task_reason_missing' }`
+
 ## 2026-04-06
 ### PROBLEM SOLVED
 - **22:47** Draft stale-cleanup writes still relied on a parallel `$unset` for `source_data.superseded_at` even when the same mutation rewrote `source_data` as a full object, which made the cleanup path less explicit and harder to verify.

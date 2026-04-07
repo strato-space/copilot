@@ -48,6 +48,7 @@ These decisions are part of the current platform contract and must be preserved 
   - video inputs must be staged to extracted audio before transcription,
   - transcription is single-file-first, with segmented fallback only after provider-limit checks,
   - segmentation must not exceed the hard `8`-chunk cap; low-bitrate re-encode is required before capped segmented fallback,
+  - duration recovery must request `ffprobe` `format_tags` / `stream_tags` and parse duration-like tag fallbacks before accepting `duration=0`,
   - forensic fields `source_media_type`, `audio_extracted`, `asr_chunk_count`, `chunk_policy`, and `chunk_cap_applied` must persist on both success and deterministic failure paths.
 - Runtime isolation is mandatory for operational data:
   - use deployment/database separation (dedicated DB/instance per environment),
@@ -68,6 +69,8 @@ These decisions are part of the current platform contract and must be preserved 
   - `CREATE_TASKS` payload shape is `id/name/description/priority/...`,
   - `CREATE_TASKS` extraction is ontology-first: only bounded deliverables may materialize into `task_draft`; coordination, inputs/accesses, references/ideas, and status/report statements must stay out of Draft materialization unless they are explicitly transformed into supporting context or comment enrichment,
   - `CREATE_TASKS` full recompute with no explicit chunk payload must use compact session raw transcript context (not session-id-only under-context fallback), and replay acceptance requires stable Draft `row_id` identity across consecutive recompute runs for unchanged semantics,
+  - successful-but-empty `CREATE_TASKS` MCP composites must resolve through structured `no_task_decision` output; `create_tasks_empty_mcp_result` is an operational failure signal, not an accepted steady-state result after a successful composite,
+  - raw-text `CREATE_TASKS` context builders must exclude garbage-flagged transcript rows from language sampling and replay context assembly,
   - `task_type_id` is optional in Possible Tasks UI,
   - possible tasks are master records in `automation_tasks` with `task_status=DRAFT_10`,
   - Draft task editing is autosave-first across both inline row edits and the right-hand detail card; the primary manual action is `Run`, not `Save`, and `Run` must not materialize a row to `READY_10` if autosave failed,
