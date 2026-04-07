@@ -10,6 +10,36 @@ const toPositiveNumber = (value: unknown): number | null => {
   return parsed;
 };
 
+const toPositiveDurationSeconds = (value: unknown): number | null => {
+  const numeric = toPositiveNumber(value);
+  if (numeric != null) return numeric;
+
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  const match = raw.match(/^(\d+):(\d{2}):(\d{2}(?:\.\d+)?)$/);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+    return null;
+  }
+
+  return toPositiveNumber(hours * 3600 + minutes * 60 + seconds);
+};
+
+const collectDurationCandidatesFromTags = (tags: unknown, candidates: number[]): void => {
+  if (!tags || typeof tags !== 'object') return;
+
+  for (const [key, value] of Object.entries(tags as Record<string, unknown>)) {
+    if (!/duration/i.test(String(key || ''))) continue;
+    const parsed = toPositiveDurationSeconds(value);
+    if (parsed != null) candidates.push(parsed);
+  }
+};
+
 export const parseFfprobeDuration = (rawOutput: string): number => {
   const raw = String(rawOutput || '').trim();
   if (!raw) {
@@ -27,19 +57,25 @@ export const parseFfprobeDuration = (rawOutput: string): number => {
   const root = parsed as Record<string, unknown>;
   const candidates: number[] = [];
 
-  const formatDuration = toPositiveNumber(
+  const formatDuration = toPositiveDurationSeconds(
     (root.format as Record<string, unknown> | undefined)?.duration
   );
   if (formatDuration != null) {
     candidates.push(formatDuration);
   }
 
+  collectDurationCandidatesFromTags(
+    (root.format as Record<string, unknown> | undefined)?.tags,
+    candidates
+  );
+
   const streams = Array.isArray(root.streams) ? root.streams : [];
   for (const stream of streams) {
-    const streamDuration = toPositiveNumber((stream as Record<string, unknown>)?.duration);
+    const streamDuration = toPositiveDurationSeconds((stream as Record<string, unknown>)?.duration);
     if (streamDuration != null) {
       candidates.push(streamDuration);
     }
+    collectDurationCandidatesFromTags((stream as Record<string, unknown>)?.tags, candidates);
   }
 
   if (candidates.length === 0) {
@@ -49,20 +85,18 @@ export const parseFfprobeDuration = (rawOutput: string): number => {
   return Math.max(...candidates);
 };
 
+export const buildFfprobeDurationArgs = (filePath: string): string[] => [
+  '-v',
+  'error',
+  '-show_entries',
+  'format=duration:format_tags:stream=duration:stream_tags',
+  '-of',
+  'json',
+  filePath,
+];
+
 export const getAudioDurationFromFile = async (filePath: string): Promise<number> => {
-  const probe = spawnSync(
-    'ffprobe',
-    [
-      '-v',
-      'error',
-      '-show_entries',
-      'format=duration:stream=duration',
-      '-of',
-      'json',
-      filePath,
-    ],
-    { encoding: 'utf8' }
-  );
+  const probe = spawnSync('ffprobe', buildFfprobeDurationArgs(filePath), { encoding: 'utf8' });
 
   if (probe.error) {
     throw new Error(`ffprobe execution failed: ${probe.error.message}`);

@@ -15,6 +15,7 @@ const applyCreateTasksCompositeCommentSideEffectsMock = jest.fn();
 const CREATE_TASKS_COMPOSITE_META_KEY = '__create_tasks_composite_meta';
 const {
   extractCreateTasksRuntimeFailure: extractCreateTasksRuntimeFailureFromSource,
+  isCreateTasksMessageGarbageFlagged: isCreateTasksMessageGarbageFlaggedFromSource,
 } = await import('../../../src/services/voicebot/createTasksAgent.ts');
 
 jest.unstable_mockModule('../../../src/services/db.js', () => ({
@@ -29,6 +30,7 @@ jest.unstable_mockModule('../../../src/services/voicebot/createTasksAgent.js', a
   return {
     CREATE_TASKS_COMPOSITE_META_KEY,
     extractCreateTasksRuntimeFailure: extractCreateTasksRuntimeFailureFromSource,
+    isCreateTasksMessageGarbageFlagged: isCreateTasksMessageGarbageFlaggedFromSource,
     runCreateTasksAgent: runCreateTasksAgentMock,
   };
 });
@@ -166,6 +168,102 @@ describe('handleCreateTasksFromChunksJob', () => {
       expect.objectContaining({
         sessionId: sessionId.toString(),
         drafts: undefined,
+      })
+    );
+  });
+
+  it('filters garbage-flagged rows out of full-recompute raw_text context', async () => {
+    const sessionId = new ObjectId();
+    const sessionsFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      session_name: 'Garbage filter session',
+      project_id: 'proj-1',
+      user_id: 'user-1',
+    }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const messagesFind = jest.fn(() => ({
+      sort: () => ({
+        toArray: async () => [
+          {
+            _id: new ObjectId(),
+            transcription_text: 'Keep this executor-ready transcript.',
+            garbage_detected: false,
+          },
+          {
+            _id: new ObjectId(),
+            transcription_text: 'Drop this garbage loop.',
+            garbage_detected: true,
+            garbage_detection: {
+              is_garbage: true,
+              code: 'noise_or_garbage',
+            },
+          },
+          {
+            _id: new ObjectId(),
+            text: 'Legacy clean text fallback.',
+            garbage_detection: {
+              is_garbage: false,
+              code: 'ok',
+            },
+          },
+        ],
+      }),
+    }));
+    const eventsAdd = jest.fn(async () => ({ id: 'event-job' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: messagesFind,
+          };
+        }
+        return {};
+      },
+    });
+
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.EVENTS]: { add: eventsAdd },
+    });
+
+    const generatedTasks = [
+      {
+        row_id: 'TASK-1',
+        id: 'TASK-1',
+        name: 'Ship parity',
+        description: 'Implement parity',
+        priority: 'P2',
+      },
+    ] as Array<Record<string, unknown>>;
+    (generatedTasks as unknown as Record<string, unknown>)[CREATE_TASKS_COMPOSITE_META_KEY] = {
+      summary_md_text: 'Summary body',
+      scholastic_review_md: 'Review body',
+      session_name: 'Garbage filter session',
+      project_id: 'proj-1',
+    };
+    runCreateTasksAgentMock.mockResolvedValue(generatedTasks);
+    persistPossibleTasksForSessionMock.mockResolvedValue({
+      items: [{ id: 'TASK-1', row_id: 'TASK-1', name: 'Ship parity' }],
+      rows: [{ id: 'TASK-1', row_id: 'TASK-1', name: 'Ship parity' }],
+      removedRowIds: [],
+    });
+
+    await handleCreateTasksFromChunksJob({
+      session_id: sessionId.toString(),
+      chunks_to_process: [],
+    });
+
+    expect(runCreateTasksAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: sessionId.toString(),
+        projectId: 'proj-1',
+        rawText: 'Keep this executor-ready transcript.\n\nLegacy clean text fallback.',
       })
     );
   });

@@ -10,6 +10,7 @@ import { getLogger } from '../../../utils/logger.js';
 import { runtimeQuery } from './shared/sharedRuntime.js';
 import {
   extractCreateTasksRuntimeFailure,
+  isCreateTasksMessageGarbageFlagged,
   runCreateTasksAgent,
 } from '../../../services/voicebot/createTasksAgent.js';
 import {
@@ -103,6 +104,8 @@ const collectSessionRawTextForCreateTasks = async ({
           text: 1,
           message_timestamp: 1,
           created_at: 1,
+          garbage_detected: 1,
+          garbage_detection: 1,
         },
       }
     )
@@ -110,6 +113,7 @@ const collectSessionRawTextForCreateTasks = async ({
     .toArray();
 
   const rawText = rows
+    .filter((row) => !isCreateTasksMessageGarbageFlagged(row))
     .map(
       (row) =>
         normalizeChunkText((row as { transcription_text?: unknown }).transcription_text) ||

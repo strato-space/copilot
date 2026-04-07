@@ -1,6 +1,6 @@
 type OpenAiResponsesClient = {
   responses?: {
-    create: (params: Record<string, unknown>) => Promise<any>;
+    create: (params: Record<string, unknown>) => Promise<unknown>;
   };
 };
 
@@ -23,8 +23,13 @@ const DEFAULT_CODE_FALSE = 'ok';
 const DEFAULT_CODE_TRUE = 'noise_or_garbage';
 const SHORT_ARTIFACT_REGEX = /^[\s.,!?;:'"`~()[\]{}\-_/\\|+=*]+$/;
 const MIN_TOKEN_COUNT_FOR_REPETITION = 12;
-const MAX_UNIQUE_TOKEN_RATIO_FOR_REPETITION = 0.55;
+const MAX_UNIQUE_TOKEN_RATIO_FOR_REPETITION = 0.68;
 const MIN_REPETITION_COVERAGE = 0.4;
+const MIN_REPEATED_SEGMENT_COUNT = 3;
+const MIN_REPEATED_SEGMENT_LENGTH = 6;
+const MIN_REPEATED_SEGMENT_COVERAGE = 0.55;
+const MIN_COMPACT_LOOP_LENGTH = 24;
+const COMPACT_LOOP_REGEX = /(.{4,24}?)\1{3,}/u;
 
 const toFiniteNumber = (value: unknown, fallback: number): number => {
   const n = Number(value);
@@ -62,9 +67,12 @@ const normalizeReason = (value: unknown, isGarbage: boolean, code: string): stri
 const normalizeForPatternChecks = (value: string): string =>
   String(value || '')
     .toLowerCase()
-    .replace(/[^a-z0-9\u0400-\u04ff]+/gi, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+const compactNormalizedToken = (value: string): string =>
+  value.replace(/\s+/g, '').trim();
 
 const detectLowDiversityRepetition = (normalized: string): string | null => {
   const tokens = normalized.split(' ').filter(Boolean);
@@ -91,13 +99,48 @@ const detectLowDiversityRepetition = (normalized: string): string | null => {
   return null;
 };
 
+const detectCompactLoop = (normalized: string): string | null => {
+  const compactNormalized = compactNormalizedToken(normalized);
+  if (compactNormalized.length < MIN_COMPACT_LOOP_LENGTH) {
+    return null;
+  }
+  return COMPACT_LOOP_REGEX.test(compactNormalized) ? 'repeated_compact_loop' : null;
+};
+
+const detectRepeatedSegmentLoop = (transcriptionText: string): string | null => {
+  const segments = String(transcriptionText || '')
+    .split(/[\n\r.!?…;:。！？；：]+/u)
+    .map((segment) => normalizeForPatternChecks(segment))
+    .filter((segment) => segment.length >= MIN_REPEATED_SEGMENT_LENGTH);
+
+  if (segments.length < MIN_REPEATED_SEGMENT_COUNT) return null;
+
+  const totalCompactLength = segments.reduce((sum, segment) => sum + compactNormalizedToken(segment).length, 0);
+  if (totalCompactLength <= 0) return null;
+
+  const counts = new Map<string, number>();
+  for (const segment of segments) counts.set(segment, (counts.get(segment) || 0) + 1);
+
+  for (const [segment, count] of counts.entries()) {
+    if (count < MIN_REPEATED_SEGMENT_COUNT) continue;
+    const coverage = (compactNormalizedToken(segment).length * count) / totalCompactLength;
+    if (coverage >= MIN_REPEATED_SEGMENT_COVERAGE) return 'repeated_segment_loop';
+  }
+
+  return null;
+};
+
 const classifyLocalSilenceHallucination = (
   transcriptionText: unknown
 ): { is_garbage: boolean; code: string; reason: string } | null => {
-  const normalized = normalizeForPatternChecks(String(transcriptionText || ''));
+  const sourceText = String(transcriptionText || '');
+  const normalized = normalizeForPatternChecks(sourceText);
   if (!normalized) return null;
 
-  const ruleCode = detectLowDiversityRepetition(normalized);
+  const ruleCode =
+    detectRepeatedSegmentLoop(sourceText) ||
+    detectLowDiversityRepetition(normalized) ||
+    detectCompactLoop(normalized);
   if (!ruleCode) return null;
 
   return {
@@ -153,6 +196,27 @@ export const parseGarbageDetectorResponse = (
   const code = normalizeCode(payload?.code, isGarbage);
   const reason = normalizeReason(payload?.reason, isGarbage, code);
   return { is_garbage: isGarbage, code, reason };
+};
+
+const reconcileContradictoryDetectorVerdict = ({
+  is_garbage,
+  code,
+  reason,
+}: {
+  is_garbage: boolean;
+  code: string;
+  reason: string;
+}): { is_garbage: boolean; code: string; reason: string } => {
+  if (is_garbage) return { is_garbage, code, reason };
+
+  const hasGarbageHintCode = /^repetitive(?:_|$)/.test(code) || /(?:^|_)loop(?:_|$)/.test(code);
+  if (!hasGarbageHintCode) return { is_garbage, code, reason };
+
+  return {
+    is_garbage: true,
+    code,
+    reason: `reconciled_from_code_${code}`,
+  };
 };
 
 const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
@@ -249,7 +313,7 @@ export const detectGarbageTranscription = async ({
   );
 
   const rawOutput = String((response as { output_text?: string })?.output_text || '').trim();
-  const parsed = parseGarbageDetectorResponse(rawOutput);
+  const parsed = reconcileContradictoryDetectorVerdict(parseGarbageDetectorResponse(rawOutput));
 
   return {
     checked_at: checkedAt,

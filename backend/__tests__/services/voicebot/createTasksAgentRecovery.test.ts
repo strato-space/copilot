@@ -1099,7 +1099,86 @@ describe('runCreateTasksAgent quota fallback', () => {
     );
   });
 
-  it('throws on semantically empty composite payloads instead of treating them as no-task success', async () => {
+  it('derives preferred output language without garbage-flagged transcript samples', async () => {
+    const sessionId = new ObjectId().toHexString();
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: new ObjectId(sessionId),
+              summary_md_text: '',
+              review_md_text: '',
+              session_name: '',
+            })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            find: jest.fn(() => ({
+              sort: () => ({
+                limit: () => ({
+                  toArray: async () => [
+                    {
+                      message_timestamp: 20,
+                      transcription_text: 'hello from noisy repeated clip',
+                      garbage_detected: true,
+                      garbage_detection: {
+                        is_garbage: true,
+                        code: 'noise_or_garbage',
+                      },
+                    },
+                    {
+                      message_timestamp: 10,
+                      transcription_text: 'нужно подготовить смету и согласовать сроки',
+                      garbage_detected: false,
+                    },
+                  ],
+                }),
+              }),
+            })),
+          };
+        }
+        return { findOne: jest.fn(async () => null), find: jest.fn() };
+      },
+    };
+
+    initializeSessionMock.mockResolvedValue({ sessionId: 'language-filter-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValue({
+      success: true,
+      data: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              summary_md_text: '',
+              scholastic_review_md: '',
+              task_draft: [],
+              enrich_ready_task_comments: [],
+              no_task_decision: {
+                code: 'discussion-only',
+                reason: 'No bounded deliverables in transcript.',
+                evidence: ['language filter fixture'],
+              },
+              session_name: '',
+              project_id: '',
+            }),
+          },
+        ],
+      },
+    });
+
+    await runCreateTasksAgent({
+      sessionId,
+      db: dbStub as never,
+    });
+
+    const envelope = JSON.parse(String(callToolMock.mock.calls[0]?.[1]?.message || '')) as Record<string, unknown>;
+    expect(envelope.preferred_output_language).toBe('ru');
+  });
+
+  it('normalizes semantically empty composite payloads into deterministic no-task behavior', async () => {
     initializeSessionMock.mockResolvedValue({ sessionId: 'empty-composite-session' });
     closeSessionMock.mockResolvedValue(undefined);
     callToolMock.mockResolvedValue({
@@ -1117,12 +1196,27 @@ describe('runCreateTasksAgent quota fallback', () => {
       },
     });
 
-    await expect(
-      runCreateTasksAgent({
-        sessionId: 'session-empty-composite',
-        projectId: 'proj-empty',
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-empty-composite',
+      projectId: 'proj-empty',
+    });
+    const compositeMeta = (tasks as unknown as Record<string, unknown>).__create_tasks_composite_meta as
+      | Record<string, unknown>
+      | undefined;
+    const noTaskDecision = compositeMeta?.no_task_decision as Record<string, unknown> | undefined;
+    const evidence = Array.isArray(noTaskDecision?.evidence) ? (noTaskDecision?.evidence as string[]) : [];
+
+    expect(tasks).toEqual([]);
+    expect(noTaskDecision).toEqual(
+      expect.objectContaining({
+        code: 'no_task_reason_missing',
+        inferred: true,
+        source: 'agent_inferred',
       })
-    ).rejects.toThrow('create_tasks_empty_mcp_result');
+    );
+    expect(evidence).toEqual(
+      expect.arrayContaining(['has_summary_md_text=false', 'has_scholastic_review_md=false'])
+    );
   });
 
   it('assigns deterministic content-based locators when the model omits row identifiers', async () => {
@@ -1668,6 +1762,104 @@ describe('runCreateTasksAgent quota fallback', () => {
         project_id: 'proj-overflow',
       }),
     ]);
+  });
+
+  it('excludes garbage-flagged transcript excerpts from reduced create_tasks retry context', async () => {
+    const sessionId = new ObjectId().toHexString();
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: new ObjectId(sessionId),
+              session_name: 'Reduced Context Filter Session',
+              summary_md_text: 'Нужен только чистый actionable контекст.',
+            })),
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.MESSAGES) {
+          return {
+            findOne: jest.fn(async () => ({
+              message_timestamp: Math.floor(new Date('2026-03-23T12:05:00.000Z').getTime() / 1000),
+              created_at: new Date('2026-03-23T12:05:00.000Z'),
+            })),
+            find: jest.fn(() => ({
+              sort: () => ({
+                limit: () => ({
+                  toArray: async () => [
+                    {
+                      message_timestamp: 30,
+                      transcription_text: 'discard this noisy repeated loop',
+                      garbage_detected: true,
+                      garbage_detection: {
+                        is_garbage: true,
+                        code: 'noise_or_garbage',
+                      },
+                    },
+                    {
+                      message_timestamp: 20,
+                      transcription_text: 'Нужно подготовить финальный оффер и отправить клиенту.',
+                      garbage_detected: false,
+                    },
+                  ],
+                }),
+              }),
+            })),
+          };
+        }
+        return { findOne: jest.fn(async () => null), find: jest.fn() };
+      },
+    };
+
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'reduced-garbage-primary' })
+      .mockResolvedValueOnce({ sessionId: 'reduced-garbage-retry' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: "I hit an internal error while calling the model: Invalid 'input[31].output': string_above_max_length",
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [],
+                no_task_decision: {
+                  code: 'discussion-only',
+                  reason: 'No bounded tasks in reduced context',
+                  evidence: ['garbage filtered reduced context'],
+                },
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: '',
+              }),
+            },
+          ],
+        },
+      });
+
+    await runCreateTasksAgent({
+      sessionId,
+      db: dbStub as never,
+    });
+
+    const retryEnvelope = JSON.parse(String(callToolMock.mock.calls[1]?.[1]?.message || '')) as Record<string, unknown>;
+    const retryRawText = String(retryEnvelope.raw_text || '');
+    expect(retryRawText).toContain('Нужно подготовить финальный оффер и отправить клиенту.');
+    expect(retryRawText).not.toContain('discard this noisy repeated loop');
   });
 
   it('keeps reduced raw_text retry envelope bounded even when source transcript chunks are very large', async () => {

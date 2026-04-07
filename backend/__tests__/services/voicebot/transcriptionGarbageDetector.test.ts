@@ -139,6 +139,42 @@ describe('transcriptionGarbageDetector', () => {
     expect(result.code).toBe('repeated_ngram_loop');
   });
 
+  it('classifies repeated Japanese power-button hallucination locally before model call', async () => {
+    const create = jest.fn(async () => ({
+      output_text: '{"is_garbage":false,"code":"ok","reason":"model_clean"}',
+    }));
+    const result = await detectGarbageTranscription({
+      openaiClient: {
+        responses: { create },
+      },
+      transcriptionText:
+        '電源ボタンを押してください。電源ボタンを押してください。電源ボタンを押してください。',
+      timeoutMs: 1000,
+    });
+
+    expect(create).not.toHaveBeenCalled();
+    expect(result.is_garbage).toBe(true);
+    expect(result.code).toBe('repeated_segment_loop');
+  });
+
+  it('classifies repeated Chinese board phrase locally before model call', async () => {
+    const create = jest.fn(async () => ({
+      output_text: '{"is_garbage":false,"code":"ok","reason":"model_clean"}',
+    }));
+    const result = await detectGarbageTranscription({
+      openaiClient: {
+        responses: { create },
+      },
+      transcriptionText:
+        '请按电源键请按电源键请按电源键请按电源键请按电源键',
+      timeoutMs: 1000,
+    });
+
+    expect(create).not.toHaveBeenCalled();
+    expect(result.is_garbage).toBe(true);
+    expect(result.code).toBe('repeated_compact_loop');
+  });
+
   it('keeps repeated CTA in normal speech on model path when it appears only twice', async () => {
     const create = jest.fn(async () => ({
       output_text: '{"is_garbage":false,"code":"ok","reason":"clear_speech"}',
@@ -155,6 +191,25 @@ describe('transcriptionGarbageDetector', () => {
     expect(create).toHaveBeenCalledTimes(1);
     expect(result.is_garbage).toBe(false);
     expect(result.code).toBe('ok');
+  });
+
+  it('reconciles contradictory repetitive code from model as garbage', async () => {
+    const create = jest.fn(async () => ({
+      output_text:
+        '{"is_garbage":false,"code":"repetitive_chinese_speech","reason":"repeated phrase"}',
+    }));
+    const result = await detectGarbageTranscription({
+      openaiClient: {
+        responses: { create },
+      },
+      transcriptionText: 'Короткий рабочий комментарий для проверки противоречивого ответа модели.',
+      timeoutMs: 1000,
+    });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(result.is_garbage).toBe(true);
+    expect(result.code).toBe('repetitive_chinese_speech');
+    expect(result.reason).toBe('reconciled_from_code_repetitive_chinese_speech');
   });
 
   it('keeps a structured ordinal list with one back-reference on model path', async () => {

@@ -7,7 +7,6 @@ import {
 } from '../../api/routes/voicebot/possibleTasksMasterModel.js';
 import { attemptAgentsQuotaRecovery, isAgentsQuotaFailure } from './agentsRuntimeRecovery.js';
 import {
-  CREATE_TASKS_NO_TASK_REASON_MISSING_CODE,
   normalizeCreateTasksNoTaskDecision,
   resolveCreateTasksNoTaskDecisionOutcome,
   type CreateTasksNoTaskDecision,
@@ -149,6 +148,30 @@ const toText = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return '';
+};
+
+const parseLooseBoolean = (value: unknown): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1' || normalized === 'yes';
+  }
+  return false;
+};
+
+export const isCreateTasksMessageGarbageFlagged = (value: unknown): boolean => {
+  const record = asRecord(value);
+  if (!record) return false;
+  if (parseLooseBoolean(record.garbage_detected)) return true;
+
+  const garbageDetection = asRecord(record.garbage_detection);
+  if (!garbageDetection) return false;
+  if (parseLooseBoolean(garbageDetection.is_garbage)) return true;
+  if (parseLooseBoolean(garbageDetection.skipped)) return false;
+
+  const normalizedCode = toText(garbageDetection.code).toLowerCase();
+  return Boolean(normalizedCode && normalizedCode !== 'ok' && normalizedCode !== 'clear_speech');
 };
 
 const normalizeTransitionInvariantCode = (value: unknown): CreateTasksTransitionInvariantCode | null => {
@@ -1032,6 +1055,8 @@ const derivePreferredOutputLanguage = async ({
               projection: {
                 transcription_text: 1,
                 text: 1,
+                garbage_detected: 1,
+                garbage_detection: 1,
               },
             }
           )
@@ -1065,7 +1090,7 @@ const derivePreferredOutputLanguage = async ({
 
   for (const message of messageDocs) {
     const record = asRecord(message);
-    if (!record) continue;
+    if (!record || isCreateTasksMessageGarbageFlagged(record)) continue;
     const text = toText(record.transcription_text) || toText(record.text);
     if (text) samples.push(text);
   }
@@ -1099,59 +1124,6 @@ const mergeCompositeTaskDrafts = (
   return merged;
 };
 
-const mergeCommentDrafts = (
-  primary: CreateTasksCompositeEnrichmentDraft[],
-  supplemental: CreateTasksCompositeEnrichmentDraft[]
-): CreateTasksCompositeEnrichmentDraft[] => {
-  const merged = [...primary];
-  const seen = new Set(primary.map((entry) => `${entry.lookup_id}::${entry.comment}`));
-  for (const candidate of supplemental) {
-    const key = `${candidate.lookup_id}::${candidate.comment}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(candidate);
-  }
-  return merged;
-};
-
-const mergeCompositeResults = ({
-  primary,
-  supplemental,
-}: {
-  primary: CreateTasksCompositeResult;
-  supplemental: CreateTasksCompositeResult;
-}): CreateTasksCompositeResult => {
-  const taskDraft = mergeCompositeTaskDrafts(primary.task_draft, supplemental.task_draft);
-  const enrichReadyTaskComments = mergeCommentDrafts(
-    primary.enrich_ready_task_comments,
-    supplemental.enrich_ready_task_comments
-  );
-  const noTaskDecision =
-    taskDraft.length > 0
-      ? null
-      : primary.no_task_decision || supplemental.no_task_decision;
-
-  const runtimeTransitionCarryOver =
-    primary.runtime_transition_carry_over || supplemental.runtime_transition_carry_over;
-
-  return {
-    summary_md_text: primary.summary_md_text || supplemental.summary_md_text,
-    scholastic_review_md: primary.scholastic_review_md || supplemental.scholastic_review_md,
-    task_draft: taskDraft,
-    enrich_ready_task_comments: enrichReadyTaskComments,
-    no_task_decision: noTaskDecision,
-    session_name: primary.session_name || supplemental.session_name,
-    project_id: primary.project_id || supplemental.project_id,
-    runtime_transition_discards: [
-      ...(primary.runtime_transition_discards || []),
-      ...(supplemental.runtime_transition_discards || []),
-    ],
-    ...(runtimeTransitionCarryOver
-      ? { runtime_transition_carry_over: runtimeTransitionCarryOver }
-      : {}),
-  };
-};
-
 const finalizeCompositeTaskDraft = (
   composite: CreateTasksCompositeResult
 ): CreateTasksCompositeResult => {
@@ -1159,7 +1131,16 @@ const finalizeCompositeTaskDraft = (
   return {
     ...composite,
     task_draft: taskDraft,
-    no_task_decision: taskDraft.length > 0 ? null : composite.no_task_decision,
+    no_task_decision:
+      taskDraft.length > 0
+        ? null
+        : resolveCreateTasksNoTaskDecisionOutcome({
+            decision: composite.no_task_decision,
+            extractedTaskCount: taskDraft.length,
+            persistedTaskCount: taskDraft.length,
+            hasSummary: Boolean(composite.summary_md_text),
+            hasReview: Boolean(composite.scholastic_review_md),
+          }),
   };
 };
 
@@ -1201,6 +1182,8 @@ const buildReducedCreateTasksRawText = async ({
           message_timestamp: 1,
           transcription_text: 1,
           text: 1,
+          garbage_detected: 1,
+          garbage_detection: 1,
         },
       }
     )
@@ -1209,10 +1192,12 @@ const buildReducedCreateTasksRawText = async ({
     .toArray();
 
   const messageSnippets = messageDocs
+    .map((doc) => asRecord(doc))
+    .filter((doc): doc is Record<string, unknown> => Boolean(doc) && !isCreateTasksMessageGarbageFlagged(doc))
     .map((doc) => {
-      const text = toText((doc as Record<string, unknown>).transcription_text) || toText((doc as Record<string, unknown>).text);
+      const text = toText(doc.transcription_text) || toText(doc.text);
       if (!text) return '';
-      const timestamp = toText((doc as Record<string, unknown>).message_timestamp);
+      const timestamp = toText(doc.message_timestamp);
       return `- ${timestamp || 'message'}: ${clipText(text, REDUCED_CONTEXT_MESSAGE_MAX_CHARS)}`;
     })
     .filter(Boolean);
@@ -1244,21 +1229,6 @@ const toEmptyCompositeResult = (defaultProjectId = ''): CreateTasksCompositeResu
   session_name: '',
   project_id: defaultProjectId,
 });
-
-const isSemanticallyEmptyCompositeResult = (value: CreateTasksCompositeResult): boolean =>
-  {
-    const inferredMissingNoTask =
-      value.no_task_decision?.code === CREATE_TASKS_NO_TASK_REASON_MISSING_CODE &&
-      value.no_task_decision?.inferred === true &&
-      value.no_task_decision?.source === 'agent_inferred';
-    return (
-  value.task_draft.length === 0 &&
-  value.enrich_ready_task_comments.length === 0 &&
-  (!value.no_task_decision || inferredMissingNoTask) &&
-  !value.summary_md_text &&
-  !value.scholastic_review_md
-    );
-  };
 
 const normalizeCompositeResult = (
   value: unknown,
@@ -1526,11 +1496,7 @@ export const runCreateTasksCompositeAgent = async ({
         throw new Error(nestedFailure || result.error || 'create_tasks_mcp_failed');
       }
 
-      const parsedComposite = parseCreateTasksCompositeResult(result.data, normalizedProjectId);
-      if (isSemanticallyEmptyCompositeResult(parsedComposite)) {
-        throw new Error('create_tasks_empty_mcp_result');
-      }
-      return parsedComposite;
+      return parseCreateTasksCompositeResult(result.data, normalizedProjectId);
     } finally {
       await mcpClient.closeSession(mcpSessionId).catch((error) => {
         logger.warn('[voicebot-worker] create_tasks agent session close failed', {
