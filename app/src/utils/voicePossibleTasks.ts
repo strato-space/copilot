@@ -85,9 +85,6 @@ const toSingleLine = (value: string): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
-const normalizeWhitespace = (value: string): string =>
-  value.replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-
 const extractCreateTasksAgentError = (raw: string): string => {
   const singleLine = toSingleLine(raw);
   if (!singleLine) return '';
@@ -253,10 +250,63 @@ export const parseVoiceTaskEnrichmentSections = (
 export const collectPossibleTaskLocators = (value: unknown): string[] => {
   const record = asRecord(value);
   const rawValues = record
-    ? [record.row_id, record.id, record.task_id_from_ai]
+    ? [record.row_id, record.id, record.client_row_key, record.task_id_from_ai]
     : [value];
 
   return Array.from(new Set(rawValues.map((item) => toText(item)).filter(Boolean)));
+};
+
+const toNullableFiniteNumber = (value: unknown): number | null | undefined => {
+  if (value === null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    const parsed = Number(trimmed);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+};
+
+const parseFieldVersions = (value: unknown): Record<string, number> | undefined => {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  const entries = Object.entries(record)
+    .map(([key, raw]) => {
+      const parsed = toNullableFiniteNumber(raw);
+      if (parsed === null || parsed === undefined) return null;
+      return [key, parsed] as const;
+    })
+    .filter((entry): entry is readonly [string, number] => entry !== null);
+  if (entries.length === 0) return undefined;
+  return Object.fromEntries(entries);
+};
+
+const parseStringList = (value: unknown): string[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  const normalized = value.map((entry) => toText(entry)).filter(Boolean);
+  return normalized.length > 0 ? normalized : [];
+};
+
+const buildClientRowKey = ({
+  record,
+  rowId,
+  id,
+  taskIdFromAi,
+  index,
+}: {
+  record: UnknownRecord;
+  rowId: string;
+  id: string;
+  taskIdFromAi: string;
+  index: number;
+}): string => {
+  const explicit = toText(record.client_row_key);
+  if (explicit) return explicit;
+  if (rowId) return `persisted:${rowId}`;
+  if (id) return `persisted-id:${id}`;
+  if (taskIdFromAi) return `ai:${taskIdFromAi}`;
+  return `client-row-${index + 1}`;
 };
 
 export const normalizePossibleTask = (
@@ -268,8 +318,15 @@ export const normalizePossibleTask = (
   if (!record) return null;
 
   const taskIdFromAi = toText(record.task_id_from_ai);
-  const id = toText(record.id) || taskIdFromAi || `task-${index + 1}`;
-  const row_id = toText(record.row_id) || id;
+  const row_id = toText(record.row_id);
+  const id = toText(record.id) || row_id || taskIdFromAi;
+  const clientRowKey = buildClientRowKey({ record, rowId: row_id, id, taskIdFromAi, index });
+  const rowVersion = toNullableFiniteNumber(record.row_version);
+  const lastUserEditVersion = toNullableFiniteNumber(record.last_user_edit_version);
+  const lastRecomputeVersion = toNullableFiniteNumber(record.last_recompute_version);
+  const fieldVersions = parseFieldVersions(record.field_versions);
+  const userOwnedOverrides = parseStringList(record.user_owned_overrides);
+  const divergentBackendCandidates = asRecord(record.divergent_backend_candidates);
   const discussionSessions = Array.isArray(record.discussion_sessions)
     ? record.discussion_sessions as Array<{
         session_id: string;
@@ -284,6 +341,7 @@ export const normalizePossibleTask = (
     ...(toText(record._id) ? { _id: toText(record._id) } : {}),
     row_id,
     id,
+    client_row_key: clientRowKey,
     name: toText(record.name) || `Задача ${index + 1}`,
     description: toText(record.description),
     priority: toText(record.priority) || 'P3',
@@ -300,6 +358,12 @@ export const normalizePossibleTask = (
     ...(toText(record.source_ref) ? { source_ref: toText(record.source_ref) } : {}),
     ...(toText(record.external_ref) ? { external_ref: toText(record.external_ref) } : {}),
     ...(record.source_data && typeof record.source_data === 'object' ? { source_data: record.source_data as Record<string, unknown> } : {}),
+    ...(rowVersion !== undefined ? { row_version: rowVersion } : {}),
+    ...(lastUserEditVersion !== undefined ? { last_user_edit_version: lastUserEditVersion } : {}),
+    ...(lastRecomputeVersion !== undefined ? { last_recompute_version: lastRecomputeVersion } : {}),
+    ...(fieldVersions ? { field_versions: fieldVersions } : {}),
+    ...(userOwnedOverrides ? { user_owned_overrides: userOwnedOverrides } : {}),
+    ...(divergentBackendCandidates ? { divergent_backend_candidates: divergentBackendCandidates } : {}),
     ...(typeof record.discussion_count === 'number' && Number.isFinite(record.discussion_count) ? { discussion_count: record.discussion_count } : {}),
     ...(discussionSessions ? { discussion_sessions: discussionSessions } : {}),
   };
@@ -317,7 +381,7 @@ export const normalizePossibleTasks = (
   value.forEach((item, index) => {
     const task = normalizePossibleTask(item, index, defaultProjectId);
     if (!task) return;
-    const dedupeKey = task.row_id || task.id || task.task_id_from_ai;
+    const dedupeKey = task.row_id || task.id || task.client_row_key || task.task_id_from_ai;
     if (!dedupeKey || seen.has(dedupeKey)) return;
     seen.add(dedupeKey);
     normalized.push(task);

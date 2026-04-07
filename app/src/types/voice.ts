@@ -60,6 +60,7 @@ export interface VoicePossibleTask {
     _id?: string;
     row_id: string;
     id: string;
+    client_row_key?: string;
     name: string;
     description: string;
     priority: string;
@@ -76,6 +77,12 @@ export interface VoicePossibleTask {
     source_ref?: string;
     external_ref?: string;
     source_data?: Record<string, unknown>;
+    row_version?: number | null;
+    last_user_edit_version?: number | null;
+    last_recompute_version?: number | null;
+    field_versions?: Record<string, number>;
+    user_owned_overrides?: string[];
+    divergent_backend_candidates?: Record<string, unknown>;
     discussion_count?: number;
     discussion_sessions?: Array<{
         session_id: string;

@@ -8,6 +8,9 @@ Migration baseline: TypeDB `3.x` only (hard cutover), no TypeDB `2.x` compatibil
 Contract baseline for current sync wave (`copilot-gym6.*`):
 - `docs/runtime_contract_gap_matrix_v1.md`
 
+Draft normalization bridge note (2026-04-07):
+- `automation_tasks` schema+mapping now admits persisted Draft override metadata fields used by Gate-1 normalization (`slug`, `row_version`, `last_user_edit_version`, `last_recompute_version`, `user_owned_overrides`, `field_versions`, `divergent_backend_candidates`).
+
 ## Operational Kinds
 
 The rollout now distinguishes two kinds of ingest work:

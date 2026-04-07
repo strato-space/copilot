@@ -33,6 +33,8 @@ type RawTaskRecord = Record<string, unknown>;
 type TaskRow = {
   row_id: string;
   id: string;
+  client_row_key: string;
+  row_key: string;
   name: string;
   description: string;
   priority: string;
@@ -45,6 +47,12 @@ type TaskRow = {
   dependencies_from_ai: string[];
   dialogue_reference: string;
   discussion_count: number;
+  row_version: number | null;
+  last_user_edit_version: number | null;
+  last_recompute_version: number | null;
+  field_versions: Record<string, number>;
+  user_owned_overrides: string[];
+  divergent_backend_candidates: Record<string, unknown>;
 };
 
 type TaskRowView = TaskRow & {
@@ -140,15 +148,6 @@ const getCompactInlinePillClassName = (isAssigned: boolean): string =>
       : 'border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100',
   ].join(' ');
 
-const toObjectIdText = (value: unknown): string => {
-  if (typeof value === 'string') return value.trim();
-  if (value && typeof value === 'object') {
-    const oid = (value as { $oid?: unknown }).$oid;
-    if (typeof oid === 'string') return oid.trim();
-  }
-  return '';
-};
-
 const isEditableEventTarget = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(
@@ -176,6 +175,8 @@ const REQUIRED_FIELDS: Array<keyof TaskRow> = [
 const REQUIRED_FIELD_LABELS: Record<keyof TaskRow, string> = {
   row_id: 'row_id',
   id: 'id',
+  client_row_key: 'client_row_key',
+  row_key: 'row_key',
   name: 'название',
   description: 'описание',
   priority: 'приоритет',
@@ -188,15 +189,73 @@ const REQUIRED_FIELD_LABELS: Record<keyof TaskRow, string> = {
   dependencies_from_ai: 'зависимости',
   dialogue_reference: 'референс',
   discussion_count: 'обсуждения',
+  row_version: 'версия строки',
+  last_user_edit_version: 'версия пользовательского редактирования',
+  last_recompute_version: 'версия recompute',
+  field_versions: 'версии полей',
+  user_owned_overrides: 'пользовательские override',
+  divergent_backend_candidates: 'расхождения backend',
 };
 
 const getMissingFields = (task: TaskRow): Array<keyof TaskRow> =>
   REQUIRED_FIELDS.filter((field) => !toText(task[field]));
 
+const toNullableFiniteNumber = (value: unknown): number | null => {
+  if (value === null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const parseFieldVersions = (value: unknown): Record<string, number> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, number>>((acc, [key, raw]) => {
+    const parsed = toNullableFiniteNumber(raw);
+    if (parsed === null) return acc;
+    acc[key] = parsed;
+    return acc;
+  }, {});
+};
+
+const parseStringList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map((entry) => toText(entry)).filter(Boolean) : [];
+
+const buildTaskRowKey = ({
+  rowId,
+  clientRowKey,
+  id,
+  taskIdFromAi,
+  index,
+}: {
+  rowId: string;
+  clientRowKey: string;
+  id: string;
+  taskIdFromAi: string;
+  index: number;
+}): string => {
+  if (rowId) return `persisted:${rowId}`;
+  if (clientRowKey) return `client:${clientRowKey}`;
+  if (id) return `id:${id}`;
+  if (taskIdFromAi) return `ai:${taskIdFromAi}`;
+  return `client:index:${index + 1}`;
+};
+
+const collectTaskRowLocators = (row: Pick<TaskRow, 'row_id' | 'id' | 'client_row_key' | 'task_id_from_ai' | 'row_key'>): string[] =>
+  Array.from(
+    new Set([row.row_id, row.id, row.client_row_key, row.task_id_from_ai, row.row_key].map((value) => toText(value)).filter(Boolean))
+  );
+
 const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string): TaskRow => {
-  const rowId = toText(raw.row_id) || toText(raw.id) || toText(raw.task_id_from_ai) || `task-${index + 1}`;
+  const rowId = toText(raw.row_id);
+  const clientRowKey = toText(raw.client_row_key);
   const taskIdFromAi = toText(raw.task_id_from_ai);
-  const id = toText(raw.id) || taskIdFromAi || `task-${index + 1}`;
+  const id = toText(raw.id) || rowId || taskIdFromAi;
+  const rowKey = buildTaskRowKey({ rowId, clientRowKey, id, taskIdFromAi, index });
   const name = toText(raw.name) || `Задача ${index + 1}`;
   const description = toText(raw.description);
   const priority = normalizePriority(raw.priority);
@@ -212,6 +271,8 @@ const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string):
   return {
     row_id: rowId,
     id,
+    client_row_key: clientRowKey,
+    row_key: rowKey,
     name,
     description,
     priority,
@@ -224,6 +285,15 @@ const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string):
     dependencies_from_ai: parseDependencies(raw.dependencies_from_ai),
     dialogue_reference: dialogueReference,
     discussion_count: discussionCount,
+    row_version: toNullableFiniteNumber(raw.row_version),
+    last_user_edit_version: toNullableFiniteNumber(raw.last_user_edit_version),
+    last_recompute_version: toNullableFiniteNumber(raw.last_recompute_version),
+    field_versions: parseFieldVersions(raw.field_versions),
+    user_owned_overrides: parseStringList(raw.user_owned_overrides),
+    divergent_backend_candidates:
+      raw.divergent_backend_candidates && typeof raw.divergent_backend_candidates === 'object' && !Array.isArray(raw.divergent_backend_candidates)
+        ? (raw.divergent_backend_candidates as Record<string, unknown>)
+        : {},
   };
 };
 
@@ -234,8 +304,9 @@ const toPersistencePayload = (row: TaskRow | TaskRowView): Record<string, unknow
     '__resolvedTaskTypeId' in row ? toText(row.__resolvedTaskTypeId) : toText(row.task_type_id);
 
   return {
-    row_id: row.row_id,
-    id: row.id,
+    ...(toText(row.row_id) ? { row_id: toText(row.row_id) } : {}),
+    ...(toText(row.id) ? { id: toText(row.id) } : {}),
+    ...(toText(row.client_row_key) ? { client_row_key: toText(row.client_row_key) } : {}),
     name: toText(row.name),
     description: toText(row.description),
     performer_id: toText(row.performer_id),
@@ -283,7 +354,7 @@ function PossibleTasksSessionScope() {
     }))
   );
 
-  const [activeRowId, setActiveRowId] = useState<string>('');
+  const [activeRowKey, setActiveRowKey] = useState<string>('');
   const [drafts, setDrafts] = useState<Record<string, Partial<TaskRow>>>({});
   const [isAutosaving, setIsAutosaving] = useState(false);
   const [lastAutosavedAt, setLastAutosavedAt] = useState<number | null>(null);
@@ -373,7 +444,7 @@ function PossibleTasksSessionScope() {
     () =>
       serverRowsSnapshot.map((row) => ({
         ...row,
-        ...(drafts[row.row_id] || {}),
+        ...(drafts[row.row_key] || {}),
       })),
     [serverRowsSnapshot, drafts]
   );
@@ -386,13 +457,10 @@ function PossibleTasksSessionScope() {
     draftsRef.current = drafts;
   }, [drafts]);
 
-  const rowsById = useMemo(() => {
+  const rowsByLocator = useMemo(() => {
     const map = new Map<string, TaskRow>();
     for (const row of rows) {
-      [row.row_id, row.id, row.task_id_from_ai]
-        .map((value) => toText(value))
-        .filter(Boolean)
-        .forEach((value) => map.set(value, row));
+      collectTaskRowLocators(row).forEach((value) => map.set(value, row));
     }
     return map;
   }, [rows]);
@@ -466,7 +534,7 @@ function PossibleTasksSessionScope() {
           __resolvedProjectId: resolvedProjectId,
           __resolvedTaskTypeId: resolvedTaskTypeId,
           __missing: missing,
-          __hasLocalChanges: Boolean(drafts[row.row_id]),
+          __hasLocalChanges: Boolean(drafts[row.row_key]),
         };
       }),
     [drafts, resolveRowProjectId, resolveRowTaskTypeId, rows]
@@ -474,31 +542,39 @@ function PossibleTasksSessionScope() {
 
   useEffect(() => {
     if (rowsWithMeta.length === 0) {
-      if (activeRowId) setActiveRowId('');
+      if (activeRowKey) setActiveRowKey('');
       if (editingNameRowId) setEditingNameRowId(null);
       if (inlineListEdit) setInlineListEdit(null);
       if (focusedDetailField) setFocusedDetailField(null);
       if (openDetailSelectField) setOpenDetailSelectField(null);
       return;
     }
-    const hasActive = rowsWithMeta.some((row) => row.row_id === activeRowId);
+    const hasActive = rowsWithMeta.some((row) => row.row_key === activeRowKey);
     if (!hasActive) {
-      setActiveRowId(rowsWithMeta[0]?.row_id || '');
+      setActiveRowKey(rowsWithMeta[0]?.row_key || '');
     }
-    const hasEditingRow = editingNameRowId && rowsWithMeta.some((row) => row.row_id === editingNameRowId);
+    const hasEditingRow = editingNameRowId && rowsWithMeta.some((row) => row.row_key === editingNameRowId);
     if (editingNameRowId && !hasEditingRow) {
       setEditingNameRowId(null);
     }
-    const hasInlineEditingRow = inlineListEdit && rowsWithMeta.some((row) => row.row_id === inlineListEdit.rowId);
+    const hasInlineEditingRow = inlineListEdit && rowsWithMeta.some((row) => row.row_key === inlineListEdit.rowId);
     if (inlineListEdit && !hasInlineEditingRow) {
       setInlineListEdit(null);
     }
-  }, [activeRowId, editingNameRowId, focusedDetailField, inlineListEdit, openDetailSelectField, rowsWithMeta]);
+  }, [activeRowKey, editingNameRowId, focusedDetailField, inlineListEdit, openDetailSelectField, rowsWithMeta]);
 
   const activeRow = useMemo(
-    () => rowsWithMeta.find((row) => row.row_id === activeRowId) || rowsWithMeta[0] || null,
-    [activeRowId, rowsWithMeta]
+    () => rowsWithMeta.find((row) => row.row_key === activeRowKey) || rowsWithMeta[0] || null,
+    [activeRowKey, rowsWithMeta]
   );
+  const activeRowOverrideFields = useMemo(
+    () => (activeRow ? activeRow.user_owned_overrides.map((entry) => toText(entry)).filter(Boolean) : []),
+    [activeRow]
+  );
+  const activeRowDivergenceEntries = useMemo(() => {
+    if (!activeRow) return [] as Array<[string, unknown]>;
+    return Object.entries(activeRow.divergent_backend_candidates || {}).filter(([field]) => toText(field).length > 0);
+  }, [activeRow]);
   const clearAutosaveTimer = useCallback(() => {
     if (autosaveTimerRef.current !== null) {
       window.clearTimeout(autosaveTimerRef.current);
@@ -613,7 +689,7 @@ function PossibleTasksSessionScope() {
   };
 
   const beginInlineListEdit = (rowId: string, field: InlineListEditField) => {
-    setActiveRowId(rowId);
+    setActiveRowKey(rowId);
     if (editingNameRowId) {
       suppressNextTitleBlurSaveRef.current =
         editingNameRowId === rowId ? { rowId, field } : null;
@@ -650,7 +726,7 @@ function PossibleTasksSessionScope() {
   };
 
   const startInlineNameEdit = (rowId: string) => {
-    setActiveRowId(rowId);
+    setActiveRowKey(rowId);
     setInlineListEdit(null);
     suppressNextTitleBlurSaveRef.current = null;
     setEditingNameRowId(rowId);
@@ -684,19 +760,22 @@ function PossibleTasksSessionScope() {
     });
   };
 
-  const handleDeleteTask = async (rowId: string) => {
-    setDeleteInProgressRowId(rowId);
+  const handleDeleteTask = async (row: TaskRowView) => {
+    const rowKey = row.row_key;
+    const deleteLocator = toText(row.row_id) || toText(row.id) || toText(row.client_row_key);
+    if (!deleteLocator) return;
+    setDeleteInProgressRowId(rowKey);
     try {
       await flushAutosave('manual');
-      const success = await deleteTaskFromSession(rowId);
+      const success = await deleteTaskFromSession(deleteLocator);
       if (!success) return;
       setDrafts((prev) => {
-        if (!prev[rowId]) return prev;
+        if (!prev[rowKey]) return prev;
         const next = { ...prev };
-        delete next[rowId];
+        delete next[rowKey];
         return next;
       });
-      clearRowError(rowId);
+      clearRowError(rowKey);
     } finally {
       setDeleteInProgressRowId(null);
     }
@@ -704,29 +783,45 @@ function PossibleTasksSessionScope() {
 
   const handleCloneTask = async (row: TaskRowView) => {
     if (!sessionId) return;
-    setCloneInProgressRowId(row.row_id);
+    setCloneInProgressRowId(row.row_key);
     try {
       await flushAutosave('manual');
       const cloneSuffix = `${Date.now().toString(36)}-${Math.round(Math.random() * 9999)}`;
+      const cloneClientRowKey = `clone:${cloneSuffix}`;
       const cloneRow: TaskRow = {
         ...row,
-        row_id: `${toText(row.row_id) || 'task'}-clone-${cloneSuffix}`,
-        id: `${toText(row.id) || 'task'}-clone-${cloneSuffix}`,
+        row_id: '',
+        id: '',
+        client_row_key: cloneClientRowKey,
+        row_key: `client:${cloneClientRowKey}`,
         task_id_from_ai: '',
         name: `${toText(row.name) || 'Задача'} (copy)`,
+        row_version: null,
+        last_user_edit_version: null,
+        last_recompute_version: null,
+        field_versions: {},
+        user_owned_overrides: [],
+        divergent_backend_candidates: {},
       };
       const nextPayload = [...rowsRef.current.map((item) => toPersistencePayload(item)), toPersistencePayload(cloneRow)];
       const refreshCorrelationId = crypto.randomUUID();
       const refreshClickedAtMs = Date.now();
-      await saveSessionPossibleTasks(sessionId, nextPayload, {
+      const savedTasks = await saveSessionPossibleTasks(sessionId, nextPayload, {
         refreshMode: 'incremental_refresh',
         refreshCorrelationId,
         refreshClickedAtMs,
       });
-      setActiveRowId(cloneRow.row_id);
+      const savedRows = savedTasks.map((task, index) => parseTask(task as unknown as RawTaskRecord, index, defaultProjectId));
+      const clonedPersistedRow =
+        savedRows.find((candidate) => toText(candidate.client_row_key) === cloneClientRowKey) ||
+        savedRows.find((candidate) => candidate.name === cloneRow.name && candidate.description === cloneRow.description) ||
+        null;
+      if (clonedPersistedRow) {
+        setActiveRowKey(clonedPersistedRow.row_key);
+      }
       message.success('Черновик клонирован');
     } catch (error) {
-      console.error('[voice.possible_tasks] clone.failed', { sessionId, rowId: row.row_id, error });
+      console.error('[voice.possible_tasks] clone.failed', { sessionId, rowKey: row.row_key, error });
       message.error('Не удалось клонировать черновик');
     } finally {
       setCloneInProgressRowId(null);
@@ -741,9 +836,9 @@ function PossibleTasksSessionScope() {
     }
     if (!sessionId) return;
 
-    const payload = toPersistencePayload(row);
-    setRunInProgressRowId(row.row_id);
-    clearRowError(row.row_id);
+    const initialLocators = new Set(collectTaskRowLocators(row));
+    setRunInProgressRowId(row.row_key);
+    clearRowError(row.row_key);
 
     try {
       const hasPendingDraftEdits = Object.keys(draftsRef.current).length > 0;
@@ -752,36 +847,48 @@ function PossibleTasksSessionScope() {
         if (!autosaveOk) {
           console.warn('[voice.possible_tasks] run.aborted_autosave_failed', {
             sessionId,
-            rowId: row.row_id,
+            rowKey: row.row_key,
           });
           return;
         }
       }
+
+      const latestRow =
+        rowsRef.current.find((candidate) => collectTaskRowLocators(candidate).some((locator) => initialLocators.has(locator))) ||
+        row;
+      const persistedRowId = toText(latestRow.row_id);
+      if (!persistedRowId) {
+        message.error('Черновик еще не получил canonical row_id. Повторите запуск после автосохранения.');
+        return;
+      }
+
+      const payload = toPersistencePayload(latestRow);
       console.info('[voice.possible_tasks] run.submit', {
         sessionId,
-        rowId: row.row_id,
-        performer_id: row.performer_id,
-        routing: toText(row.performer_id) === CODEX_PERFORMER_ID ? 'codex' : 'human',
+        rowId: persistedRowId,
+        performer_id: latestRow.performer_id,
+        routing: toText(latestRow.performer_id) === CODEX_PERFORMER_ID ? 'codex' : 'human',
       });
 
-      await confirmSelectedTickets([row.row_id], [payload]);
+      await confirmSelectedTickets([persistedRowId], [payload]);
       setRowCreationErrors((prev) => {
-        if (!prev[row.row_id]) return prev;
+        if (!prev[row.row_key]) return prev;
         const next = { ...prev };
-        delete next[row.row_id];
+        delete next[row.row_key];
         return next;
       });
       console.info('[voice.possible_tasks] run.result', {
         sessionId,
-        rowId: row.row_id,
-        routing: toText(row.performer_id) === CODEX_PERFORMER_ID ? 'codex' : 'human',
+        rowId: persistedRowId,
+        routing: toText(latestRow.performer_id) === CODEX_PERFORMER_ID ? 'codex' : 'human',
       });
     } catch (error) {
       if (isVoiceTaskCreateValidationError(error)) {
         const mappedErrors: TaskRowCreationErrors = {};
         for (const rowError of error.rowErrors) {
-          const rowKey = rowsById.get(rowError.ticketId)?.row_id || rowError.ticketId;
-          if (rowKey !== row.row_id) continue;
+          const matchedRow = rowsByLocator.get(rowError.ticketId);
+          const rowKey = matchedRow?.row_key || rowError.ticketId;
+          if (rowKey !== row.row_key) continue;
           if (rowError.field === 'performer_id' && !mappedErrors.performer_id) {
             mappedErrors.performer_id = rowError.message;
           } else if (rowError.field === 'project_id' && !mappedErrors.project_id) {
@@ -793,7 +900,7 @@ function PossibleTasksSessionScope() {
 
         setRowCreationErrors((prev) => ({
           ...prev,
-          [row.row_id]: mappedErrors,
+          [row.row_key]: mappedErrors,
         }));
 
         const first = error.rowErrors[0];
@@ -811,7 +918,7 @@ function PossibleTasksSessionScope() {
           );
         }
       } else {
-        console.error('[voice.possible_tasks] run.failed', { sessionId, rowId: row.row_id, error });
+        console.error('[voice.possible_tasks] run.failed', { sessionId, rowKey: row.row_key, error });
         message.error('Не удалось запустить задачу');
       }
     } finally {
@@ -839,51 +946,51 @@ function PossibleTasksSessionScope() {
       <div className="self-stretch overflow-hidden rounded-[12px] border border-white/70 bg-white/82 p-1.5 shadow-[0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl">
         <div className="flex flex-col gap-0.5 pr-0.5">
           {rowsWithMeta.map((row) => {
-              const isActive = row.row_id === activeRow?.row_id;
+              const isActive = row.row_key === activeRow?.row_key;
               const resolvedProjectId = toText(row.__resolvedProjectId) || toText(row.project_id);
               const projectLabel = projectLabelById.get(resolvedProjectId) || 'Проект';
               const projectHierarchy = projectHierarchyLabelById.get(resolvedProjectId) || '';
               const showProjectTag = Boolean(
                 resolvedProjectId && (!resolvedSessionProjectId || resolvedProjectId !== resolvedSessionProjectId)
               );
-              const performerError = rowCreationErrors[row.row_id]?.performer_id;
+              const performerError = rowCreationErrors[row.row_key]?.performer_id;
               const isEditingPerformer =
-                inlineListEdit?.rowId === row.row_id && inlineListEdit.field === 'performer_id';
+                inlineListEdit?.rowId === row.row_key && inlineListEdit.field === 'performer_id';
               const isEditingPriority =
-                inlineListEdit?.rowId === row.row_id && inlineListEdit.field === 'priority';
+                inlineListEdit?.rowId === row.row_key && inlineListEdit.field === 'priority';
               const isEditingProject =
-                inlineListEdit?.rowId === row.row_id && inlineListEdit.field === 'project_id';
+                inlineListEdit?.rowId === row.row_key && inlineListEdit.field === 'project_id';
               return (
                 <div
-                  key={row.row_id}
+                  key={row.row_key}
                   className={`w-full rounded-[5px] border px-0.5 py-0 text-left transition ${
                     isActive
                       ? 'border-blue-400 bg-blue-50/92 shadow-[0_3px_8px_rgba(59,130,246,0.08)]'
                       : 'border-white/80 bg-white/86 hover:border-slate-300 hover:bg-white/96'
                   }`}
-                  onClick={() => setActiveRowId(row.row_id)}
+                  onClick={() => setActiveRowKey(row.row_key)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(event) => {
                     if (isEditableEventTarget(event.target)) return;
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      setActiveRowId(row.row_id);
+                      setActiveRowKey(row.row_key);
                     }
                   }}
                 >
                   <div className="grid grid-cols-1 gap-0.5 md:grid-cols-[minmax(0,1fr)_max-content_max-content] md:items-center md:gap-x-0.5">
                     <div className="min-w-0">
-                      {editingNameRowId === row.row_id ? (
+                      {editingNameRowId === row.row_key ? (
                         <Input
                           size="small"
                           autoFocus
                           status={row.__missing.includes('name') ? 'error' : ''}
                           value={row.name}
                           onClick={(event) => event.stopPropagation()}
-                          onChange={(event) => setDraftValue(row.row_id, 'name', event.target.value)}
-                          onBlur={() => finishInlineNameEdit(row.row_id)}
-                          onPressEnter={() => finishInlineNameEdit(row.row_id)}
+                          onChange={(event) => setDraftValue(row.row_key, 'name', event.target.value)}
+                          onBlur={() => finishInlineNameEdit(row.row_key)}
+                          onPressEnter={() => finishInlineNameEdit(row.row_key)}
                         />
                       ) : (
                         <div className="flex min-w-0 flex-nowrap items-center gap-0.5 overflow-hidden py-0">
@@ -897,7 +1004,7 @@ function PossibleTasksSessionScope() {
                             }}
                             onClick={(event) => {
                               event.stopPropagation();
-                              startInlineNameEdit(row.row_id);
+                              startInlineNameEdit(row.row_key);
                             }}
                             aria-label="Редактировать название"
                           >
@@ -910,7 +1017,7 @@ function PossibleTasksSessionScope() {
                             isEditingProject ? (
                               <ProjectSelect
                                 ref={(node: { focus?: () => void } | null) => {
-                                  inlineSelectRefs.current[`${row.row_id}:project_id`] = node;
+                                  inlineSelectRefs.current[`${row.row_key}:project_id`] = node;
                                 }}
                                 size="small"
                                 autoFocus
@@ -922,12 +1029,12 @@ function PossibleTasksSessionScope() {
                                 onClick={(event) => event.stopPropagation()}
                                 onOpenChange={(open) => {
                                   if (!open) {
-                                    void endInlineListEdit(row.row_id, 'project_id');
+                                    void endInlineListEdit(row.row_key, 'project_id');
                                   }
                                 }}
                                 onChange={(value) => {
-                                  setDraftValue(row.row_id, 'project_id', toText(value));
-                                  void endInlineListEdit(row.row_id, 'project_id', { persist: true });
+                                  setDraftValue(row.row_key, 'project_id', toText(value));
+                                  void endInlineListEdit(row.row_key, 'project_id', { persist: true });
                                 }}
                                 options={projectOptions}
                                 className="w-auto min-w-[154px] max-w-[248px]"
@@ -943,11 +1050,11 @@ function PossibleTasksSessionScope() {
                                 <button
                                   type="button"
                                   className={`${getCompactInlinePillClassName(Boolean(resolvedProjectId))} max-w-[128px] overflow-hidden whitespace-nowrap text-ellipsis`}
-                                  onMouseDown={(event) => handleInlineActivatorMouseDown(event, row.row_id, 'project_id')}
+                                  onMouseDown={(event) => handleInlineActivatorMouseDown(event, row.row_key, 'project_id')}
                                   onClick={(event) => {
                                     event.stopPropagation();
-                                    if (inlineListEdit?.rowId !== row.row_id || inlineListEdit.field !== 'project_id') {
-                                      beginInlineListEdit(row.row_id, 'project_id');
+                                    if (inlineListEdit?.rowId !== row.row_key || inlineListEdit.field !== 'project_id') {
+                                      beginInlineListEdit(row.row_key, 'project_id');
                                     }
                                   }}
                                   title="Изменить проект"
@@ -969,7 +1076,7 @@ function PossibleTasksSessionScope() {
                       {isEditingPerformer ? (
                         <Select
                           ref={(node: { focus?: () => void } | null) => {
-                            inlineSelectRefs.current[`${row.row_id}:performer_id`] = node;
+                            inlineSelectRefs.current[`${row.row_key}:performer_id`] = node;
                           }}
                           size="small"
                           autoFocus
@@ -986,12 +1093,12 @@ function PossibleTasksSessionScope() {
                           onClick={(event) => event.stopPropagation()}
                           onOpenChange={(open) => {
                             if (!open) {
-                              void endInlineListEdit(row.row_id, 'performer_id');
+                              void endInlineListEdit(row.row_key, 'performer_id');
                             }
                           }}
                           onChange={(value) => {
-                            setDraftValue(row.row_id, 'performer_id', toText(value));
-                            void endInlineListEdit(row.row_id, 'performer_id', { persist: true });
+                            setDraftValue(row.row_key, 'performer_id', toText(value));
+                            void endInlineListEdit(row.row_key, 'performer_id', { persist: true });
                           }}
                           options={performerOptions}
                           popupMatchSelectWidth={false}
@@ -1001,11 +1108,11 @@ function PossibleTasksSessionScope() {
                         <button
                           type="button"
                           className={`max-w-full ${getCompactInlinePillClassName(Boolean(row.performer_id))}`}
-                          onMouseDown={(event) => handleInlineActivatorMouseDown(event, row.row_id, 'performer_id')}
+                          onMouseDown={(event) => handleInlineActivatorMouseDown(event, row.row_key, 'performer_id')}
                           onClick={(event) => {
                             event.stopPropagation();
-                            if (inlineListEdit?.rowId !== row.row_id || inlineListEdit.field !== 'performer_id') {
-                              beginInlineListEdit(row.row_id, 'performer_id');
+                            if (inlineListEdit?.rowId !== row.row_key || inlineListEdit.field !== 'performer_id') {
+                              beginInlineListEdit(row.row_key, 'performer_id');
                             }
                           }}
                           title={performerError || 'Изменить исполнителя'}
@@ -1022,7 +1129,7 @@ function PossibleTasksSessionScope() {
                         {isEditingPriority ? (
                           <Select
                             ref={(node: { focus?: () => void } | null) => {
-                              inlineSelectRefs.current[`${row.row_id}:priority`] = node;
+                              inlineSelectRefs.current[`${row.row_key}:priority`] = node;
                             }}
                             size="small"
                             autoFocus
@@ -1032,12 +1139,12 @@ function PossibleTasksSessionScope() {
                             onClick={(event) => event.stopPropagation()}
                             onOpenChange={(open) => {
                               if (!open) {
-                                void endInlineListEdit(row.row_id, 'priority');
+                                void endInlineListEdit(row.row_key, 'priority');
                               }
                             }}
                             onChange={(value) => {
-                              setDraftValue(row.row_id, 'priority', normalizePriority(value));
-                              void endInlineListEdit(row.row_id, 'priority', { persist: true });
+                              setDraftValue(row.row_key, 'priority', normalizePriority(value));
+                              void endInlineListEdit(row.row_key, 'priority', { persist: true });
                             }}
                             options={PRIORITY_VALUES.map((priority) => ({
                               value: priority,
@@ -1052,11 +1159,11 @@ function PossibleTasksSessionScope() {
                             className={`rounded-full border px-1.5 py-0 text-[10px] font-semibold leading-[15px] transition hover:brightness-95 ${getPriorityPillClassName(
                               row.priority
                             )} ${shouldRenderUrgentPriorityAccent(row.priority) ? 'voice-priority-pill voice-priority-pill--urgent' : ''}`}
-                            onMouseDown={(event) => handleInlineActivatorMouseDown(event, row.row_id, 'priority')}
+                            onMouseDown={(event) => handleInlineActivatorMouseDown(event, row.row_key, 'priority')}
                             onClick={(event) => {
                               event.stopPropagation();
-                              if (inlineListEdit?.rowId !== row.row_id || inlineListEdit.field !== 'priority') {
-                                beginInlineListEdit(row.row_id, 'priority');
+                              if (inlineListEdit?.rowId !== row.row_key || inlineListEdit.field !== 'priority') {
+                                beginInlineListEdit(row.row_key, 'priority');
                               }
                             }}
                             title={toText(row.priority_reason) || 'Изменить приоритет'}
@@ -1085,7 +1192,7 @@ function PossibleTasksSessionScope() {
                       shape="circle"
                       aria-label="Run"
                       icon={<CaretRightOutlined />}
-                      loading={runInProgressRowId === activeRow.row_id}
+                      loading={runInProgressRowId === activeRow.row_key}
                       onClick={() => void handleRunRow(activeRow)}
                     />
                   </Tooltip>
@@ -1094,14 +1201,14 @@ function PossibleTasksSessionScope() {
                       shape="circle"
                       aria-label="Клонировать"
                       icon={<CopyOutlined />}
-                      loading={cloneInProgressRowId === activeRow.row_id}
+                      loading={cloneInProgressRowId === activeRow.row_key}
                       onClick={() => void handleCloneTask(activeRow)}
                     />
                   </Tooltip>
                   <Popconfirm
                     title="Удалить черновик?"
                     description="Это действие нельзя отменить."
-                    onConfirm={() => void handleDeleteTask(activeRow.row_id)}
+                    onConfirm={() => void handleDeleteTask(activeRow)}
                     okText="Удалить"
                     cancelText="Отмена"
                     okButtonProps={{ danger: true }}
@@ -1112,7 +1219,7 @@ function PossibleTasksSessionScope() {
                         shape="circle"
                         aria-label="Удалить"
                         icon={<DeleteOutlined />}
-                        loading={deleteInProgressRowId === activeRow.row_id}
+                        loading={deleteInProgressRowId === activeRow.row_key}
                       />
                     </Tooltip>
                   </Popconfirm>
@@ -1129,11 +1236,34 @@ function PossibleTasksSessionScope() {
                       : 'Изменения сохраняются автоматически при blur/debounce'}
               </Text>
 
-              {rowCreationErrors[activeRow.row_id]?.project_id ? (
-                <Alert type="error" showIcon message={rowCreationErrors[activeRow.row_id]?.project_id} />
+              {rowCreationErrors[activeRow.row_key]?.project_id ? (
+                <Alert type="error" showIcon message={rowCreationErrors[activeRow.row_key]?.project_id} />
               ) : null}
-              {rowCreationErrors[activeRow.row_id]?.general ? (
-                <Alert type="error" showIcon message={rowCreationErrors[activeRow.row_id]?.general} />
+              {rowCreationErrors[activeRow.row_key]?.general ? (
+                <Alert type="error" showIcon message={rowCreationErrors[activeRow.row_key]?.general} />
+              ) : null}
+              {activeRowOverrideFields.length > 0 ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={`Пользовательские override: ${activeRowOverrideFields.join(', ')}`}
+                />
+              ) : null}
+              {activeRowDivergenceEntries.length > 0 ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={`Есть ${activeRowDivergenceEntries.length} backend-кандидатов, конфликтующих с locked полями`}
+                  description={
+                    <div className="text-xs text-slate-600">
+                      {activeRowDivergenceEntries.slice(0, 5).map(([field, value]) => (
+                        <div key={field} className="truncate">
+                          <Text strong>{field}</Text>: {typeof value === 'string' ? value : JSON.stringify(value)}
+                        </div>
+                      ))}
+                    </div>
+                  }
+                />
               ) : null}
 
               <div className="grid gap-3 md:grid-cols-2">
@@ -1142,7 +1272,7 @@ function PossibleTasksSessionScope() {
                   <Input
                     status={activeRow.__missing.includes('name') ? 'error' : ''}
                     value={activeRow.name}
-                    onChange={(event) => setDraftValue(activeRow.row_id, 'name', event.target.value)}
+                    onChange={(event) => setDraftValue(activeRow.row_key, 'name', event.target.value)}
                     onFocus={() => focusDetailField('name')}
                     onBlur={() => blurDetailField('name')}
                   />
@@ -1155,7 +1285,7 @@ function PossibleTasksSessionScope() {
                       <Select
                         status={activeRow.__missing.includes('priority') ? 'error' : ''}
                         value={normalizePriority(activeRow.priority) || undefined}
-                        onChange={(value) => setDraftValue(activeRow.row_id, 'priority', normalizePriority(value))}
+                        onChange={(value) => setDraftValue(activeRow.row_key, 'priority', normalizePriority(value))}
                         onFocus={() => focusDetailField('priority')}
                         onBlur={() => blurDetailField('priority')}
                         onOpenChange={(open) => setDetailSelectOpen('priority', open)}
@@ -1173,13 +1303,13 @@ function PossibleTasksSessionScope() {
                   <ProjectSelect
                     placeholder="Проект"
                     status={
-                      activeRow.__missing.includes('project_id') || Boolean(rowCreationErrors[activeRow.row_id]?.project_id)
+                      activeRow.__missing.includes('project_id') || Boolean(rowCreationErrors[activeRow.row_key]?.project_id)
                         ? 'error'
                         : ''
                     }
                     value={activeRow.__resolvedProjectId || null}
                     classNames={{ popup: { root: 'voice-project-select-popup' } }}
-                    onChange={(value) => setDraftValue(activeRow.row_id, 'project_id', toText(value))}
+                    onChange={(value) => setDraftValue(activeRow.row_key, 'project_id', toText(value))}
                     onFocus={() => focusDetailField('project_id')}
                     onBlur={() => blurDetailField('project_id')}
                     onOpenChange={(open) => setDetailSelectOpen('project_id', open)}
@@ -1193,7 +1323,7 @@ function PossibleTasksSessionScope() {
                     placeholder="Выберите тип задачи"
                     value={activeRow.__resolvedTaskTypeId || null}
                     classNames={{ popup: { root: 'w-[380px]' } }}
-                    onChange={(value) => setDraftValue(activeRow.row_id, 'task_type_id', toText(value))}
+                    onChange={(value) => setDraftValue(activeRow.row_key, 'task_type_id', toText(value))}
                     onFocus={() => focusDetailField('task_type_id')}
                     onBlur={() => blurDetailField('task_type_id')}
                     onOpenChange={(open) => setDetailSelectOpen('task_type_id', open)}
@@ -1207,7 +1337,7 @@ function PossibleTasksSessionScope() {
                   <Select
                     status={
                       activeRow.__missing.includes('performer_id') ||
-                      Boolean(rowCreationErrors[activeRow.row_id]?.performer_id)
+                      Boolean(rowCreationErrors[activeRow.row_key]?.performer_id)
                         ? 'error'
                         : ''
                     }
@@ -1219,14 +1349,14 @@ function PossibleTasksSessionScope() {
                     placeholder="Исполнитель"
                     labelRender={renderOpaqueLabel('Исполнитель')}
                     value={activeRow.performer_id || undefined}
-                    onChange={(value) => setDraftValue(activeRow.row_id, 'performer_id', toText(value))}
+                    onChange={(value) => setDraftValue(activeRow.row_key, 'performer_id', toText(value))}
                     onFocus={() => focusDetailField('performer_id')}
                     onBlur={() => blurDetailField('performer_id')}
                     onOpenChange={(open) => setDetailSelectOpen('performer_id', open)}
                     options={performerOptions}
                   />
-                  {rowCreationErrors[activeRow.row_id]?.performer_id ? (
-                    <Text type="danger">{rowCreationErrors[activeRow.row_id]?.performer_id}</Text>
+                  {rowCreationErrors[activeRow.row_key]?.performer_id ? (
+                    <Text type="danger">{rowCreationErrors[activeRow.row_key]?.performer_id}</Text>
                   ) : null}
                 </div>
               </div>
@@ -1238,7 +1368,7 @@ function PossibleTasksSessionScope() {
                   autoSize={DESCRIPTION_AUTOSIZE_CONFIG}
                   rows={DESCRIPTION_AUTOSIZE_CONFIG ? undefined : DESCRIPTION_AUTOSIZE_MIN_ROWS}
                   value={activeRow.description}
-                  onChange={(event) => setDraftValue(activeRow.row_id, 'description', event.target.value)}
+                  onChange={(event) => setDraftValue(activeRow.row_key, 'description', event.target.value)}
                   onFocus={() => focusDetailField('description')}
                   onBlur={() => blurDetailField('description')}
                   placeholder={

@@ -35,9 +35,9 @@ describe('PossibleTasks design contract', () => {
   it('renders inline-editable title, conditional project chip, performer pill, and priority pill in the list', () => {
     expect(source).toContain('aria-label="Редактировать название"');
     expect(source).toContain("resolvedProjectId !== resolvedSessionProjectId");
-    expect(source).toContain("handleInlineActivatorMouseDown(event, row.row_id, 'project_id')");
-    expect(source).toContain("handleInlineActivatorMouseDown(event, row.row_id, 'performer_id')");
-    expect(source).toContain("handleInlineActivatorMouseDown(event, row.row_id, 'priority')");
+    expect(source).toContain("handleInlineActivatorMouseDown(event, row.row_key, 'project_id')");
+    expect(source).toContain("handleInlineActivatorMouseDown(event, row.row_key, 'performer_id')");
+    expect(source).toContain("handleInlineActivatorMouseDown(event, row.row_key, 'priority')");
     expect(source).toContain("text-slate-400");
     expect(source).toContain("|| '—'");
     expect(source).toContain('title={toText(row.priority_reason) || \'Изменить приоритет\'}');
@@ -48,7 +48,7 @@ describe('PossibleTasks design contract', () => {
     expect(source).toContain('onMouseDown={(event) => {');
     expect(source).toContain('inlineSelectRefs.current');
     expect(source).toContain('defaultOpen');
-    expect(source).toContain('handleInlineActivatorMouseDown(event, row.row_id, \'project_id\')');
+    expect(source).toContain('handleInlineActivatorMouseDown(event, row.row_key, \'project_id\')');
     expect(source).toContain('<ProjectSelect');
     expect(source).toContain('<OperationalTaskTypeSelect');
     expect(source).toContain("classNames={{ popup: { root: 'voice-project-select-popup' } }}");
@@ -68,6 +68,15 @@ describe('PossibleTasks design contract', () => {
     expect(source).toContain('import { useShallow } from \'zustand/react/shallow\';');
     expect(source).toContain("await saveSessionPossibleTasks(sessionId, payload, {");
     expect(source).toContain("refreshMode: 'incremental_refresh'");
+    expect(source).toContain("...(toText(row.client_row_key) ? { client_row_key: toText(row.client_row_key) } : {}),");
+    expect(source).toContain('row_key');
+  });
+
+  it('shows backend override metadata without breaking the draft detail flow', () => {
+    expect(source).toContain('activeRowOverrideFields.length > 0');
+    expect(source).toContain('activeRowDivergenceEntries.length > 0');
+    expect(source).toContain('Пользовательские override');
+    expect(source).toContain('backend-кандидатов');
   });
 
   it('keeps the detail pane limited to explicit form fields plus one large markdown body', () => {

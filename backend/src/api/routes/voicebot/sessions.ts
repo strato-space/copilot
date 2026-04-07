@@ -61,14 +61,11 @@ import {
 } from './sessionsSharedUtils.js';
 import { buildCanonicalTaskSourceRef, isVoiceSessionSourceRef } from '../../../services/taskSourceRef.js';
 import {
-    ACTIVE_VOICE_DRAFT_STATUSES,
-    buildVoicePossibleTaskMasterDoc,
     buildVoicePossibleTaskMasterQuery,
     normalizeVoicePossibleTaskDocForApi,
     normalizeVoicePossibleTaskRelations,
     normalizeVoiceTaskDiscussionSessions,
     recomputeVoiceTaskSourceDataSessionLinkage,
-    resolveVoicePossibleTaskRowId,
 } from './possibleTasksMasterModel.js';
 import {
   buildActorFromPerformer,
@@ -96,6 +93,7 @@ import {
     type TargetTaskStatusKey,
 } from '../../../services/taskStatusSurface.js';
 import {
+    PossibleTaskStaleWriteError,
     persistPossibleTasksForSession,
     POSSIBLE_TASKS_REFRESH_MODE_VALUES,
     type PossibleTasksRefreshMode,
@@ -185,7 +183,6 @@ const SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS = ['id'] as const;
 const SESSION_TASKFLOW_LEGACY_ROW_ID_FALLBACK_FIELDS = ['task_id_from_ai'] as const;
 const SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS = [
     ...SESSION_TASKFLOW_ROW_ID_ALIAS_FIELDS,
-    ...SESSION_TASKFLOW_LEGACY_ROW_ID_FALLBACK_FIELDS,
 ] as const;
 
 export const SESSION_TASKFLOW_CONTRACT = {
@@ -196,6 +193,7 @@ export const SESSION_TASKFLOW_CONTRACT = {
         delete_input_aliases: [],
         errors: {
             ambiguous_row_locator: 'ambiguous_row_locator',
+            legacy_row_locator_unsupported: 'legacy_row_locator_unsupported',
         },
     },
     create_regular_payload: {
@@ -289,8 +287,16 @@ const sessionTasksInputSchema = z.object({
 const savePossibleTasksInputSchema = z
     .object({
         session_id: z.string().trim().min(1),
-        tasks: z.array(z.object({}).passthrough()).optional(),
-        items: z.array(z.object({}).passthrough()).optional(),
+        tasks: z.array(sessionTaskRowLocatorInputSchema.extend({
+            expected_row_version: z.number().int().nonnegative().optional(),
+            expected_field_versions: z.record(z.string(), z.number().int().nonnegative()).optional(),
+            clear_user_owned_overrides: z.array(z.string().trim().min(1)).optional(),
+        }).passthrough()).optional(),
+        items: z.array(sessionTaskRowLocatorInputSchema.extend({
+            expected_row_version: z.number().int().nonnegative().optional(),
+            expected_field_versions: z.record(z.string(), z.number().int().nonnegative()).optional(),
+            clear_user_owned_overrides: z.array(z.string().trim().min(1)).optional(),
+        }).passthrough()).optional(),
         refresh_mode: z.enum(POSSIBLE_TASKS_REFRESH_MODE_VALUES).optional(),
         refresh_correlation_id: z.string().trim().min(1).optional(),
         refresh_clicked_at_ms: z.number().finite().optional(),
@@ -314,7 +320,11 @@ const deleteTaskFromSessionInputSchema = z
         task_id_from_ai: z.union([z.string(), z.number()]).optional(),
     })
     .superRefine((value, ctx) => {
-        const hasLocator = [SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD, ...SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS].some(
+        const hasLocator = [
+            SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD,
+            ...SESSION_TASKFLOW_DELETE_ROW_ID_ALIAS_FIELDS,
+            ...SESSION_TASKFLOW_LEGACY_ROW_ID_FALLBACK_FIELDS,
+        ].some(
             (field) => String(value[field as keyof typeof value] ?? '').trim().length > 0
         );
         if (!hasLocator) {
@@ -649,6 +659,7 @@ type AcceptedTaskLineageIndex = {
     byRowId: Map<string, ObjectId>;
     bySourceDataRowId: Map<string, ObjectId>;
     byCompatibilityKey: Map<string, ObjectId>;
+    statusByTaskId: Map<string, unknown>;
 };
 
 const emptyAcceptedTaskLineageIndex = (): AcceptedTaskLineageIndex => ({
@@ -656,6 +667,7 @@ const emptyAcceptedTaskLineageIndex = (): AcceptedTaskLineageIndex => ({
     byRowId: new Map<string, ObjectId>(),
     bySourceDataRowId: new Map<string, ObjectId>(),
     byCompatibilityKey: new Map<string, ObjectId>(),
+    statusByTaskId: new Map<string, unknown>(),
 });
 
 const indexAcceptedTaskLineage = (
@@ -677,6 +689,7 @@ const indexAcceptedTaskLineage = (
             toTaskText(doc.id),
             toTaskText(doc.task_id_from_ai),
         ].filter(Boolean);
+        index.statusByTaskId.set(docObjectId.toHexString(), doc.task_status);
 
         if (acceptedFromRowId && !index.byAcceptedFromRowId.has(acceptedFromRowId)) {
             index.byAcceptedFromRowId.set(acceptedFromRowId, docObjectId);
@@ -753,6 +766,7 @@ const listSessionLinkedAcceptedTaskLineageDocs = async ({
                 row_id: 1,
                 accepted_from_row_id: 1,
                 source_data: 1,
+                task_status: 1,
                 updated_at: 1,
                 created_at: 1,
             },
@@ -825,11 +839,33 @@ const resolveExistingAcceptedTaskIdByLineage = ({
     return null;
 };
 
+const TASK_STATUS_ORDER_INDEX = new Map(
+    TARGET_TASK_STATUS_KEYS.map((status, index) => [status, index])
+);
+
+const resolveMaxStatusByLifecycleOrder = ({
+    targetStatus,
+    existingStatus,
+}: {
+    targetStatus: unknown;
+    existingStatus: unknown;
+}): string => {
+    const targetStatusKey = resolveTaskStatusKey(targetStatus);
+    const existingStatusKey = resolveTaskStatusKey(existingStatus);
+    const targetRank = targetStatusKey ? (TASK_STATUS_ORDER_INDEX.get(targetStatusKey) ?? -1) : -1;
+    const existingRank = existingStatusKey ? (TASK_STATUS_ORDER_INDEX.get(existingStatusKey) ?? -1) : -1;
+    const chosenKey = existingRank > targetRank ? existingStatusKey : targetStatusKey;
+    if (chosenKey) {
+        return TASK_STATUSES[chosenKey] ?? chosenKey;
+    }
+    return toTaskText(targetStatus) || toTaskText(existingStatus) || TASK_STATUSES.DRAFT_10;
+};
+
 type SessionTaskRowLocatorResolution =
     | { ok: true; row_id: string; source_fields: string[] }
     | {
         ok: false;
-        error_code: 'missing_row_id' | 'ambiguous_row_locator';
+        error_code: 'missing_row_id' | 'ambiguous_row_locator' | 'legacy_row_locator_unsupported';
         source_fields: string[];
         values?: Array<{ field: string; value: string }>;
     };
@@ -886,16 +922,16 @@ const resolveSessionTaskRowLocator = (
         legacyFallbackValues.push({ field, value: fieldValue });
     }
 
-    const uniqueLegacyValues = Array.from(new Set(legacyFallbackValues.map((entry) => entry.value)));
-    if (uniqueLegacyValues.length === 0) {
-        return { ok: false, error_code: 'missing_row_id', source_fields: [] };
+    if (legacyFallbackValues.length > 0) {
+        return {
+            ok: false,
+            error_code: 'legacy_row_locator_unsupported',
+            source_fields: legacyFallbackValues.map((entry) => entry.field),
+            values: legacyFallbackValues,
+        };
     }
 
-    return {
-        ok: true,
-        row_id: uniqueLegacyValues[0]!,
-        source_fields: legacyFallbackValues.map((entry) => entry.field),
-    };
+    return { ok: false, error_code: 'missing_row_id', source_fields: [] };
 };
 
 const collectSessionTaskMutationLocatorKeys = (value: unknown): string[] => {
@@ -910,12 +946,7 @@ const collectSessionTaskMutationLocatorKeys = (value: unknown): string[] => {
     if (canonicalKeys.length > 0) {
         return Array.from(new Set(canonicalKeys));
     }
-
-    const legacyKey = toTaskText(record.task_id_from_ai);
-    if (legacyKey) return [legacyKey];
-
-    const sourceDataRowId = toTaskText((record.source_data as Record<string, unknown> | undefined)?.row_id);
-    return sourceDataRowId ? [sourceDataRowId] : [];
+    return [];
 };
 
 const collectSessionPossibleTaskDiscussionSessions = (doc: Record<string, unknown>): Array<Record<string, unknown>> => {
@@ -928,19 +959,6 @@ const collectSessionPossibleTaskDiscussionSessions = (doc: Record<string, unknow
     return [...direct, ...sourceDataVoiceSessions].filter(
         (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'
     );
-};
-
-const normalizeSessionPossibleTaskForApi = (value: unknown): Record<string, unknown> | null => {
-    if (!value || typeof value !== 'object') return null;
-    const row = value as Record<string, unknown>;
-    const resolved = resolveSessionTaskRowLocator(row);
-    const canonicalRowId = resolved.ok
-        ? resolved.row_id
-        : toTaskText(row[SESSION_TASKFLOW_CANONICAL_ROW_ID_FIELD]);
-    return {
-        ...row,
-        ...(canonicalRowId ? { row_id: canonicalRowId } : {}),
-    };
 };
 
 type CreateTicketsRowRejectionReason =
@@ -999,6 +1017,12 @@ const POSSIBLE_TASK_MASTER_PROJECTION = {
     parent_id: 1,
     children: 1,
     task_status: 1,
+    row_version: 1,
+    field_versions: 1,
+    last_user_edit_version: 1,
+    last_recompute_version: 1,
+    user_owned_overrides: 1,
+    divergent_backend_candidates: 1,
     created_at: 1,
     updated_at: 1,
     source_data: 1,
@@ -1057,79 +1081,6 @@ const listPossibleTaskMasterDocs = async ({
     return await cursor.toArray();
 };
 
-const buildProjectScopedPossibleTaskRuntimeQuery = ({
-    projectId,
-    rowIds,
-}: {
-    projectId: string;
-    rowIds: string[];
-}): Record<string, unknown> =>
-    mergeWithRuntimeFilter(
-        {
-            is_deleted: { $ne: true },
-            codex_task: { $ne: true },
-            task_status: { $in: [...ACTIVE_VOICE_DRAFT_STATUSES] },
-            source: 'VOICE_BOT',
-            source_kind: 'voice_possible_task',
-            project_id: projectId,
-            $or: [
-                { row_id: { $in: rowIds } },
-                { id: { $in: rowIds } },
-                { 'source_data.row_id': { $in: rowIds } },
-            ],
-        },
-        {
-            field: 'runtime_tag',
-            familyMatch: IS_PROD_RUNTIME,
-            includeLegacyInProd: IS_PROD_RUNTIME,
-        }
-    );
-
-const listPossibleTaskSaveMatchDocs = async ({
-    db,
-    sessionId,
-    projectId,
-    rowIds,
-}: {
-    db: Db;
-    sessionId: string;
-    projectId: string;
-    rowIds: string[];
-}): Promise<{
-    sessionDocs: Array<Record<string, unknown>>;
-    matchDocs: Array<Record<string, unknown>>;
-}> => {
-    const sessionDocs = await listPossibleTaskMasterDocs({ db, sessionId });
-    const normalizedRowIds = Array.from(new Set(rowIds.map((value) => String(value || '').trim()).filter(Boolean)));
-    if (!projectId || normalizedRowIds.length === 0) {
-        return { sessionDocs, matchDocs: sessionDocs };
-    }
-
-    const projectCursor = toSortedTaskCursor(
-        db.collection(COLLECTIONS.TASKS),
-        buildProjectScopedPossibleTaskRuntimeQuery({ projectId, rowIds: normalizedRowIds }),
-        {
-            projection: POSSIBLE_TASK_MASTER_PROJECTION,
-        }
-    );
-    const projectDocs = projectCursor ? await projectCursor.toArray() : [];
-
-    const mergedByKey = new Map<string, Record<string, unknown>>();
-    for (const doc of [...sessionDocs, ...projectDocs]) {
-        const docKey = toIdString((doc as Record<string, unknown>)._id)
-            || collectSessionTaskMutationLocatorKeys(doc)[0]
-            || JSON.stringify(doc);
-        if (!mergedByKey.has(docKey)) {
-            mergedByKey.set(docKey, doc);
-        }
-    }
-
-    return {
-        sessionDocs,
-        matchDocs: Array.from(mergedByKey.values()),
-    };
-};
-
 const buildPossibleTaskMasterAliasMap = (
     docs: Array<Record<string, unknown>>
 ): Map<string, Record<string, unknown>> => {
@@ -1138,11 +1089,7 @@ const buildPossibleTaskMasterAliasMap = (
     const docSortRank = (doc: Record<string, unknown>, key: string): number => {
         const rowId = toTaskText(doc.row_id);
         const id = toTaskText(doc.id);
-        const legacy = toTaskText(doc.task_id_from_ai);
-        const sourceDataRowId = toTaskText((doc.source_data as Record<string, unknown> | undefined)?.row_id);
         if (key && (key === rowId || key === id)) return 4;
-        if (key && key === legacy) return 3;
-        if (key && key === sourceDataRowId) return 1;
         return 0;
     };
     const docUpdatedAtMs = (doc: Record<string, unknown>): number => {
@@ -5552,6 +5499,13 @@ const materializeSessionTickets = async ({
         const existingTaskId = explicitExistingTaskId || lineageExistingTaskId;
         const preserveCreatedAt = Boolean(existingTaskId);
         const materializedTaskId = existingTaskId || new ObjectId();
+        const existingTaskStatus = existingTaskId
+            ? acceptedTaskLineageIndex.statusByTaskId.get(existingTaskId.toHexString())
+            : undefined;
+        const materializedTaskStatus = resolveMaxStatusByLifecycleOrder({
+            targetStatus: targetTaskStatus,
+            existingStatus: existingTaskStatus,
+        });
         const incomingVoiceSessions = normalizeVoiceTaskDiscussionSessions([
             ...(Array.isArray(ticket.discussion_sessions) ? ticket.discussion_sessions : []),
             ...(Array.isArray(incomingSourceData.voice_sessions) ? incomingSourceData.voice_sessions : []),
@@ -5742,7 +5696,7 @@ const materializeSessionTickets = async ({
                 performer: taskPerformer,
                 created_at: now,
                 updated_at: now,
-                task_status: targetTaskStatus,
+                task_status: materializedTaskStatus,
                 task_status_history: [],
                 last_status_update: now,
                 status_update_checked: false,
@@ -6029,6 +5983,14 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
                     values: resolvedRowLocator.values ?? [],
                 });
             }
+            if (!resolvedRowLocator.ok && resolvedRowLocator.error_code === 'legacy_row_locator_unsupported') {
+                return res.status(400).json({
+                    error: 'legacy_row_locator_unsupported',
+                    error_code: 'legacy_row_locator_unsupported',
+                    item_index: taskIndex,
+                    values: resolvedRowLocator.values ?? [],
+                });
+            }
         }
 
         const persisted = await persistPossibleTasksForSession({
@@ -6075,6 +6037,16 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
             items: persisted.items,
         });
     } catch (error) {
+        if (error instanceof PossibleTaskStaleWriteError) {
+            return res.status(409).json({
+                error: 'stale_write',
+                error_code: 'stale_write',
+                row_id: error.rowId,
+                expected_row_version: error.expectedRowVersion,
+                current_row_version: error.currentRowVersion,
+                conflicting_fields: error.conflictingFields,
+            });
+        }
         logger.error('Error in save_possible_tasks:', error);
         return res.status(500).json({ error: String(error) });
     }
@@ -6303,7 +6275,13 @@ router.post('/process_possible_tasks', async (req: Request, res: Response) => {
         const tickets = parsedBody.data.tickets.map((rawTicket) => {
             const ticket = rawTicket as Record<string, unknown>;
             const resolvedRowLocator = resolveSessionTaskRowLocator(ticket);
-            if (!resolvedRowLocator.ok) return ticket;
+            if (!resolvedRowLocator.ok) {
+                return {
+                    ...ticket,
+                    __row_locator_error: resolvedRowLocator.error_code,
+                    __row_locator_values: resolvedRowLocator.values ?? [],
+                };
+            }
             const matchedDoc = existingAliasMap.get(resolvedRowLocator.row_id);
             if (!matchedDoc) return ticket;
             return buildProcessPossibleTasksPayload({
@@ -6311,6 +6289,31 @@ router.post('/process_possible_tasks', async (req: Request, res: Response) => {
                 rawTicket: ticket,
             });
         });
+        const rejectedTicket = tickets.find((ticket) => {
+            const locatorError = toTaskText((ticket as Record<string, unknown>).__row_locator_error);
+            return Boolean(locatorError);
+        }) as Record<string, unknown> | undefined;
+        if (rejectedTicket) {
+            const locatorError = toTaskText(rejectedTicket.__row_locator_error);
+            if (locatorError === 'ambiguous_row_locator') {
+                return res.status(409).json({
+                    error: 'ambiguous_row_locator',
+                    error_code: 'ambiguous_row_locator',
+                    values: Array.isArray(rejectedTicket.__row_locator_values) ? rejectedTicket.__row_locator_values : [],
+                });
+            }
+            if (locatorError === 'legacy_row_locator_unsupported') {
+                return res.status(400).json({
+                    error: 'legacy_row_locator_unsupported',
+                    error_code: 'legacy_row_locator_unsupported',
+                    values: Array.isArray(rejectedTicket.__row_locator_values) ? rejectedTicket.__row_locator_values : [],
+                });
+            }
+            return res.status(400).json({
+                error: 'row_id is required',
+                error_code: 'missing_row_id',
+            });
+        }
 
         const materializeResult = await materializeSessionTickets({
             req,
@@ -6413,10 +6416,6 @@ router.post('/codex_tasks', async (req: Request, res: Response) => {
     }
 });
 
-const CANONICAL_TASK_STATUS_ORDER = [...TARGET_TASK_STATUS_KEYS];
-const CANONICAL_TASK_STATUS_ORDER_INDEX = new Map(
-  CANONICAL_TASK_STATUS_ORDER.map((status, index) => [status, index])
-);
 const VOICE_SESSION_TASK_STATUS_ORDER = [...TARGET_TASK_STATUS_KEYS, VOICE_SESSION_UNKNOWN_STATUS_KEY] as const;
 const VOICE_SESSION_ACCEPTED_STATUS_KEYS = [
     ...TARGET_TASK_STATUS_KEYS.filter(
@@ -7087,6 +7086,13 @@ router.post('/delete_task_from_session', async (req: Request, res: Response) => 
                 return res.status(409).json({
                     error: 'ambiguous_row_locator',
                     error_code: 'ambiguous_row_locator',
+                    values: resolvedRowLocator.values ?? [],
+                });
+            }
+            if (resolvedRowLocator.error_code === 'legacy_row_locator_unsupported') {
+                return res.status(400).json({
+                    error: 'legacy_row_locator_unsupported',
+                    error_code: 'legacy_row_locator_unsupported',
                     values: resolvedRowLocator.values ?? [],
                 });
             }
@@ -8336,9 +8342,6 @@ router.post('/edit_categorization_chunk', async (req: Request, res: Response) =>
         if (!Array.isArray(sourceRows) || sourceRows.length <= target.index) {
             return sendCategorizationMutationError(res, 404, 'categorization_row_not_found', 'Categorization row not found');
         }
-        const previousRowsSnapshot = sourceRows.map((entry) =>
-            entry && typeof entry === 'object' ? { ...(entry as Record<string, unknown>) } : entry
-        );
         const previousRow =
             sourceRows[target.index] && typeof sourceRows[target.index] === 'object'
                 ? { ...(sourceRows[target.index] as Record<string, unknown>) }

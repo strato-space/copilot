@@ -250,3 +250,12 @@ export interface FinopsMonthClosure {
   closed_at?: Date | null;
   comment?: string | null;
 }
+
+export interface VoiceDraftMergeMetadata {
+  row_version: number;
+  field_versions: Record<string, number>;
+  last_user_edit_version: number;
+  last_recompute_version: number;
+  user_owned_overrides: string[];
+  divergent_backend_candidates: Record<string, unknown>;
+}

@@ -289,11 +289,18 @@ collections:
       project_ref: project
       task_type_name: task_type
       task_type_id: task_type_id
+      slug: slug
       performer: performer
       performer_id: performer_id
       epic_task_id: epic
       planned_time: planned_time
       type_class: type_class
+      row_version: row_version
+      last_user_edit_version: last_user_edit_version
+      last_recompute_version: last_recompute_version
+      user_owned_overrides: user_owned_overrides
+      field_versions: field_versions
+      divergent_backend_candidates: divergent_backend_candidates
       status_history: status_history
       task_status_history: task_status_history
       comments_list: comments_list

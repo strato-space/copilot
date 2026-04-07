@@ -1202,7 +1202,7 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                         throw new Error('create_tasks result is not an array');
                     }
                     tasks = parsed as Array<Record<string, unknown>>;
-                } catch (parseError) {
+                } catch (_parseError) {
                     throw new Error('Не удалось распарсить результат агента');
                 }
             } else {
@@ -2281,7 +2281,9 @@ export const useVoiceBotStore = create<VoiceBotStoreShape>((set, get) => ({
                 selectedRowIds: selectedTicketIds,
                 selectedCount: selectedTicketIds.length,
                 payload: preparedTickets.map((ticket) => ({
-                    row_id: String(ticket.row_id || ticket.id || '').trim(),
+                    row_id: String(ticket.row_id || '').trim(),
+                    client_row_key: String(ticket.client_row_key || '').trim(),
+                    fallback_locator: String(ticket.id || ticket.task_id_from_ai || '').trim(),
                     performer_id: String(ticket.performer_id || '').trim(),
                     project_id: String(ticket.project_id || '').trim(),
                     priority: String(ticket.priority || '').trim(),

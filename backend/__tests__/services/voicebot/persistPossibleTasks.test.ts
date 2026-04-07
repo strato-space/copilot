@@ -2,17 +2,35 @@ import { beforeEach, describe, expect, it } from '@jest/globals';
 import { ObjectId } from 'mongodb';
 import { COLLECTIONS, TASK_STATUSES } from '../../../src/constants.js';
 import {
+  PossibleTaskStaleWriteError,
   persistPossibleTasksForSession,
   validatePossibleTaskMasterDocs,
 } from '../../../src/services/voicebot/persistPossibleTasks.js';
 
 type TaskDoc = Record<string, unknown>;
+const OBJECT_ID_HEX_REGEX = /^[a-f0-9]{24}$/i;
+
 const toEpochMsForAssert = (value: unknown): number => {
   if (value instanceof Date) return value.getTime();
   if (typeof value === 'number') return value;
   if (typeof value === 'string') return Date.parse(value);
   return Number.NaN;
 };
+
+const expectCanonicalTaskIdentity = (value: unknown, expectedRowId?: string): string => {
+  const record = (value && typeof value === 'object' ? (value as Record<string, unknown>) : {}) as Record<string, unknown>;
+  const rowId = String(record.row_id || '');
+  const id = String(record.id || '');
+  expect(rowId).toMatch(OBJECT_ID_HEX_REGEX);
+  expect(id).toBe(rowId);
+  if (expectedRowId) {
+    expect(rowId).toBe(expectedRowId);
+  }
+  return rowId;
+};
+
+const findTaskByName = (items: Array<Record<string, unknown>>, name: string): Record<string, unknown> | undefined =>
+  items.find((item) => String(item.name || '') === name);
 
 const buildTasksCollection = (seedDocs: TaskDoc[]) => {
   let docs = seedDocs.map((doc) => ({ ...doc }));
@@ -266,27 +284,27 @@ describe('persistPossibleTasksForSession', () => {
     });
 
     expect(result.removedRowIds).toEqual([]);
-    expect(result.items).toEqual([
+    expect(result.items).toHaveLength(1);
+    expectCanonicalTaskIdentity(result.items[0], existingDocId.toHexString());
+    expect(result.items[0]).toEqual(
       expect.objectContaining({
-        row_id: 'draft-canonical-openclaw',
-        id: 'draft-canonical-openclaw',
         name: 'Развернуть OpenClaw на Mac mini для тестов оркестратора',
         project_id: 'proj-1',
         discussion_count: 2,
-      }),
-    ]);
+      })
+    );
 
     const persistedDocs = tasksCollection.snapshot();
     expect(persistedDocs).toHaveLength(1);
     expect(persistedDocs[0]).toEqual(
       expect.objectContaining({
         _id: existingDocId,
-        row_id: 'draft-canonical-openclaw',
-        id: 'draft-canonical-openclaw',
+        row_id: existingDocId.toHexString(),
+        id: existingDocId.toHexString(),
         name: 'Развернуть OpenClaw на Mac mini для тестов оркестратора',
         source_kind: 'voice_possible_task',
         source_data: expect.objectContaining({
-          row_id: 'draft-canonical-openclaw',
+          row_id: existingDocId.toHexString(),
           session_id: sessionId,
           voice_sessions: expect.arrayContaining([
             expect.objectContaining({ session_id: sessionId }),
@@ -347,14 +365,15 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
-    expect(result.items).toEqual([
+    expect(result.items).toHaveLength(1);
+    const insertedTask = result.items[0]!;
+    const insertedRowId = expectCanonicalTaskIdentity(insertedTask);
+    expect(insertedTask).toEqual(
       expect.objectContaining({
-        row_id: 'incoming-paraphrased-row',
-        id: 'incoming-paraphrased-row',
         project_id: 'proj-2',
         discussion_count: 1,
-      }),
-    ]);
+      })
+    );
 
     const persistedDocs = tasksCollection.snapshot();
     expect(persistedDocs).toHaveLength(2);
@@ -366,12 +385,12 @@ describe('persistPossibleTasksForSession', () => {
           project_id: 'proj-1',
         }),
         expect.objectContaining({
-          row_id: 'incoming-paraphrased-row',
-          id: 'incoming-paraphrased-row',
+          row_id: insertedRowId,
+          id: insertedRowId,
           project_id: 'proj-2',
           source_data: expect.objectContaining({
             session_id: sessionId,
-            row_id: 'incoming-paraphrased-row',
+            row_id: insertedRowId,
           }),
         }),
       ]),
@@ -405,9 +424,8 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
-    expect(firstPass.items).toEqual(
-      expect.arrayContaining([expect.objectContaining({ row_id: 'incoming-row-pass-1', id: 'incoming-row-pass-1' })])
-    );
+    expect(firstPass.items).toHaveLength(1);
+    const canonicalRowId = expectCanonicalTaskIdentity(firstPass.items[0]);
 
     const secondPass = await persistPossibleTasksForSession({
       db: dbStub,
@@ -427,16 +445,15 @@ describe('persistPossibleTasksForSession', () => {
     });
 
     expect(secondPass.removedRowIds).toEqual([]);
-    expect(secondPass.items).toEqual(
-      expect.arrayContaining([expect.objectContaining({ row_id: 'incoming-row-pass-1', id: 'incoming-row-pass-1' })])
-    );
+    expect(secondPass.items).toHaveLength(1);
+    expectCanonicalTaskIdentity(secondPass.items[0], canonicalRowId);
 
     const persistedDocs = tasksCollection.snapshot();
     expect(persistedDocs).toHaveLength(1);
     expect(persistedDocs[0]).toEqual(
       expect.objectContaining({
-        row_id: 'incoming-row-pass-1',
-        id: 'incoming-row-pass-1',
+        row_id: canonicalRowId,
+        id: canonicalRowId,
         is_deleted: false,
       })
     );
@@ -504,9 +521,10 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
-    expect(result.items).toEqual(
-      expect.arrayContaining([expect.objectContaining({ row_id: 'canonical-row', id: 'canonical-row' })])
-    );
+    expect(result.items).toHaveLength(1);
+    const insertedRowId = expectCanonicalTaskIdentity(result.items[0]);
+    expect(insertedRowId).not.toBe(canonicalDocId.toHexString());
+    expect(insertedRowId).not.toBe(foreignDocId.toHexString());
 
     const persistedDocs = tasksCollection.snapshot();
     const foreignDoc = persistedDocs.find((doc) => String(doc._id) === String(foreignDocId));
@@ -516,9 +534,9 @@ describe('persistPossibleTasksForSession', () => {
       expect.objectContaining({
         _id: canonicalDocId,
         row_id: 'canonical-row',
-        name: 'Обновить канонический draft по canonical row',
+        name: 'Канонический draft',
         source_data: expect.objectContaining({
-          session_id: sessionId,
+          session_id: previousSessionB,
           row_id: 'canonical-row',
         }),
       })
@@ -528,6 +546,16 @@ describe('persistPossibleTasksForSession', () => {
         _id: foreignDocId,
         row_id: 'foreign-stale-row',
         name: 'Старый foreign stale draft',
+      })
+    );
+    expect(
+      persistedDocs.find((doc) => String(doc._id) === insertedRowId)
+    ).toEqual(
+      expect.objectContaining({
+        row_id: insertedRowId,
+        id: insertedRowId,
+        name: 'Обновить канонический draft по canonical row',
+        is_deleted: false,
       })
     );
   });
@@ -577,9 +605,8 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
-    expect(result.items).toEqual(
-      expect.arrayContaining([expect.objectContaining({ row_id: 'incoming-canonical-row', id: 'incoming-canonical-row' })])
-    );
+    expect(result.items).toHaveLength(1);
+    const insertedCanonicalRowId = expectCanonicalTaskIdentity(result.items[0]);
 
     const persistedDocs = tasksCollection.snapshot();
     expect(persistedDocs).toHaveLength(2);
@@ -594,11 +621,11 @@ describe('persistPossibleTasksForSession', () => {
           }),
         }),
         expect.objectContaining({
-          row_id: 'incoming-canonical-row',
-          id: 'incoming-canonical-row',
+          row_id: insertedCanonicalRowId,
+          id: insertedCanonicalRowId,
           source_data: expect.objectContaining({
             session_id: sessionId,
-            row_id: 'incoming-canonical-row',
+            row_id: insertedCanonicalRowId,
           }),
         }),
       ])
@@ -649,10 +676,9 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
-    expect(result.items).toEqual(
-      expect.arrayContaining([expect.objectContaining({ row_id: 'incoming-canonical-row', id: 'incoming-canonical-row' })])
-    );
-    expect(result.removedRowIds).toEqual(['foreign-stale-row']);
+    expect(result.items).toHaveLength(1);
+    const canonicalInsertedRowId = expectCanonicalTaskIdentity(result.items[0]);
+    expect(result.removedRowIds).toEqual([staleSessionDocId.toHexString()]);
 
     const persistedDocs = tasksCollection.snapshot();
     const staleDoc = persistedDocs.find((doc) => String(doc._id) === String(staleSessionDocId));
@@ -667,12 +693,12 @@ describe('persistPossibleTasksForSession', () => {
     );
     expect(canonicalDoc).toEqual(
       expect.objectContaining({
-        row_id: 'incoming-canonical-row',
-        id: 'incoming-canonical-row',
+        row_id: canonicalInsertedRowId,
+        id: canonicalInsertedRowId,
         is_deleted: false,
         source_data: expect.objectContaining({
           session_id: sessionId,
-          row_id: 'incoming-canonical-row',
+          row_id: canonicalInsertedRowId,
         }),
       })
     );
@@ -738,7 +764,7 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
-    expect(result.removedRowIds).toEqual(['draft-b-stale']);
+    expect(result.removedRowIds).toEqual([existingDocB.toHexString()]);
 
     const persistedDocs = tasksCollection.snapshot();
     const keptDocA = persistedDocs.find((doc) => String(doc._id) === String(existingDocA));
@@ -747,7 +773,7 @@ describe('persistPossibleTasksForSession', () => {
     expect(keptDocA).toEqual(
       expect.objectContaining({
         _id: existingDocA,
-        row_id: 'draft-a-stable',
+        row_id: existingDocA.toHexString(),
         is_deleted: false,
       })
     );
@@ -825,7 +851,7 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'incremental_refresh',
     });
 
-    expect(result.removedRowIds).toEqual(['draft-b']);
+    expect(result.removedRowIds).toEqual([existingDocB.toHexString()]);
 
     const persistedDocs = tasksCollection.snapshot();
     const refreshedDocA = persistedDocs.find((doc) => String(doc._id) === String(existingDocA));
@@ -834,10 +860,10 @@ describe('persistPossibleTasksForSession', () => {
     expect(refreshedDocA).toEqual(
       expect.objectContaining({
         _id: existingDocA,
-        row_id: 'draft-a',
+        row_id: existingDocA.toHexString(),
         is_deleted: false,
         source_data: expect.objectContaining({
-          row_id: 'draft-a',
+          row_id: existingDocA.toHexString(),
           last_refresh_mode: 'incremental_refresh',
         }),
       })
@@ -920,7 +946,7 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'incremental_refresh',
     });
 
-    expect(result.removedRowIds).toEqual(['draft-b-stale']);
+    expect(result.removedRowIds).toEqual([existingDocB.toHexString()]);
 
     const persistedDocs = tasksCollection.snapshot();
     const keptDocA = persistedDocs.find((doc) => String(doc._id) === String(existingDocA));
@@ -995,19 +1021,18 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
-    expect(result.items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ row_id: 'draft-project-binding' }),
-        expect.objectContaining({ row_id: 'incoming-title-row' }),
-      ])
-    );
+    expect(result.items).toHaveLength(2);
+    const reusedBindingTask = findTaskByName(result.items, 'Автоматизировать project binding для voice-сессий');
+    const insertedTitleTask = findTaskByName(result.items, 'Автоматизировать project binding и генерацию заголовков voice-сессий');
+    expectCanonicalTaskIdentity(reusedBindingTask, existingDocId.toHexString());
+    const insertedTitleRowId = expectCanonicalTaskIdentity(insertedTitleTask);
 
     const persistedDocs = tasksCollection.snapshot();
     expect(persistedDocs).toHaveLength(2);
     expect(persistedDocs).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ row_id: 'draft-project-binding' }),
-        expect.objectContaining({ row_id: 'incoming-title-row' }),
+        expect.objectContaining({ _id: existingDocId, row_id: existingDocId.toHexString() }),
+        expect.objectContaining({ row_id: insertedTitleRowId, id: insertedTitleRowId }),
       ])
     );
   });
@@ -1078,20 +1103,11 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
-    expect(result.items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          name: 'Создать принимающую project-структуру для MediaGen',
-          row_id: expect.stringMatching(/^voice-task-/),
-          id: expect.stringMatching(/^voice-task-/),
-        }),
-        expect.objectContaining({
-          name: 'Сделать project-first work surface вместо поиска в диалогах',
-          row_id: expect.stringMatching(/^voice-task-/),
-          id: expect.stringMatching(/^voice-task-/),
-        }),
-      ])
-    );
+    expect(result.items).toHaveLength(2);
+    const mediaGenTask = findTaskByName(result.items, 'Создать принимающую project-структуру для MediaGen');
+    const projectFirstTask = findTaskByName(result.items, 'Сделать project-first work surface вместо поиска в диалогах');
+    const mediaGenRowId = expectCanonicalTaskIdentity(mediaGenTask);
+    const projectFirstRowId = expectCanonicalTaskIdentity(projectFirstTask);
 
     const persistedDocs = tasksCollection.snapshot();
     expect(persistedDocs).toEqual(
@@ -1106,11 +1122,11 @@ describe('persistPossibleTasksForSession', () => {
         }),
         expect.objectContaining({
           name: 'Создать принимающую project-структуру для MediaGen',
-          row_id: expect.stringMatching(/^voice-task-/),
+          row_id: mediaGenRowId,
         }),
         expect.objectContaining({
           name: 'Сделать project-first work surface вместо поиска в диалогах',
-          row_id: expect.stringMatching(/^voice-task-/),
+          row_id: projectFirstRowId,
         }),
       ])
     );
@@ -1182,11 +1198,18 @@ describe('persistPossibleTasksForSession', () => {
     });
 
     expect(result.removedRowIds).toHaveLength(2);
-    expect(result.removedRowIds.every((value) => /^voice-task-/.test(value))).toBe(true);
+    expect(result.removedRowIds).toEqual(
+      expect.arrayContaining(
+        tasksCollection
+          .snapshot()
+          .filter((doc) => String(doc.row_id || '').startsWith('task-'))
+          .map((doc) => String(doc._id || ''))
+      )
+    );
 
     const persistedDocs = tasksCollection.snapshot();
     const staleDocs = persistedDocs.filter((doc) => String(doc.row_id || '').startsWith('task-'));
-    const freshDocs = persistedDocs.filter((doc) => String(doc.row_id || '').startsWith('voice-task-'));
+    const freshDocs = persistedDocs.filter((doc) => OBJECT_ID_HEX_REGEX.test(String(doc.row_id || '')));
 
     expect(staleDocs).toEqual(
       expect.arrayContaining([
@@ -1266,7 +1289,7 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
-    expect(result.removedRowIds).toEqual(['draft-b']);
+    expect(result.removedRowIds).toEqual([existingDocB.toHexString()]);
 
     const persistedDocs = tasksCollection.snapshot();
     const refreshedDocA = persistedDocs.find((doc) => String(doc._id) === String(existingDocA));
@@ -1275,7 +1298,7 @@ describe('persistPossibleTasksForSession', () => {
     expect(refreshedDocA).toEqual(
       expect.objectContaining({
         _id: existingDocA,
-        row_id: 'draft-a',
+        row_id: existingDocA.toHexString(),
         is_deleted: false,
       })
     );
@@ -1445,12 +1468,11 @@ describe('persistPossibleTasksForSession', () => {
     });
 
     expect(result.removedRowIds).toEqual([]);
-    expect(result.items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ row_id: 'draft-a', id: 'draft-a' }),
-        expect.objectContaining({ row_id: 'draft-b', id: 'draft-b' }),
-      ])
-    );
+    expect(result.items).toHaveLength(2);
+    const zeroPassA = result.items.find((item) => String(item._id || '') === existingDocA.toHexString());
+    const zeroPassB = result.items.find((item) => String(item._id || '') === existingDocB.toHexString());
+    expectCanonicalTaskIdentity(zeroPassA, existingDocA.toHexString());
+    expectCanonicalTaskIdentity(zeroPassB, existingDocB.toHexString());
 
     const persistedDocs = tasksCollection.snapshot();
     const persistedDocA = persistedDocs.find((doc) => String(doc._id) === String(existingDocA));
@@ -1461,7 +1483,7 @@ describe('persistPossibleTasksForSession', () => {
     expect(persistedDocB?.is_deleted).not.toBe(true);
   });
 
-  it('matches existing drafts by task_id_from_ai when it is the only incoming locator', async () => {
+  it('does not reuse existing drafts by task_id_from_ai once legacy locator matching is retired', async () => {
     const canonicalDocId = new ObjectId();
     const staleDocId = new ObjectId();
     const tasksCollection = buildTasksCollection([
@@ -1524,16 +1546,16 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
-    expect(result.removedRowIds).toEqual(['stale-row']);
-    expect(result.items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          row_id: 'stable-row',
-          id: 'stable-row',
-          task_id_from_ai: 'T1',
-          name: 'Canonical row refreshed by AI id only',
-        }),
-      ])
+    expect(result.removedRowIds).toEqual(
+      expect.arrayContaining([canonicalDocId.toHexString(), staleDocId.toHexString()])
+    );
+    expect(result.items).toHaveLength(1);
+    const aiOnlyInsertedRowId = expectCanonicalTaskIdentity(result.items[0]);
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        task_id_from_ai: 'T1',
+        name: 'Canonical row refreshed by AI id only',
+      })
     );
 
     const persistedDocs = tasksCollection.snapshot();
@@ -1543,12 +1565,17 @@ describe('persistPossibleTasksForSession', () => {
           _id: canonicalDocId,
           row_id: 'stable-row',
           task_id_from_ai: 'T1',
-          is_deleted: false,
+          is_deleted: true,
         }),
         expect.objectContaining({
           _id: staleDocId,
           row_id: 'stale-row',
           is_deleted: true,
+        }),
+        expect.objectContaining({
+          row_id: aiOnlyInsertedRowId,
+          id: aiOnlyInsertedRowId,
+          task_id_from_ai: 'T1',
         }),
       ])
     );
@@ -1589,44 +1616,242 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
+    expect(result.items).toHaveLength(2);
+    result.items.forEach((item) => expectCanonicalTaskIdentity(item));
     expect(result.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          row_id: 'draft-emoji-priority-1',
           priority: 'P1',
         }),
         expect.objectContaining({
-          row_id: 'draft-emoji-priority-2',
           priority: 'P2',
         }),
       ])
     );
 
-    expect(tasksCollection.snapshot()).toEqual(
+    const persisted = tasksCollection.snapshot();
+    expect(persisted).toHaveLength(2);
+    persisted.forEach((item) => {
+      const rowId = expectCanonicalTaskIdentity(item);
+      expect(item).toEqual(
+        expect.objectContaining({
+          row_id: rowId,
+          id: rowId,
+          source_kind: 'voice_possible_task',
+          task_status: TASK_STATUSES.DRAFT_10,
+        })
+      );
+    });
+    expect(persisted).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          row_id: 'draft-emoji-priority-1',
-          priority: 'P1',
-          source_kind: 'voice_possible_task',
-          task_status: TASK_STATUSES.DRAFT_10,
-        }),
-        expect.objectContaining({
-          row_id: 'draft-emoji-priority-2',
-          priority: 'P2',
-          source_kind: 'voice_possible_task',
-          task_status: TASK_STATUSES.DRAFT_10,
-        }),
+        expect.objectContaining({ priority: 'P1' }),
+        expect.objectContaining({ priority: 'P2' }),
       ])
     );
   });
 
+  it('tracks row_version metadata and preserves user-owned overrides across recompute updates', async () => {
+    const existingDocId = new ObjectId();
+    const existingRowId = existingDocId.toHexString();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocId,
+        row_id: existingRowId,
+        id: existingRowId,
+        name: 'User-owned title',
+        description: 'User-owned description',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source: 'VOICE_BOT',
+        source_kind: 'voice_possible_task',
+        source_ref: `https://copilot.stratospace.fun/operops/task/${existingRowId}`,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: existingRowId,
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        row_version: 2,
+        field_versions: { name: 2, description: 1 },
+        last_user_edit_version: 2,
+        last_recompute_version: 1,
+        user_owned_overrides: ['name'],
+        divergent_backend_candidates: {},
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const userWrite = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Version metadata session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: existingRowId,
+          id: existingRowId,
+          name: 'Edited by user',
+          description: 'Edited by user description',
+          project_id: 'proj-1',
+          expected_row_version: 2,
+          expected_field_versions: {
+            name: 2,
+            description: 1,
+          },
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(userWrite.items).toHaveLength(1);
+    expect(userWrite.items[0]).toEqual(
+      expect.objectContaining({
+        row_id: existingRowId,
+        id: existingRowId,
+        name: 'Edited by user',
+        description: 'Edited by user description',
+        row_version: 3,
+        field_versions: expect.objectContaining({
+          name: 3,
+          description: 2,
+        }),
+        last_user_edit_version: 3,
+        last_recompute_version: 1,
+        user_owned_overrides: expect.arrayContaining(['name', 'description']),
+      })
+    );
+
+    const recomputeWrite = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Version metadata session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: existingRowId,
+          id: existingRowId,
+          name: 'Backend recompute title',
+          description: 'Backend recompute description',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(recomputeWrite.items).toHaveLength(1);
+    expect(recomputeWrite.items[0]).toEqual(
+      expect.objectContaining({
+        row_id: existingRowId,
+        id: existingRowId,
+        name: 'Edited by user',
+        description: 'Edited by user description',
+        row_version: 4,
+        last_user_edit_version: 3,
+        last_recompute_version: 4,
+        user_owned_overrides: expect.arrayContaining(['name', 'description']),
+        divergent_backend_candidates: expect.objectContaining({
+          name: 'Backend recompute title',
+          description: 'Backend recompute description',
+        }),
+      })
+    );
+  });
+
+  it('throws stale_write when expected_row_version is stale for explicit user patches', async () => {
+    const existingDocId = new ObjectId();
+    const existingRowId = existingDocId.toHexString();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocId,
+        row_id: existingRowId,
+        id: existingRowId,
+        name: 'Current title',
+        description: 'Current description',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source: 'VOICE_BOT',
+        source_kind: 'voice_possible_task',
+        source_ref: `https://copilot.stratospace.fun/operops/task/${existingRowId}`,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: existingRowId,
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        row_version: 7,
+        field_versions: { name: 4 },
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    await expect(
+      persistPossibleTasksForSession({
+        db: dbStub,
+        sessionId,
+        sessionName: 'Stale write session',
+        defaultProjectId: 'proj-1',
+        taskItems: [
+          {
+            row_id: existingRowId,
+            id: existingRowId,
+            name: 'User edit attempt',
+            project_id: 'proj-1',
+            expected_row_version: 6,
+            expected_field_versions: { name: 3 },
+          },
+        ],
+        refreshMode: 'full_recompute',
+      })
+    ).rejects.toEqual(
+      expect.objectContaining({
+        code: 'stale_write',
+        rowId: existingRowId,
+        expectedRowVersion: 6,
+        currentRowVersion: 7,
+        conflictingFields: ['name'],
+      })
+    );
+    await expect(
+      persistPossibleTasksForSession({
+        db: dbStub,
+        sessionId,
+        sessionName: 'Stale write session',
+        defaultProjectId: 'proj-1',
+        taskItems: [
+          {
+            row_id: existingRowId,
+            id: existingRowId,
+            name: 'User edit attempt',
+            project_id: 'proj-1',
+            expected_row_version: 6,
+            expected_field_versions: { name: 3 },
+          },
+        ],
+        refreshMode: 'full_recompute',
+      })
+    ).rejects.toBeInstanceOf(PossibleTaskStaleWriteError);
+  });
+
   it('rejects persisted rows that violate Draft master invariants', async () => {
+    const invalidDocId = new ObjectId();
     await expect(
       validatePossibleTaskMasterDocs([
         {
-          _id: new ObjectId(),
-          row_id: 'draft-invalid',
-          id: 'draft-invalid',
+          _id: invalidDocId,
+          row_id: invalidDocId.toHexString(),
+          id: invalidDocId.toHexString(),
           name: 'Неверный row',
           project_id: 'proj-1',
           task_status: TASK_STATUSES.DRAFT_10,
@@ -1640,12 +1865,13 @@ describe('persistPossibleTasksForSession', () => {
   });
 
   it('rejects persisted rows that violate card-derived scalar domains inside the strict Draft subset', async () => {
+    const invalidPriorityDocId = new ObjectId();
     await expect(
       validatePossibleTaskMasterDocs([
         {
-          _id: new ObjectId(),
-          row_id: 'draft-invalid-priority',
-          id: 'draft-invalid-priority',
+          _id: invalidPriorityDocId,
+          row_id: invalidPriorityDocId.toHexString(),
+          id: invalidPriorityDocId.toHexString(),
           name: 'Неверный priority',
           priority: 'P9',
           project_id: 'proj-1',
@@ -1740,12 +1966,13 @@ describe('persistPossibleTasksForSession', () => {
   });
 
   it('accepts compatibility overlays while validating the strict Draft subset', async () => {
+    const validDocId = new ObjectId();
     await expect(
       validatePossibleTaskMasterDocs([
         {
-          _id: new ObjectId(),
-          row_id: 'draft-valid',
-          id: 'draft-valid',
+          _id: validDocId,
+          row_id: validDocId.toHexString(),
+          id: validDocId.toHexString(),
           name: 'Совместимый row',
           project: 'Project One',
           priority: 'P3',
@@ -1758,7 +1985,7 @@ describe('persistPossibleTasksForSession', () => {
           external_ref: 'https://copilot.stratospace.fun/voice/session/session-1',
           source_data: {
             session_id: 'session-1',
-            row_id: 'draft-valid',
+            row_id: validDocId.toHexString(),
           },
           dependencies_from_ai: ['draft-prev'],
           task_status_history: [],
@@ -1770,7 +1997,7 @@ describe('persistPossibleTasksForSession', () => {
           created_at: new Date('2026-03-23T10:00:00.000Z'),
           updated_at: new Date('2026-03-23T10:00:00.000Z'),
         },
-      ], 'persistPossibleTasks.test')
+      ], 'persistPossibleTasks.test', 'write-strict')
     ).resolves.toHaveLength(1);
   });
 
@@ -1842,14 +2069,12 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'incremental_refresh',
     });
 
-    expect(result.items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          row_id: 'draft-new-row',
-          id: 'draft-new-row',
-          project_id: 'proj-1',
-        }),
-      ])
+    expect(result.items).toHaveLength(1);
+    const noisyProjectInsertedRowId = expectCanonicalTaskIdentity(result.items[0]);
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        project_id: 'proj-1',
+      })
     );
 
     const persistedDocs = tasksCollection.snapshot();
@@ -1861,7 +2086,7 @@ describe('persistPossibleTasksForSession', () => {
           source_kind: 'manual',
         }),
         expect.objectContaining({
-          row_id: 'draft-new-row',
+          row_id: noisyProjectInsertedRowId,
           source_kind: 'voice_possible_task',
         }),
       ])
@@ -1877,7 +2102,7 @@ describe('persistPossibleTasksForSession', () => {
       },
     } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
 
-    await persistPossibleTasksForSession({
+    const firstPass = await persistPossibleTasksForSession({
       db: dbStub,
       sessionId,
       sessionName: 'Retry replay session',
@@ -1892,10 +2117,11 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
-    const firstDoc = tasksCollection.snapshot().find((doc) => doc.row_id === 'draft-retry');
+    const firstRowId = expectCanonicalTaskIdentity(firstPass.items[0]);
+    const firstDoc = tasksCollection.snapshot().find((doc) => String(doc.row_id || '') === firstRowId);
     const firstUpdatedAtMs = toEpochMsForAssert(firstDoc?.updated_at);
 
-    await persistPossibleTasksForSession({
+    const secondPass = await persistPossibleTasksForSession({
       db: dbStub,
       sessionId,
       sessionName: 'Retry replay session',
@@ -1910,7 +2136,8 @@ describe('persistPossibleTasksForSession', () => {
       refreshMode: 'full_recompute',
     });
 
-    const secondDoc = tasksCollection.snapshot().find((doc) => doc.row_id === 'draft-retry');
+    expectCanonicalTaskIdentity(secondPass.items[0], firstRowId);
+    const secondDoc = tasksCollection.snapshot().find((doc) => String(doc.row_id || '') === firstRowId);
     const secondUpdatedAtMs = toEpochMsForAssert(secondDoc?.updated_at);
 
     expect(Number.isFinite(firstUpdatedAtMs)).toBe(true);

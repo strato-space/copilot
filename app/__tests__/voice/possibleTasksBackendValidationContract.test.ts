@@ -10,10 +10,11 @@ describe('PossibleTasks backend validation contract', () => {
     expect(source).toContain('const [rowCreationErrors, setRowCreationErrors] = useState<Record<string, TaskRowCreationErrors>>({});');
     expect(source).toContain('if (rowError.field === \'performer_id\' && !mappedErrors.performer_id) {');
     expect(source).toContain('} else if (rowError.field === \'project_id\' && !mappedErrors.project_id) {');
-    expect(source).toContain('[row.row_id]: mappedErrors');
+    expect(source).toContain('[row.row_key]: mappedErrors');
     expect(source).toContain('Выберите проект с заполненным git_repo.');
-    expect(source).toContain('const rowKey = rowsById.get(rowError.ticketId)?.row_id || rowError.ticketId;');
-    expect(source).toContain('rowCreationErrors[activeRow.row_id]?.project_id');
-    expect(source).toContain('rowCreationErrors[activeRow.row_id]?.performer_id');
+    expect(source).toContain('const matchedRow = rowsByLocator.get(rowError.ticketId);');
+    expect(source).toContain('const rowKey = matchedRow?.row_key || rowError.ticketId;');
+    expect(source).toContain('rowCreationErrors[activeRow.row_key]?.project_id');
+    expect(source).toContain('rowCreationErrors[activeRow.row_key]?.performer_id');
   });
 });

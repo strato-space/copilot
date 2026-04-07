@@ -47,6 +47,8 @@ attribute currency, value string;
 attribute month_key, value string;
 attribute month_number, value integer;
 attribute year_number, value integer;
+attribute last_user_edit_version, value integer;
+attribute last_recompute_version, value integer;
 attribute row_version, value integer;
 attribute order_index, value integer;
 attribute priority_rank, value integer;
@@ -218,6 +220,10 @@ attribute task_status_history, value string;
 attribute last_status, value string;
 attribute status_history, value string;
 attribute row_id, value string;
+attribute slug, value string;
+attribute user_owned_overrides, value string;
+attribute field_versions, value string;
+attribute divergent_backend_candidates, value string;
 # @toon inventory=inspect domain=dictionary max_values=20
 attribute role_name, value string;
 # @toon values: null | MANAGER | PERFORMER | SUPER_ADMIN | VIEWER
@@ -1123,6 +1129,20 @@ entity task,
   owns project_ref,
   # canonical draft/taskflow row locator reused across refreshes
   owns row_id,
+  # immutable human-facing draft address separate from row identity
+  owns slug,
+  # optimistic-concurrency token for draft row writes
+  owns row_version,
+  # latest persisted user-edit mutation marker
+  owns last_user_edit_version,
+  # latest persisted recompute mutation marker
+  owns last_recompute_version,
+  # persisted lock-set of user-owned draft fields (JSON payload)
+  owns user_owned_overrides,
+  # per-field optimistic version counters for user-owned fields (JSON payload)
+  owns field_versions,
+  # backend-proposed conflicting values for locked user-owned fields (JSON payload)
+  owns divergent_backend_candidates,
   # broad class of work (task/spec/research/etc) used by runtime prompts and UI
   owns type_class,
   # primary task title / short actionable name

@@ -1,6 +1,7 @@
 import {
   buildVoiceTaskEnrichmentDescription,
   parseCreateTasksMcpResult,
+  parsePossibleTasksResponse,
   parseVoiceTaskEnrichmentSections,
 } from '../../src/utils/voicePossibleTasks';
 
@@ -39,6 +40,31 @@ Error details: responses request failed for model 'gpt-5.2-codex' (code: insuffi
         ],
       })
     ).toThrow(/Ошибка модели в create_tasks: .*insufficient_quota/i);
+  });
+
+  it('keeps canonical row_id separate from provisional client_row_key and carries override metadata', () => {
+    const [task] = parsePossibleTasksResponse([
+      {
+        id: 'candidate-id-1',
+        client_row_key: 'clone:abc123',
+        name: 'Новый локальный draft',
+        description: 'Описание',
+        priority: 'P2',
+        user_owned_overrides: ['description', 'performer_id'],
+        row_version: 7,
+        field_versions: { description: 3 },
+        divergent_backend_candidates: { description: 'Backend proposal' },
+      },
+    ]);
+
+    expect(task).toBeDefined();
+    expect(task?.row_id).toBe('');
+    expect(task?.id).toBe('candidate-id-1');
+    expect(task?.client_row_key).toBe('clone:abc123');
+    expect(task?.user_owned_overrides).toEqual(['description', 'performer_id']);
+    expect(task?.row_version).toBe(7);
+    expect(task?.field_versions).toEqual({ description: 3 });
+    expect(task?.divergent_backend_candidates).toEqual({ description: 'Backend proposal' });
   });
 
   it('parses canonical Draft enrichment markdown sections from description', () => {

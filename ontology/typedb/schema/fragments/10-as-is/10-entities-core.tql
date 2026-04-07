@@ -541,6 +541,20 @@ entity task,
   owns project_ref,
   # canonical draft/taskflow row locator reused across refreshes
   owns row_id,
+  # immutable human-facing draft address separate from row identity
+  owns slug,
+  # optimistic-concurrency token for draft row writes
+  owns row_version,
+  # latest persisted user-edit mutation marker
+  owns last_user_edit_version,
+  # latest persisted recompute mutation marker
+  owns last_recompute_version,
+  # persisted lock-set of user-owned draft fields (JSON payload)
+  owns user_owned_overrides,
+  # per-field optimistic version counters for user-owned fields (JSON payload)
+  owns field_versions,
+  # backend-proposed conflicting values for locked user-owned fields (JSON payload)
+  owns divergent_backend_candidates,
   # broad class of work (task/spec/research/etc) used by runtime prompts and UI
   owns type_class,
   # primary task title / short actionable name

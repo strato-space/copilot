@@ -43,6 +43,7 @@ jest.unstable_mockModule('../../../src/services/voicebot/createTasksAgent.js', a
 jest.unstable_mockModule('../../../src/services/voicebot/persistPossibleTasks.js', async () => {
   return {
     POSSIBLE_TASKS_REFRESH_MODE_VALUES: ['full_recompute', 'incremental_refresh'],
+    PossibleTaskStaleWriteError: class PossibleTaskStaleWriteError extends Error {},
     persistPossibleTasksForSession: persistPossibleTasksForSessionMock,
     validatePossibleTaskMasterDocs: jest.fn(async (docs: Array<Record<string, unknown>>) => docs),
   };

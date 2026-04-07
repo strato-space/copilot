@@ -18,6 +18,25 @@ import {
 
 describe('Voicebot utility routes runtime behavior', () => {
   const flame = String.fromCodePoint(0x1f525);
+  const OBJECT_ID_HEX_REGEX = /^[a-f0-9]{24}$/i;
+
+  const expectCanonicalTaskIdentity = (
+    item: Record<string, unknown> | undefined,
+    { legacyRowId }: { legacyRowId?: string } = {}
+  ): void => {
+    expect(item).toBeDefined();
+    const rowId = String(item?.row_id || '');
+    expect(rowId).toMatch(OBJECT_ID_HEX_REGEX);
+    expect(item?.id).toBe(rowId);
+    if (legacyRowId !== undefined) {
+      expect(item?.source_data).toEqual(
+        expect.objectContaining({
+          row_id: legacyRowId,
+        })
+      );
+    }
+  };
+
   beforeEach(() => {
     resetRuntimeBehaviorMocks();
   });
@@ -1148,15 +1167,18 @@ describe('Voicebot utility routes runtime behavior', () => {
       .send({ session_id: sessionId.toHexString(), bucket: 'Draft' });
 
     expect(response.status).toBe(200);
+    expect(response.body.items).toHaveLength(1);
+    expectCanonicalTaskIdentity(response.body.items[0], { legacyRowId: 'master-row' });
     expect(response.body.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          row_id: 'master-row',
-          id: 'master-row',
           name: 'Master row',
           project: 'Master project',
           task_status: TASK_STATUSES.DRAFT_10,
           discussion_count: 1,
+          source_data: expect.objectContaining({
+            row_id: 'master-row',
+          }),
           discussion_sessions: [
             expect.objectContaining({
               session_id: sessionId.toHexString(),
@@ -1256,13 +1278,34 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
     expect(response.body.count).toBe(5);
+    response.body.items.forEach((item: Record<string, unknown>) => {
+      const legacyRowId = String(((item.source_data as Record<string, unknown> | undefined)?.row_id) || '');
+      if (legacyRowId) {
+        expectCanonicalTaskIdentity(item, { legacyRowId });
+      }
+    });
     expect(response.body.items).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-01', priority: 'P2' }),
-        expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-02', priority: 'P3' }),
-        expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-03', priority: 'P3' }),
-        expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-04', priority: 'P3' }),
-        expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-05', priority: 'P4' }),
+        expect.objectContaining({
+          priority: 'P2',
+          source_data: expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-01' }),
+        }),
+        expect.objectContaining({
+          priority: 'P3',
+          source_data: expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-02' }),
+        }),
+        expect.objectContaining({
+          priority: 'P3',
+          source_data: expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-03' }),
+        }),
+        expect.objectContaining({
+          priority: 'P3',
+          source_data: expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-04' }),
+        }),
+        expect.objectContaining({
+          priority: 'P4',
+          source_data: expect.objectContaining({ row_id: 'voice-69c27fd63b94e66785ee67da-05' }),
+        }),
       ])
     );
     expect(response.body.items).not.toEqual(
@@ -1550,10 +1593,22 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.items).toHaveLength(2);
+    response.body.items.forEach((item: Record<string, unknown>) => {
+      const legacyRowId = String(((item.source_data as Record<string, unknown> | undefined)?.row_id) || '');
+      if (legacyRowId) {
+        expectCanonicalTaskIdentity(item, { legacyRowId });
+      }
+    });
     expect(response.body.items).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ row_id: 'row-b', name: 'Stale fallback B' }),
-        expect.objectContaining({ row_id: 'row-a', name: 'Active row A' }),
+        expect.objectContaining({
+          name: 'Stale fallback B',
+          source_data: expect.objectContaining({ row_id: 'row-b' }),
+        }),
+        expect.objectContaining({
+          name: 'Active row A',
+          source_data: expect.objectContaining({ row_id: 'row-a' }),
+        }),
       ])
     );
     expect(response.body.items).not.toEqual(
@@ -1647,9 +1702,12 @@ describe('Voicebot utility routes runtime behavior', () => {
       .send({ session_id: sessionId.toHexString(), bucket: 'Draft', draft_horizon_days: 30 });
 
     expect(horizonResponse.status).toBe(200);
+    expectCanonicalTaskIdentity(horizonResponse.body.items[0], { legacyRowId: 'old-row' });
     expect(horizonResponse.body.items).toEqual([
       expect.objectContaining({
-        row_id: 'old-row',
+        source_data: expect.objectContaining({
+          row_id: 'old-row',
+        }),
         name: 'Old linked draft',
         task_status: TASK_STATUSES.DRAFT_10,
       }),
@@ -1714,7 +1772,7 @@ describe('Voicebot utility routes runtime behavior', () => {
       }),
     }));
     const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => {
-      persistedDocs = docs.map((doc) => ({ ...doc, _id: new ObjectId() }));
+      persistedDocs = docs.map((doc) => ({ ...doc }));
       return { insertedCount: docs.length };
     });
     const updateManySpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
@@ -1781,10 +1839,9 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.success).toBe(true);
     expect(response.body.saved_count).toBe(1);
     expect(response.body.removed_row_ids).toBeUndefined();
+    expectCanonicalTaskIdentity(response.body.items[0]);
     expect(response.body.items).toEqual([
       expect.objectContaining({
-        row_id: 'new-row',
-        id: 'new-row',
         name: 'Saved row',
         project: 'Saved project',
         discussion_count: 1,
@@ -1795,8 +1852,6 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(insertManySpy.mock.calls[0]?.[0]).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          row_id: 'new-row',
-          id: 'new-row',
           name: 'Saved row',
           project: 'Saved project',
           task_status: TASK_STATUSES.DRAFT_10,
@@ -1830,7 +1885,6 @@ describe('Voicebot utility routes runtime behavior', () => {
     const performerMongoId = new ObjectId();
     const projectId = new ObjectId();
     const staleMasterId = new ObjectId();
-    const newMasterId = new ObjectId();
 
     const sessionFindOne = jest.fn(async () => ({
       _id: sessionId,
@@ -1878,9 +1932,8 @@ describe('Voicebot utility routes runtime behavior', () => {
       }),
     }));
     const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => {
-      const inserted = docs.map((doc, index) => ({
+      const inserted = docs.map((doc) => ({
         ...doc,
-        _id: index === 0 ? newMasterId : new ObjectId(),
       }));
       masterDocs = [...masterDocs, ...inserted];
       return { insertedCount: inserted.length };
@@ -1986,7 +2039,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(staleSourceData.superseded_at).toBeUndefined();
     expect(insertManySpy).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ row_id: 'new-row', name: 'Fresh row' }),
+        expect.objectContaining({ name: 'Fresh row' }),
       ])
     );
     expect(sessionUpdateOneSpy).not.toHaveBeenCalled();
@@ -2021,7 +2074,7 @@ describe('Voicebot utility routes runtime behavior', () => {
       }),
     }));
     const insertManySpy = jest.fn(async (docs: Array<Record<string, unknown>>) => {
-      persistedDocs = docs.map((doc) => ({ ...doc, _id: new ObjectId() }));
+      persistedDocs = docs.map((doc) => ({ ...doc }));
       return { insertedCount: docs.length };
     });
     const sessionUpdateOneSpy = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
@@ -2075,18 +2128,15 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
+    expectCanonicalTaskIdentity(response.body.items[0]);
     expect(response.body.items).toEqual([
       expect.objectContaining({
-        row_id: 'stable-row',
-        id: 'stable-row',
         task_id_from_ai: 'T1',
       }),
     ]);
     expect(insertManySpy).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
-          row_id: 'stable-row',
-          id: 'stable-row',
           task_id_from_ai: 'T1',
         }),
       ]),
@@ -2114,8 +2164,8 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     let sharedDoc: Record<string, unknown> = {
       _id: sharedTaskId,
-      row_id: 'shared-row',
-      id: 'shared-row',
+      row_id: sharedTaskId.toHexString(),
+      id: sharedTaskId.toHexString(),
       name: 'Old wording',
       description: 'Old description',
       priority: 'P3',
@@ -2130,7 +2180,7 @@ describe('Voicebot utility routes runtime behavior', () => {
       source_data: {
         session_id: otherSessionId.toHexString(),
         session_name: 'Other runtime session',
-        row_id: 'shared-row',
+        row_id: sharedTaskId.toHexString(),
         voice_sessions: [
           {
             session_id: otherSessionId.toHexString(),
@@ -2162,6 +2212,9 @@ describe('Voicebot utility routes runtime behavior', () => {
       sort: () => ({
         toArray: async () => {
           const filterJson = JSON.stringify(filter);
+          if (filterJson.includes(canonicalRef)) {
+            return [sharedDoc];
+          }
           if (filterJson.includes(sessionId.toHexString())) {
             const voiceSessions = (((sharedDoc.source_data as Record<string, unknown> | undefined)?.voice_sessions) ?? []) as Array<Record<string, unknown>>;
             return voiceSessions.some((entry) => String(entry.session_id || '') === sessionId.toHexString())
@@ -2214,8 +2267,8 @@ describe('Voicebot utility routes runtime behavior', () => {
         session_id: sessionId.toHexString(),
         tasks: [
           {
-            row_id: 'shared-row',
-            id: 'shared-row',
+            row_id: sharedTaskId.toHexString(),
+            id: sharedTaskId.toHexString(),
             name: 'Updated wording',
             description: 'Updated description with more context',
             priority: 'P2',
@@ -2231,8 +2284,8 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.saved_count).toBe(1);
     expect(response.body.items).toEqual([
       expect.objectContaining({
-        row_id: 'shared-row',
-        id: 'shared-row',
+        row_id: sharedTaskId.toHexString(),
+        id: sharedTaskId.toHexString(),
         name: 'Updated wording',
         description: 'Updated description with more context',
         project_id: projectId.toHexString(),
@@ -2251,8 +2304,8 @@ describe('Voicebot utility routes runtime behavior', () => {
       { _id: sharedTaskId },
       expect.objectContaining({
         $set: expect.objectContaining({
-          row_id: 'shared-row',
-          id: 'shared-row',
+          row_id: sharedTaskId.toHexString(),
+          id: sharedTaskId.toHexString(),
           name: 'Updated wording',
           description: 'Updated description with more context',
           source_ref: `https://copilot.stratospace.fun/operops/task/${sharedTaskId.toHexString()}`,
@@ -2288,8 +2341,8 @@ describe('Voicebot utility routes runtime behavior', () => {
 
     let sharedDoc: Record<string, unknown> = {
       _id: sharedTaskId,
-      row_id: 'shared-row',
-      id: 'shared-row',
+      row_id: sharedTaskId.toHexString(),
+      id: sharedTaskId.toHexString(),
       name: 'Old wording',
       description: 'Old description',
       performer_id: performerMongoId.toHexString(),
@@ -2303,7 +2356,7 @@ describe('Voicebot utility routes runtime behavior', () => {
       source_data: {
         session_id: otherSessionId.toHexString(),
         session_name: 'Other session',
-        row_id: 'shared-row',
+        row_id: sharedTaskId.toHexString(),
         voice_sessions: [
           {
             session_id: otherSessionId.toHexString(),
@@ -2321,6 +2374,9 @@ describe('Voicebot utility routes runtime behavior', () => {
         toArray: async () => {
           const serialized = JSON.stringify(filter);
           if (serialized.includes(`"project_id":"${projectId.toHexString()}"`) && serialized.includes('"row_id"')) {
+            return [sharedDoc];
+          }
+          if (serialized.includes(`https://copilot.stratospace.fun/voice/session/${sessionId.toHexString()}`)) {
             return [sharedDoc];
           }
           if (serialized.includes(sessionId.toHexString())) {
@@ -2396,8 +2452,8 @@ describe('Voicebot utility routes runtime behavior', () => {
         session_id: sessionId.toHexString(),
         tasks: [
           {
-            row_id: 'shared-row',
-            id: 'shared-row',
+            row_id: sharedTaskId.toHexString(),
+            id: sharedTaskId.toHexString(),
             name: 'Updated wording',
             description: 'Updated description',
             performer_id: performerMongoId.toHexString(),
@@ -2410,8 +2466,8 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.status).toBe(200);
     expect(response.body.items).toEqual([
       expect.objectContaining({
-        row_id: 'shared-row',
-        id: 'shared-row',
+        row_id: sharedTaskId.toHexString(),
+        id: sharedTaskId.toHexString(),
         name: 'Updated wording',
         description: 'Updated description',
         source_ref: `https://copilot.stratospace.fun/operops/task/${sharedTaskId.toHexString()}`,
@@ -2805,7 +2861,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(acceptedUpdateCall).toBeDefined();
   });
 
-  it('delete_task_from_session supports alias locators and returns idempotent counters', async () => {
+  it('delete_task_from_session rejects legacy-only locators after alias retirement', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
       _id: sessionId,
@@ -2869,28 +2925,16 @@ describe('Voicebot utility routes runtime behavior', () => {
         task_id_from_ai: 'legacy-row',
       });
 
-    expect(response.status).toBe(200);
-    expect(response.body.success).toBe(true);
-    expect(response.body.row_id).toBe('legacy-row');
-    expect(response.body.matched_count).toBe(1);
-    expect(response.body.modified_count).toBe(1);
-    expect(response.body.deleted_count).toBe(1);
-    expect(response.body.not_found).toBe(false);
-    expect(updateOneSpy).not.toHaveBeenCalled();
-    expect(masterUpdateOneSpy).toHaveBeenCalledTimes(1);
-    expect(emitSpy).toHaveBeenCalledWith(
-      'session_update',
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual(
       expect.objectContaining({
-        _id: sessionId.toHexString(),
-        session_id: sessionId.toHexString(),
-        taskflow_refresh: expect.objectContaining({
-          reason: 'delete_task_from_session',
-          possible_tasks: true,
-          tasks: false,
-          codex: false,
-        }),
-      }),
+        error: 'legacy_row_locator_unsupported',
+        error_code: 'legacy_row_locator_unsupported',
+      })
     );
+    expect(updateOneSpy).not.toHaveBeenCalled();
+    expect(masterUpdateOneSpy).not.toHaveBeenCalled();
+    expect(emitSpy).not.toHaveBeenCalled();
   });
 
   it('delete_task_from_session recomputes all linkage carriers when unlink keeps another session edge', async () => {

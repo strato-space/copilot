@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { ObjectId } from 'mongodb';
 import { NOTION_TICKET_PRIORITIES, TASK_CLASSES, TASK_STATUSES } from '../../../constants.js';
 import { normalizeDateField, toIdString, toTaskReferenceList, toTaskText } from './sessionsSharedUtils.js';
@@ -41,13 +40,33 @@ const GENERIC_VOICE_TASK_LOCATOR_REGEXES = [
   /^item[-_\s]*\d+$/i,
 ] as const;
 
-const normalizeLocatorText = (value: unknown): string =>
-  toTaskText(value)
-    .toLowerCase()
-    .replace(/ё/g, 'е')
-    .replace(/[^a-z0-9а-я]+/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+const MONGO_OBJECT_ID_HEX_REGEX = /^[a-f0-9]{24}$/i;
+
+export const buildVoicePossibleTaskFallbackLocator = ({
+  rawTask,
+  index,
+}: {
+  rawTask: Record<string, unknown>;
+  index: number;
+}): string => {
+  const persistedObjectId = toIdString(rawTask._id);
+  if (persistedObjectId && MONGO_OBJECT_ID_HEX_REGEX.test(persistedObjectId)) {
+    return persistedObjectId;
+  }
+
+  const taskIdFromAi = normalizeTaskIdFromAiLocatorKey({
+    rowId: rawTask.row_id,
+    id: rawTask.id,
+    taskIdFromAi: rawTask.task_id_from_ai,
+  });
+  if (taskIdFromAi) {
+    return `voice-task-${taskIdFromAi.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}`
+      .replace(/-+/g, '-')
+      .replace(/-$/, '');
+  }
+
+  return `voice-task-${String(index + 1).padStart(3, '0')}`;
+};
 
 const CANONICAL_TASK_PRIORITY_SET = new Set<string>(NOTION_TICKET_PRIORITIES);
 
@@ -370,70 +389,31 @@ export const recomputeVoiceTaskSourceDataSessionLinkage = ({
 
 export const resolveVoicePossibleTaskRowId = ({
   rawTask,
-  index,
+  index: _index,
 }: {
   rawTask: Record<string, unknown>;
   index: number;
 }): string => {
-  const taskIdFromAi = normalizeTaskIdFromAiLocatorKey({
-    rowId: rawTask.row_id,
-    id: rawTask.id,
-    taskIdFromAi: rawTask.task_id_from_ai,
-  });
+  const persistedObjectId = toIdString(rawTask._id);
+  if (persistedObjectId && MONGO_OBJECT_ID_HEX_REGEX.test(persistedObjectId)) {
+    return persistedObjectId;
+  }
   return (
     normalizeVoicePossibleTaskLocatorKey(rawTask.row_id) ||
-    normalizeVoicePossibleTaskLocatorKey(rawTask.id) ||
-    taskIdFromAi ||
-    buildVoicePossibleTaskFallbackLocator({ rawTask, index })
+    normalizeVoicePossibleTaskLocatorKey(rawTask.id)
   );
 };
 
 export const collectVoicePossibleTaskCanonicalLocatorKeys = (value: unknown): string[] => {
   if (!value || typeof value !== 'object') return [];
   const record = value as Record<string, unknown>;
+  const objectId = toIdString(record._id);
+  if (objectId && MONGO_OBJECT_ID_HEX_REGEX.test(objectId)) {
+    return [objectId];
+  }
   const rowId = normalizeVoicePossibleTaskLocatorKey(record.row_id);
   const id = normalizeVoicePossibleTaskLocatorKey(record.id);
-  const primaryKeys = [rowId, id].filter(Boolean);
-  if (primaryKeys.length > 0) {
-    return Array.from(new Set(primaryKeys));
-  }
-
-  const taskIdFromAi = normalizeTaskIdFromAiLocatorKey({
-    rowId: record.row_id,
-    id: record.id,
-    taskIdFromAi: record.task_id_from_ai,
-  });
-  return Array.from(
-    new Set(
-      [
-        taskIdFromAi,
-      ].filter(Boolean)
-    )
-  );
-};
-
-export const buildVoicePossibleTaskFallbackLocator = ({
-  rawTask,
-  index,
-}: {
-  rawTask: Record<string, unknown>;
-  index: number;
-}): string => {
-  const rawName = toTaskText(rawTask.name);
-  const rawDescription = toTaskText(rawTask.description);
-  const rawDialogueReference = toTaskText(rawTask.dialogue_reference);
-  const slugSource = normalizeLocatorText(rawName || rawDescription || `draft ${index + 1}`);
-  const slug = slugSource.split(' ').filter(Boolean).slice(0, 8).join('-') || `draft-${index + 1}`;
-  const seed = JSON.stringify({
-    name: rawName,
-    description: rawDescription,
-    dialogue_reference: rawDialogueReference,
-    priority: toTaskText(rawTask.priority),
-    project_id: toTaskText(rawTask.project_id),
-    performer_id: toTaskText(rawTask.performer_id),
-  });
-  const digest = createHash('sha1').update(seed).digest('hex').slice(0, 10);
-  return `voice-task-${slug}-${digest}`;
+  return Array.from(new Set([rowId, id].filter(Boolean)));
 };
 
 export const collectVoicePossibleTaskAliasLocatorKeys = (
@@ -456,7 +436,7 @@ export const collectVoicePossibleTaskAliasLocatorEntries = (
   value: unknown,
   {
     includeSourceDataRowId = true,
-    includeFallbackLocator = true,
+    includeFallbackLocator = false,
     includeTaskIdFromAi = false,
   }: {
     includeSourceDataRowId?: boolean;
@@ -484,7 +464,8 @@ export const collectVoicePossibleTaskAliasLocatorEntries = (
     );
   }
   if (includeFallbackLocator) {
-    addEntry(buildVoicePossibleTaskFallbackLocator({ rawTask: record, index: 0 }), 'fallback_locator');
+    const fallback = normalizeVoicePossibleTaskLocatorKey(toTaskText(record.id) || toTaskText(record.row_id));
+    addEntry(fallback, 'fallback_locator');
   }
   if (includeTaskIdFromAi) {
     addEntry(
@@ -558,12 +539,13 @@ export const buildVoicePossibleTaskMasterDoc = ({
   index,
   defaultProjectId,
   sessionId,
-  sessionObjectId,
+  sessionObjectId: _sessionObjectId,
   externalRef,
   sourceRef,
   now,
   createdBy,
   existingCreatedAt,
+  persistedRowId,
 }: {
   rawTask: Record<string, unknown>;
   index: number;
@@ -578,8 +560,9 @@ export const buildVoicePossibleTaskMasterDoc = ({
     name?: string;
   };
   existingCreatedAt?: unknown;
+  persistedRowId: string;
 }): Record<string, unknown> => {
-  const rowId = resolveVoicePossibleTaskRowId({ rawTask, index });
+  const rowId = normalizeVoicePossibleTaskLocatorKey(persistedRowId) || resolveVoicePossibleTaskRowId({ rawTask, index });
   const taskIdFromAi = toTaskText(rawTask.task_id_from_ai);
   const relations = normalizeVoicePossibleTaskRelations(rawTask);
   const dependencyViews = buildDependencyRelationViews(relations);
@@ -605,7 +588,7 @@ export const buildVoicePossibleTaskMasterDoc = ({
 
   return {
     row_id: rowId,
-    id: normalizeVoicePossibleTaskLocatorKey(rawTask.id) || rowId,
+    id: rowId,
     name: toTaskText(rawTask.name) || `Задача ${index + 1}`,
     project: toTaskText(rawTask.project),
     description: toTaskText(rawTask.description),
@@ -670,7 +653,7 @@ export const normalizeVoicePossibleTaskDocForApi = (value: unknown): Record<stri
   return {
     ...(record._id != null ? { _id: toMaybeStringId(record._id) } : {}),
     row_id: rowId,
-    id: normalizeVoicePossibleTaskLocatorKey(record.id) || rowId,
+    id: rowId,
     name: toTaskText(record.name),
     project: toTaskText(record.project),
     description: toTaskText(record.description),
@@ -689,6 +672,24 @@ export const normalizeVoicePossibleTaskDocForApi = (value: unknown): Record<stri
     ...(sourceData ? { source_data: sourceData } : {}),
     ...(discussionSessions.length > 0 ? { discussion_sessions: discussionSessions, discussion_count: discussionSessions.length } : {}),
     task_status: toTaskText(record.task_status),
+    row_version: Number.isFinite(Number(record.row_version)) ? Number(record.row_version) : 0,
+    field_versions:
+      record.field_versions && typeof record.field_versions === 'object' && !Array.isArray(record.field_versions)
+        ? record.field_versions as Record<string, unknown>
+        : {},
+    last_user_edit_version: Number.isFinite(Number(record.last_user_edit_version))
+      ? Number(record.last_user_edit_version)
+      : 0,
+    last_recompute_version: Number.isFinite(Number(record.last_recompute_version))
+      ? Number(record.last_recompute_version)
+      : 0,
+    user_owned_overrides: Array.isArray(record.user_owned_overrides)
+      ? record.user_owned_overrides.map((entry) => toTaskText(entry)).filter(Boolean)
+      : [],
+    divergent_backend_candidates:
+      record.divergent_backend_candidates && typeof record.divergent_backend_candidates === 'object' && !Array.isArray(record.divergent_backend_candidates)
+        ? record.divergent_backend_candidates as Record<string, unknown>
+        : {},
     created_at: normalizeDateField(record.created_at),
     updated_at: normalizeDateField(record.updated_at),
   };

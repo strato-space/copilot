@@ -37,6 +37,11 @@ const POSSIBLE_TASKS_COMPATIBILITY_MONGO_FIELDS = new Set<string>([
   'parent',
   'children',
   'discussion_sessions',
+  'field_versions',
+  'last_user_edit_version',
+  'last_recompute_version',
+  'user_owned_overrides',
+  'divergent_backend_candidates',
 ]);
 
 const POSSIBLE_TASKS_STRUCTURED_DEFERRED_MONGO_FIELDS = [
@@ -79,9 +84,86 @@ const POSSIBLE_TASKS_VALIDATED_MONGO_FIELDS = [
   'created_by_name',
   'created_at',
   'updated_at',
+  'row_version',
 ] as const;
 
 const POSSIBLE_TASKS_REQUIRED_MONGO_FIELDS = ['row_id', 'id', 'task_status'] as const;
+
+const MONGO_OBJECT_ID_HEX_REGEX = /^[a-f0-9]{24}$/i;
+
+const USER_OWNED_POSSIBLE_TASK_FIELDS = [
+  'performer_id',
+  'name',
+  'task_type_id',
+  'description',
+  'priority',
+  'project_id',
+  'priority_reason',
+  'dialogue_tag',
+  'dependencies_from_ai',
+] as const;
+
+type UserOwnedPossibleTaskField = (typeof USER_OWNED_POSSIBLE_TASK_FIELDS)[number];
+
+const toIntegerOrNull = (value: unknown): number | null => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.trunc(numeric);
+};
+
+const toOverrideFieldList = (value: unknown): UserOwnedPossibleTaskField[] => {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((entry) => toTaskText(entry))
+        .filter((entry): entry is UserOwnedPossibleTaskField =>
+          Boolean(entry) && (USER_OWNED_POSSIBLE_TASK_FIELDS as readonly string[]).includes(entry)
+        )
+    )
+  );
+};
+
+const toFieldVersionMap = (value: unknown): Record<string, number> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const map: Record<string, number> = {};
+  Object.entries(value as Record<string, unknown>).forEach(([field, fieldVersion]) => {
+    const numeric = toIntegerOrNull(fieldVersion);
+    if (numeric === null || numeric < 0) return;
+    map[field] = numeric;
+  });
+  return map;
+};
+
+export class PossibleTaskStaleWriteError extends Error {
+  readonly code = 'stale_write';
+
+  readonly rowId: string;
+
+  readonly expectedRowVersion: number;
+
+  readonly currentRowVersion: number;
+
+  readonly conflictingFields: string[];
+
+  constructor({
+    rowId,
+    expectedRowVersion,
+    currentRowVersion,
+    conflictingFields,
+  }: {
+    rowId: string;
+    expectedRowVersion: number;
+    currentRowVersion: number;
+    conflictingFields: string[];
+  }) {
+    super(`stale_write for row ${rowId || 'unknown'}`);
+    this.rowId = rowId;
+    this.expectedRowVersion = expectedRowVersion;
+    this.currentRowVersion = currentRowVersion;
+    this.conflictingFields = conflictingFields;
+  }
+}
 
 let possibleTaskAdapterPromise: Promise<OntologyMongoCollectionAdapter> | null = null;
 const LEGACY_COMPATIBLE_DRAFT_SOURCE_KINDS = new Set<string>(['voice_possible_task', 'voice_session']);
@@ -214,6 +296,19 @@ const assertPossibleTaskMongoDocumentShape = ({
       );
     }
   }
+
+  if (mode === 'write-strict') {
+    const persistedObjectId = toIdString(document._id);
+    if (persistedObjectId && MONGO_OBJECT_ID_HEX_REGEX.test(persistedObjectId)) {
+      const rowId = toTaskText(document.row_id);
+      const id = toTaskText(document.id);
+      if (rowId !== persistedObjectId || id !== persistedObjectId) {
+        throw new OntologyCardRegistryError(
+          `[possible-tasks][ontology] ${context} violates Draft master invariant: persisted row_id/id must equal String(_id)`
+        );
+      }
+    }
+  }
 };
 
 const canonicalizePossibleTaskMongoDocument = ({
@@ -341,6 +436,12 @@ const POSSIBLE_TASK_MASTER_PROJECTION = {
   external_ref: 1,
   source_data: 1,
   discussion_sessions: 1,
+  row_version: 1,
+  field_versions: 1,
+  last_user_edit_version: 1,
+  last_recompute_version: 1,
+  user_owned_overrides: 1,
+  divergent_backend_candidates: 1,
 } as const;
 
 const toSortedTaskCursor = (
@@ -760,8 +861,8 @@ const buildPossibleTaskMasterLocatorMaps = ({
     const includeSourceDataRowIdAlias = Boolean(docId) && (docId ? sessionDocIds.has(docId) : false);
     collectVoicePossibleTaskAliasLocatorEntries(doc, {
       includeSourceDataRowId: includeSourceDataRowIdAlias,
-      includeFallbackLocator: true,
-      includeTaskIdFromAi: includeSourceDataRowIdAlias,
+      includeFallbackLocator: false,
+      includeTaskIdFromAi: false,
     }).forEach((entry) => {
       const canonicalOwner = canonicalKeyMap.get(entry.key);
       if (canonicalOwner && canonicalOwner !== doc) return;
@@ -822,6 +923,129 @@ const collectStoredPossibleTaskAliasKeys = (doc: Record<string, unknown>): strin
       ].filter(Boolean)
     )
   );
+};
+
+const buildDivergentBackendCandidates = ({
+  existing,
+  merged,
+  incoming,
+  lockedFields,
+}: {
+  existing: Record<string, unknown>;
+  merged: Record<string, unknown>;
+  incoming: Record<string, unknown>;
+  lockedFields: Set<string>;
+}): Record<string, unknown> => {
+  const current =
+    existing.divergent_backend_candidates &&
+    typeof existing.divergent_backend_candidates === 'object' &&
+    !Array.isArray(existing.divergent_backend_candidates)
+      ? { ...(existing.divergent_backend_candidates as Record<string, unknown>) }
+      : {};
+
+  USER_OWNED_POSSIBLE_TASK_FIELDS.forEach((field) => {
+    if (!lockedFields.has(field)) {
+      delete current[field];
+      return;
+    }
+    if (!Object.prototype.hasOwnProperty.call(incoming, field)) return;
+    const mergedValue = merged[field];
+    const incomingValue = incoming[field];
+    const sameValue = JSON.stringify(mergedValue) === JSON.stringify(incomingValue);
+    if (sameValue) {
+      delete current[field];
+      return;
+    }
+    current[field] = incomingValue;
+  });
+
+  return current;
+};
+
+const applyPossibleTaskOwnershipMerge = ({
+  existingDoc,
+  incomingTask,
+  candidateDoc,
+}: {
+  existingDoc: Record<string, unknown> | undefined;
+  incomingTask: Record<string, unknown>;
+  candidateDoc: Record<string, unknown>;
+}): {
+  mergedDoc: Record<string, unknown>;
+  rowVersion: number;
+  fieldVersions: Record<string, number>;
+  lastUserEditVersion: number;
+  lastRecomputeVersion: number;
+  userOwnedOverrides: string[];
+  divergentBackendCandidates: Record<string, unknown>;
+} => {
+  const currentRowVersion = toIntegerOrNull(existingDoc?.row_version) ?? 0;
+  const currentFieldVersions = toFieldVersionMap(existingDoc?.field_versions);
+  const existingOverrides = new Set<string>(toOverrideFieldList(existingDoc?.user_owned_overrides));
+  const patchedUserFields = USER_OWNED_POSSIBLE_TASK_FIELDS.filter((field) =>
+    Object.prototype.hasOwnProperty.call(incomingTask, field)
+  );
+  const expectedRowVersion = toIntegerOrNull(incomingTask.expected_row_version);
+  const expectedFieldVersions = toFieldVersionMap(incomingTask.expected_field_versions);
+  const clearOverrides = new Set<string>(toOverrideFieldList(incomingTask.clear_user_owned_overrides));
+  const isExplicitUserWrite = expectedRowVersion !== null;
+
+  if (isExplicitUserWrite && expectedRowVersion !== currentRowVersion) {
+    const conflictingFields = patchedUserFields.filter((field) => {
+      if (!Object.prototype.hasOwnProperty.call(expectedFieldVersions, field)) return false;
+      return (currentFieldVersions[field] ?? 0) !== (expectedFieldVersions[field] ?? 0);
+    });
+    throw new PossibleTaskStaleWriteError({
+      rowId: toTaskText(existingDoc?.row_id) || toTaskText(existingDoc?.id) || '',
+      expectedRowVersion,
+      currentRowVersion,
+      conflictingFields,
+    });
+  }
+
+  const mergedDoc = { ...candidateDoc };
+  const nextFieldVersions = { ...currentFieldVersions };
+  const nextOverrides = new Set<string>(existingOverrides);
+
+  if (isExplicitUserWrite) {
+    patchedUserFields.forEach((field) => {
+      nextOverrides.add(field);
+      nextFieldVersions[field] = (nextFieldVersions[field] ?? 0) + 1;
+    });
+    clearOverrides.forEach((field) => {
+      if (patchedUserFields.includes(field as UserOwnedPossibleTaskField)) {
+        nextOverrides.delete(field);
+      }
+    });
+  } else if (existingDoc) {
+    nextOverrides.forEach((field) => {
+      if (!(USER_OWNED_POSSIBLE_TASK_FIELDS as readonly string[]).includes(field)) return;
+      if (!Object.prototype.hasOwnProperty.call(existingDoc, field)) return;
+      mergedDoc[field] = existingDoc[field];
+    });
+  }
+
+  const nextRowVersion = currentRowVersion + 1;
+  const currentLastUserEditVersion = toIntegerOrNull(existingDoc?.last_user_edit_version) ?? 0;
+  const currentLastRecomputeVersion = toIntegerOrNull(existingDoc?.last_recompute_version) ?? 0;
+  const nextLastUserEditVersion = isExplicitUserWrite ? nextRowVersion : currentLastUserEditVersion;
+  const nextLastRecomputeVersion = isExplicitUserWrite ? currentLastRecomputeVersion : nextRowVersion;
+  const nextDivergentBackendCandidates = buildDivergentBackendCandidates({
+    existing: existingDoc ?? {},
+    merged: mergedDoc,
+    incoming: incomingTask,
+    lockedFields: nextOverrides,
+  });
+
+  return {
+    mergedDoc,
+    rowVersion: nextRowVersion,
+    fieldVersions: nextFieldVersions,
+    lastUserEditVersion: nextLastUserEditVersion,
+    lastRecomputeVersion: nextLastRecomputeVersion,
+    userOwnedOverrides: Array.from(nextOverrides.values()).sort(),
+    divergentBackendCandidates: nextDivergentBackendCandidates,
+  };
 };
 
 const softDeletePossibleTaskMasterRows = async ({
@@ -1110,6 +1334,7 @@ export const persistPossibleTasksForSession = async ({
 
   const newDocs: Array<Record<string, unknown>> = [];
   const persistedCanonicalRowIds = new Set<string>();
+  const retainedSessionDocIds = new Set<string>();
   const now = new Date();
   const sessionObjectId = new ObjectId(sessionId);
   const canonicalExternalRef = voiceSessionUrlUtils.canonical(sessionId);
@@ -1164,19 +1389,24 @@ export const persistPossibleTasksForSession = async ({
     if (matchedBySemanticReuse && existingDocId) {
       claimedSemanticReuseDocIds.add(existingDocId);
     }
+    if (existingDocId && existingSessionDocIds.has(existingDocId)) {
+      retainedSessionDocIds.add(existingDocId);
+    }
 
-    const existingCanonicalRowId = existingDoc
-      ? resolveVoicePossibleTaskRowId({ rawTask: existingDoc, index: taskIndex })
-      : '';
-    const canonicalRowId = existingCanonicalRowId || incomingCanonicalRowId;
+    const taskObjectId = existingDoc?._id instanceof ObjectId ? existingDoc._id : new ObjectId();
+    const canonicalRowId = taskObjectId.toHexString();
     const persistedTaskForMasterDoc = existingDoc
       ? {
           ...rawTask,
-          row_id: existingCanonicalRowId || toTaskText(existingDoc.row_id) || toTaskText(existingDoc.id),
-          id: toTaskText(existingDoc.id) || existingCanonicalRowId || toTaskText(existingDoc.row_id),
+          row_id: canonicalRowId,
+          id: canonicalRowId,
           name: toTaskText(rawTask.name) || toTaskText(existingDoc.name),
         }
-      : rawTask;
+      : {
+          ...rawTask,
+          row_id: canonicalRowId,
+          id: canonicalRowId,
+        };
 
     const existingSourceData =
       existingDoc?.source_data && typeof existingDoc.source_data === 'object'
@@ -1214,9 +1444,8 @@ export const persistPossibleTasksForSession = async ({
       },
       discussionSessions,
     });
-    const taskObjectId = existingDoc?._id instanceof ObjectId ? existingDoc._id : new ObjectId();
 
-    const nextDoc = canonicalizePossibleTaskMongoDocument({
+    const candidateDoc = canonicalizePossibleTaskMongoDocument({
       adapter,
       context: `persistPossibleTasksForSession(nextDoc:${canonicalRowId || taskIndex})`,
       rawDocument: {
@@ -1235,19 +1464,36 @@ export const persistPossibleTasksForSession = async ({
             ...(createdByName ? { name: createdByName } : {}),
           },
           existingCreatedAt: existingDoc?.created_at,
+          persistedRowId: canonicalRowId,
         }),
         external_ref: canonicalExternalRef,
         source_data: nextSourceData,
         discussion_sessions: discussionSessions,
       },
     });
+    const mergedState = applyPossibleTaskOwnershipMerge({
+      existingDoc,
+      incomingTask: rawTask,
+      candidateDoc,
+    });
+    const nextDoc: Record<string, unknown> = {
+      ...mergedState.mergedDoc,
+      row_id: canonicalRowId,
+      id: canonicalRowId,
+      row_version: mergedState.rowVersion,
+      field_versions: mergedState.fieldVersions,
+      last_user_edit_version: mergedState.lastUserEditVersion,
+      last_recompute_version: mergedState.lastRecomputeVersion,
+      user_owned_overrides: mergedState.userOwnedOverrides,
+      divergent_backend_candidates: mergedState.divergentBackendCandidates,
+    };
     const persistedCanonicalRowId = resolveVoicePossibleTaskRowId({ rawTask: nextDoc, index: taskIndex });
     if (persistedCanonicalRowId) {
       persistedCanonicalRowIds.add(persistedCanonicalRowId);
     }
 
     if (existingDoc?._id instanceof ObjectId) {
-      const updateDocument = { ...nextDoc };
+      const updateDocument: Record<string, unknown> = { ...nextDoc };
       delete updateDocument._id;
       delete updateDocument.updated_at;
       await db.collection(COLLECTIONS.TASKS).updateOne(
@@ -1279,9 +1525,13 @@ export const persistPossibleTasksForSession = async ({
   const staleDocs = existingSessionDocs
     .map((doc, index) => ({
       doc,
+      docId: toIdString(doc._id),
       canonicalRowId: resolveVoicePossibleTaskRowId({ rawTask: doc, index }),
     }))
-    .filter(({ canonicalRowId }) => canonicalRowId && !nextSessionRowIds.has(canonicalRowId));
+    .filter(({ docId, canonicalRowId }) => {
+      if (docId && retainedSessionDocIds.has(docId)) return false;
+      return Boolean(canonicalRowId && !nextSessionRowIds.has(canonicalRowId));
+    });
   const staleRowIds = staleDocs.map(({ canonicalRowId }) => canonicalRowId);
   const staleDocIds = staleDocs
     .map(({ doc }) => (doc._id instanceof ObjectId ? doc._id : null))
