@@ -124,6 +124,17 @@ const toOverrideFieldList = (value: unknown): UserOwnedPossibleTaskField[] => {
   );
 };
 
+const toPatchedUserOwnedFieldList = (value: unknown): UserOwnedPossibleTaskField[] => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      Object.keys(value as Record<string, unknown>).filter((entry): entry is UserOwnedPossibleTaskField =>
+        (USER_OWNED_POSSIBLE_TASK_FIELDS as readonly string[]).includes(entry)
+      )
+    )
+  );
+};
+
 const toFieldVersionMap = (value: unknown): Record<string, number> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const map: Record<string, number> = {};
@@ -982,13 +993,14 @@ const applyPossibleTaskOwnershipMerge = ({
   const currentRowVersion = toIntegerOrNull(existingDoc?.row_version) ?? 0;
   const currentFieldVersions = toFieldVersionMap(existingDoc?.field_versions);
   const existingOverrides = new Set<string>(toOverrideFieldList(existingDoc?.user_owned_overrides));
-  const patchedUserFields = USER_OWNED_POSSIBLE_TASK_FIELDS.filter((field) =>
-    Object.prototype.hasOwnProperty.call(incomingTask, field)
-  );
   const expectedRowVersion = toIntegerOrNull(incomingTask.expected_row_version);
   const expectedFieldVersions = toFieldVersionMap(incomingTask.expected_field_versions);
+  const expectedPatchedUserFields = toPatchedUserOwnedFieldList(expectedFieldVersions);
   const clearOverrides = new Set<string>(toOverrideFieldList(incomingTask.clear_user_owned_overrides));
   const isExplicitUserWrite = expectedRowVersion !== null;
+  const patchedUserFields = isExplicitUserWrite
+    ? expectedPatchedUserFields
+    : USER_OWNED_POSSIBLE_TASK_FIELDS.filter((field) => Object.prototype.hasOwnProperty.call(incomingTask, field));
 
   if (isExplicitUserWrite && expectedRowVersion !== currentRowVersion) {
     const conflictingFields = patchedUserFields.filter((field) => {
@@ -1046,6 +1058,42 @@ const applyPossibleTaskOwnershipMerge = ({
     userOwnedOverrides: Array.from(nextOverrides.values()).sort(),
     divergentBackendCandidates: nextDivergentBackendCandidates,
   };
+};
+
+const shouldRetainPossibleTaskOnOmission = (doc: Record<string, unknown>): boolean => {
+  const lockedFields = toOverrideFieldList(doc.user_owned_overrides);
+  if (lockedFields.length > 0) return true;
+  const lastUserEditVersion = toIntegerOrNull(doc.last_user_edit_version) ?? 0;
+  const lastRecomputeVersion = toIntegerOrNull(doc.last_recompute_version) ?? 0;
+  return lastUserEditVersion > lastRecomputeVersion;
+};
+
+const retainPossibleTaskMasterRowsOnOmission = async ({
+  db,
+  docs,
+}: {
+  db: Db;
+  docs: Array<Record<string, unknown>>;
+}): Promise<void> => {
+  for (const doc of docs) {
+    const docObjectId = doc._id instanceof ObjectId ? doc._id : null;
+    if (!docObjectId) continue;
+    const currentRowVersion = toIntegerOrNull(doc.row_version) ?? 0;
+    const nextRowVersion = currentRowVersion + 1;
+    const nextUpdatedAt = resolveMonotonicUpdatedAtNext({
+      previousUpdatedAt: doc.updated_at,
+    });
+    await db.collection(COLLECTIONS.TASKS).updateOne(
+      { _id: docObjectId },
+      {
+        $set: {
+          row_version: nextRowVersion,
+          last_recompute_version: nextRowVersion,
+          updated_at: nextUpdatedAt,
+        },
+      }
+    );
+  }
 };
 
 const softDeletePossibleTaskMasterRows = async ({
@@ -1532,11 +1580,19 @@ export const persistPossibleTasksForSession = async ({
       if (docId && retainedSessionDocIds.has(docId)) return false;
       return Boolean(canonicalRowId && !nextSessionRowIds.has(canonicalRowId));
     });
-  const staleRowIds = staleDocs.map(({ canonicalRowId }) => canonicalRowId);
-  const staleDocIds = staleDocs
+  const retainedOnOmissionDocs = staleDocs.filter(({ doc }) => shouldRetainPossibleTaskOnOmission(doc));
+  const removableStaleDocs = staleDocs.filter(({ doc }) => !shouldRetainPossibleTaskOnOmission(doc));
+  if (retainedOnOmissionDocs.length > 0) {
+    await retainPossibleTaskMasterRowsOnOmission({
+      db,
+      docs: retainedOnOmissionDocs.map(({ doc }) => doc),
+    });
+  }
+  const staleRowIds = removableStaleDocs.map(({ canonicalRowId }) => canonicalRowId);
+  const staleDocIds = removableStaleDocs
     .map(({ doc }) => (doc._id instanceof ObjectId ? doc._id : null))
     .filter((value): value is ObjectId => value instanceof ObjectId);
-  const staleMatchKeys = staleDocs.flatMap(({ doc, canonicalRowId }) =>
+  const staleMatchKeys = removableStaleDocs.flatMap(({ doc, canonicalRowId }) =>
     Array.from(
       new Set([
         canonicalRowId,

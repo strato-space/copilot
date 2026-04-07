@@ -17,4 +17,12 @@ describe('PossibleTasks backend validation contract', () => {
     expect(source).toContain('rowCreationErrors[activeRow.row_key]?.project_id');
     expect(source).toContain('rowCreationErrors[activeRow.row_key]?.performer_id');
   });
+
+  it('includes row-version CAS metadata for autosaved user patches', () => {
+    expect(source).toContain('const USER_OWNED_POSSIBLE_TASK_FIELDS = [');
+    expect(source).toContain('const toExpectedFieldVersions = (');
+    expect(source).toContain('expected_row_version: row.row_version');
+    expect(source).toContain('expected_field_versions: expectedFieldVersions');
+    expect(source).toContain('toPersistencePayload(row, draftsRef.current[row.row_key])');
+  });
 });

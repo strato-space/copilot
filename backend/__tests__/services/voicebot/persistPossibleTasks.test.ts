@@ -1763,6 +1763,140 @@ describe('persistPossibleTasksForSession', () => {
     );
   });
 
+  it('retains omitted rows with active user-owned overrides and advances recompute version', async () => {
+    const existingDocId = new ObjectId();
+    const existingRowId = existingDocId.toHexString();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocId,
+        row_id: existingRowId,
+        id: existingRowId,
+        name: 'Locked draft',
+        description: 'Keep me',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source: 'VOICE_BOT',
+        source_kind: 'voice_possible_task',
+        source_ref: `https://copilot.stratospace.fun/operops/task/${existingRowId}`,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: existingRowId,
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        row_version: 4,
+        field_versions: { description: 2 },
+        last_user_edit_version: 4,
+        last_recompute_version: 2,
+        user_owned_overrides: ['description'],
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Retain omitted draft session',
+      defaultProjectId: 'proj-1',
+      taskItems: [],
+      refreshMode: 'incremental_refresh',
+    });
+
+    expect(result.removedRowIds).toEqual([]);
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        row_id: existingRowId,
+        id: existingRowId,
+        description: 'Keep me',
+        row_version: 5,
+        last_user_edit_version: 4,
+        last_recompute_version: 5,
+        user_owned_overrides: ['description'],
+      }),
+    ]);
+  });
+
+  it('treats expected_field_versions keys as the explicit user-owned patch set', async () => {
+    const existingDocId = new ObjectId();
+    const existingRowId = existingDocId.toHexString();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocId,
+        row_id: existingRowId,
+        id: existingRowId,
+        name: 'Current title',
+        description: 'Current description',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source: 'VOICE_BOT',
+        source_kind: 'voice_possible_task',
+        source_ref: `https://copilot.stratospace.fun/operops/task/${existingRowId}`,
+        external_ref: `https://copilot.stratospace.fun/voice/session/${sessionId}`,
+        source_data: {
+          session_id: sessionId,
+          row_id: existingRowId,
+          voice_sessions: [{ session_id: sessionId, project_id: 'proj-1', role: 'primary' }],
+        },
+        row_version: 2,
+        field_versions: { name: 2, description: 1 },
+        last_user_edit_version: 2,
+        last_recompute_version: 2,
+        user_owned_overrides: [],
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Selective CAS session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: existingRowId,
+          id: existingRowId,
+          name: 'User edited title',
+          description: 'Current description',
+          project_id: 'proj-1',
+          expected_row_version: 2,
+          expected_field_versions: {
+            name: 2,
+          },
+        },
+      ],
+      refreshMode: 'full_recompute',
+    });
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        row_id: existingRowId,
+        id: existingRowId,
+        name: 'User edited title',
+        description: 'Current description',
+        row_version: 3,
+        field_versions: expect.objectContaining({
+          name: 3,
+          description: 1,
+        }),
+        last_user_edit_version: 3,
+        last_recompute_version: 2,
+        user_owned_overrides: ['name'],
+      }),
+    ]);
+  });
+
   it('throws stale_write when expected_row_version is stale for explicit user patches', async () => {
     const existingDocId = new ObjectId();
     const existingRowId = existingDocId.toHexString();

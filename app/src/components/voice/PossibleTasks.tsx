@@ -74,6 +74,17 @@ const PRIORITY_VALUES = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'] as const;
 const AUTOSAVE_DEBOUNCE_MS = 5000;
 const DESCRIPTION_AUTOSIZE_MIN_ROWS = 24;
 const DESCRIPTION_AUTOSIZE_MAX_ROWS = 40;
+const USER_OWNED_POSSIBLE_TASK_FIELDS = [
+  'performer_id',
+  'name',
+  'task_type_id',
+  'description',
+  'priority',
+  'project_id',
+  'priority_reason',
+  'dialogue_tag',
+  'dependencies_from_ai',
+] as const;
 
 const supportsTextareaAutosize = (): boolean => {
   if (typeof window === 'undefined' || typeof document === 'undefined') return false;
@@ -297,11 +308,30 @@ const parseTask = (raw: RawTaskRecord, index: number, defaultProjectId: string):
   };
 };
 
-const toPersistencePayload = (row: TaskRow | TaskRowView): Record<string, unknown> => {
+const toExpectedFieldVersions = (
+  row: TaskRow | TaskRowView,
+  draftPatch: Partial<TaskRow> | undefined
+): Record<string, number> => {
+  if (!draftPatch) return {};
+  return Object.keys(draftPatch).reduce<Record<string, number>>((acc, field) => {
+    if (!(USER_OWNED_POSSIBLE_TASK_FIELDS as readonly string[]).includes(field)) {
+      return acc;
+    }
+    const currentVersion = row.field_versions[field];
+    acc[field] = typeof currentVersion === 'number' && Number.isFinite(currentVersion) ? currentVersion : 0;
+    return acc;
+  }, {});
+};
+
+const toPersistencePayload = (
+  row: TaskRow | TaskRowView,
+  draftPatch?: Partial<TaskRow>
+): Record<string, unknown> => {
   const resolvedProjectId =
     '__resolvedProjectId' in row ? toText(row.__resolvedProjectId) : toText(row.project_id);
   const resolvedTaskTypeId =
     '__resolvedTaskTypeId' in row ? toText(row.__resolvedTaskTypeId) : toText(row.task_type_id);
+  const expectedFieldVersions = toExpectedFieldVersions(row, draftPatch);
 
   return {
     ...(toText(row.row_id) ? { row_id: toText(row.row_id) } : {}),
@@ -318,6 +348,12 @@ const toPersistencePayload = (row: TaskRow | TaskRowView): Record<string, unknow
     task_id_from_ai: toText(row.task_id_from_ai) || null,
     dependencies_from_ai: row.dependencies_from_ai,
     dialogue_reference: toText(row.dialogue_reference) || null,
+    ...(row.row_version !== null && Object.keys(expectedFieldVersions).length > 0
+      ? {
+          expected_row_version: row.row_version,
+          expected_field_versions: expectedFieldVersions,
+        }
+      : {}),
   };
 };
 
@@ -588,7 +624,7 @@ function PossibleTasksSessionScope() {
       if (Object.keys(draftsRef.current).length === 0) return false;
 
       const revisionAtStart = draftsRevisionRef.current;
-      const payload = rowsRef.current.map((row) => toPersistencePayload(row));
+      const payload = rowsRef.current.map((row) => toPersistencePayload(row, draftsRef.current[row.row_key]));
       const refreshCorrelationId = crypto.randomUUID();
       const refreshClickedAtMs = Date.now();
       setIsAutosaving(true);
