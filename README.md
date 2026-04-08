@@ -598,11 +598,13 @@ Rule for updates:
 
 ## Session closeout update
 - Close-session refresh (2026-04-08 22:47):
-  - Continued forensic repair wave for `copilot-pptb`; the landed code directly covers child defects `copilot-53z5`, `copilot-kso7`, and the deleted-row UI/data path behind `copilot-ryij`, while `copilot-amhu` / `copilot-mj78` remain open until post-deploy/live agent verification is complete.
+  - Continued forensic repair wave for `copilot-pptb`; `copilot-53z5` and `copilot-kso7` are now closed, the deleted-row UI/data path behind `copilot-ryij` is landed, and `copilot-amhu` / `copilot-mj78` remain open after post-deploy/live verification.
   - Hardened the deleted-garbage contract end-to-end: garbage-detected ingress/transcribe rows are now marked deleted, session/read-model normalization strips deleted transcript content, and deleting the last active transcript/categorization row cascades whole-message deletion with explicit metadata.
   - `CREATE_TASKS` full recompute now reads canonical nested transcript payloads, preserves `valid_*` detector codes as non-garbage, and fails fast on empty-success MCP payloads instead of silently collapsing them into empty inferred results.
   - Added/accepted forensic artifacts for session `69d5ef3592a1eba4f34ab278`: `tmp/voice-investigation-artifacts/20260408T070238Z-69d5ef3592a1eba4f34ab278/*` and `tmp/voice-investigation-artifacts/20260408T102848Z-69d5ef3592a1eba4f34ab278-postfix/*`.
   - Validation passed: focused backend Jest (`7/7` suites, `98/98` tests), focused app Jest (`3/3` suites, `9/9` tests), `cd backend && npm run build`, `cd app && npm run build`, and `git diff --check`.
+  - Production deploy/smoke passed: `./scripts/pm2-backend.sh prod`, `./scripts/pm2-runtime-readiness.sh prod`, `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production`, `curl -fsS http://127.0.0.1:3002/api/health`, plus PM2 backend/worker log tails with no new rollout errors beyond long-standing Node deprecation noise.
+  - Post-deploy replay on session `69d5ef3592a1eba4f34ab278` now runs `CREATE_TASKS` in `raw_text` mode with `envelope_chars=28114`, but it still returns explicit `create_tasks_empty_mcp_result`; that keeps `copilot-amhu` open while confirming the old silent no-task normalization path is gone.
   - Full lint remains blocked by pre-existing unrelated issues already tracked in `bd`: backend `copilot-x30z` (`taskAttachments.ts`, `notifyHandler.ts`) and app `copilot-jr1b` (`AgentsOpsPage.tsx`).
 - Close-session refresh (2026-04-07 18:58):
   - Closed the incident fix wave for `copilot-7fqt`, `copilot-bi99`, `copilot-w5sh`, `copilot-6ony`, and planning issue `copilot-yk0w`.

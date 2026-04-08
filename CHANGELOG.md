@@ -49,6 +49,16 @@
   - `cd app && npm run build`
   - `git diff --check`
   - lint status: blocked by pre-existing unrelated issues `copilot-x30z` and `copilot-jr1b`
+- **22:57** Production deploy/smoke and live follow-up:
+  - `./scripts/pm2-backend.sh prod`
+  - `./scripts/pm2-runtime-readiness.sh prod`
+  - `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production`
+  - `curl -fsS http://127.0.0.1:3002/api/health`
+  - `pm2 logs copilot-backend-prod --lines 60 --nostream`
+  - `pm2 logs copilot-voicebot-workers-prod --lines 60 --nostream`
+  - `mcp voice.fetch(id=69d5ef3592a1eba4f34ab278, mode=transcript)`
+  - `cd backend && DOTENV_CONFIG_PATH=.env.production npx tsx -e \"... handleCreateTasksFromChunksJob({ session_id: '69d5ef3592a1eba4f34ab278', chunks_to_process: [] }) ...\"`
+  - result: prod services stayed healthy, `copilot-53z5` / `copilot-kso7` were closed, and `copilot-amhu` remains open because replay still returns explicit `create_tasks_empty_mcp_result`
 
 ## 2026-04-07
 ### PROBLEM SOLVED
