@@ -130,6 +130,8 @@ describe('VoiceBot sessions runtime compatibility (runtime-tag agnostic)', () =>
     const aliveSegment = persistedSegments.find((segment) => segment.id === secondSegmentId);
 
     expect(deletedSegment?.is_deleted).toBe(true);
+    expect(deletedSegment?.deletion_reason).toBe('user_decision');
+    expect(deletedSegment?.deleted_at).toEqual(expect.any(Date));
     expect(aliveSegment?.is_deleted).toBe(false);
     expect(persistedTranscription.text).toBe('Second segment');
     expect(setPayload.transcription_text).toBe('Second segment');

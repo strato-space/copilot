@@ -16,6 +16,7 @@ import { VOICEBOT_COLLECTIONS } from '../../constants.js';
 import { ObjectId, type Db } from 'mongodb';
 import { randomUUID } from 'node:crypto';
 import { loadPersistedPossibleTaskCarryOverDrafts } from './persistPossibleTasks.js';
+import { extractActiveMessageText, isMarkedDeleted } from '../../api/routes/voicebot/messageHelpers.js';
 
 const logger = getLogger();
 
@@ -163,6 +164,7 @@ const parseLooseBoolean = (value: unknown): boolean => {
 export const isCreateTasksMessageGarbageFlagged = (value: unknown): boolean => {
   const record = asRecord(value);
   if (!record) return false;
+  if (isMarkedDeleted(record.is_deleted)) return true;
   if (parseLooseBoolean(record.garbage_detected)) return true;
 
   const garbageDetection = asRecord(record.garbage_detection);
@@ -171,7 +173,12 @@ export const isCreateTasksMessageGarbageFlagged = (value: unknown): boolean => {
   if (parseLooseBoolean(garbageDetection.skipped)) return false;
 
   const normalizedCode = toText(garbageDetection.code).toLowerCase();
-  return Boolean(normalizedCode && normalizedCode !== 'ok' && normalizedCode !== 'clear_speech');
+  return Boolean(
+    normalizedCode
+      && !normalizedCode.startsWith('valid_')
+      && normalizedCode !== 'ok'
+      && normalizedCode !== 'clear_speech'
+  );
 };
 
 const normalizeTransitionInvariantCode = (value: unknown): CreateTasksTransitionInvariantCode | null => {
@@ -1053,8 +1060,10 @@ const derivePreferredOutputLanguage = async ({
             },
             {
               projection: {
+                transcription: 1,
                 transcription_text: 1,
                 text: 1,
+                is_deleted: 1,
                 garbage_detected: 1,
                 garbage_detection: 1,
               },
@@ -1091,7 +1100,7 @@ const derivePreferredOutputLanguage = async ({
   for (const message of messageDocs) {
     const record = asRecord(message);
     if (!record || isCreateTasksMessageGarbageFlagged(record)) continue;
-    const text = toText(record.transcription_text) || toText(record.text);
+    const text = extractActiveMessageText(record);
     if (text) samples.push(text);
   }
 
@@ -1180,8 +1189,10 @@ const buildReducedCreateTasksRawText = async ({
         projection: {
           _id: 1,
           message_timestamp: 1,
+          transcription: 1,
           transcription_text: 1,
           text: 1,
+          is_deleted: 1,
           garbage_detected: 1,
           garbage_detection: 1,
         },
@@ -1195,7 +1206,7 @@ const buildReducedCreateTasksRawText = async ({
     .map((doc) => asRecord(doc))
     .filter((doc): doc is Record<string, unknown> => Boolean(doc) && !isCreateTasksMessageGarbageFlagged(doc))
     .map((doc) => {
-      const text = toText(doc.transcription_text) || toText(doc.text);
+      const text = extractActiveMessageText(doc);
       if (!text) return '';
       const timestamp = toText(doc.message_timestamp);
       return `- ${timestamp || 'message'}: ${clipText(text, REDUCED_CONTEXT_MESSAGE_MAX_CHARS)}`;
@@ -1327,7 +1338,7 @@ export const parseCreateTasksCompositeResult = (
   }
 
   const record = asRecord(payload);
-  if (!record) return toEmptyCompositeResult(defaultProjectId);
+  if (!record) throw new Error('create_tasks_empty_mcp_result');
 
   if (record.isError === true) {
     const content = Array.isArray(record.content) ? record.content : [];
@@ -1365,7 +1376,7 @@ export const parseCreateTasksCompositeResult = (
   const text = toText(record.text) || toText(record.output_text);
   if (text) return parseCreateTasksCompositeJson(text, defaultProjectId);
 
-  return toEmptyCompositeResult(defaultProjectId);
+  throw new Error('create_tasks_empty_mcp_result');
 };
 
 const attachCompositeMetaToDraft = (

@@ -315,6 +315,17 @@ describe('VoiceBot categorization chunk mutation route validation', () => {
         { segment_oid: rowOidInput, text: 'row to delete', is_deleted: false },
         { segment_oid: `ch_${new ObjectId().toHexString()}`, text: 'row to keep', is_deleted: false },
       ],
+      transcription: {
+        text: 'row to delete row to keep',
+        segments: [
+          { id: rowOidInput, text: 'row to delete', is_deleted: false },
+          { id: `ch_${new ObjectId().toHexString()}`, text: 'row to keep', is_deleted: false },
+        ],
+      },
+      transcription_chunks: [
+        { id: rowOidInput, text: 'row to delete', is_deleted: false },
+        { id: `ch_${new ObjectId().toHexString()}`, text: 'row to keep', is_deleted: false },
+      ],
     };
     const messageFindOne = jest.fn(async () => messageDoc);
     const messageUpdateOne = jest.fn(async (_query: Record<string, unknown>, update: Record<string, unknown>) => {
@@ -364,20 +375,34 @@ describe('VoiceBot categorization chunk mutation route validation', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
-    expect(insertedEvents).toHaveLength(1);
+    expect(insertedEvents).toHaveLength(2);
     expect(insertedEvents[0]).toEqual(
       expect.objectContaining({
         event_name: 'categorization_chunk_deleted',
         event_group: 'categorization',
         metadata: expect.objectContaining({
-          rollback_policy: 'no_rollback',
+          rollback_policy: 'compensating_revert_on_log_failure',
           categorization_row_path: 'categorization',
           categorization_row_index: 0,
+          deletion_reason: 'user_decision',
+          cascade: expect.objectContaining({
+            requested: true,
+            linked_segment_oid: rowOidInput,
+          }),
         }),
         target: expect.objectContaining({
           entity_type: 'categorization',
           entity_oid: rowOidInput,
           stage: 'categorization',
+        }),
+      })
+    );
+    expect(insertedEvents[1]).toEqual(
+      expect.objectContaining({
+        event_name: 'transcript_segment_deleted',
+        target: expect.objectContaining({
+          entity_type: 'transcript_segment',
+          entity_oid: rowOidInput,
         }),
       })
     );

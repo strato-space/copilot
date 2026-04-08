@@ -13,6 +13,7 @@ import {
   isCreateTasksMessageGarbageFlagged,
   runCreateTasksAgent,
 } from '../../../services/voicebot/createTasksAgent.js';
+import { extractActiveMessageText } from '../../../api/routes/voicebot/messageHelpers.js';
 import {
   applyCreateTasksCompositeSessionPatch,
   type CreateTasksNoTaskDecision,
@@ -100,8 +101,10 @@ const collectSessionRawTextForCreateTasks = async ({
       {
         projection: {
           _id: 1,
+          transcription: 1,
           transcription_text: 1,
           text: 1,
+          is_deleted: 1,
           message_timestamp: 1,
           created_at: 1,
           garbage_detected: 1,
@@ -114,11 +117,7 @@ const collectSessionRawTextForCreateTasks = async ({
 
   const rawText = rows
     .filter((row) => !isCreateTasksMessageGarbageFlagged(row))
-    .map(
-      (row) =>
-        normalizeChunkText((row as { transcription_text?: unknown }).transcription_text) ||
-        normalizeChunkText(row)
-    )
+    .map((row) => extractActiveMessageText(row))
     .map((value) => value.trim())
     .filter(Boolean)
     .join('\n\n')

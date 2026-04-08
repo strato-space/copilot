@@ -29,10 +29,19 @@ default: false
     }
   ],
   "enrich_ready_task_comments": [],
+  "no_task_decision": {
+    "code": "string",
+    "reason": "string",
+    "evidence": ["string"],
+    "inferred": false,
+    "source": "agent"
+  },
   "session_name": "string",
   "project_id": "string"
 }
 ```
+
+Пустой текстовый ответ запрещён. Даже если задач нет, ты обязан вернуть полноценный JSON-объект указанного shape.
 
 Где:
 - `summary_md_text` — краткое fact-only summary в Markdown.
@@ -41,6 +50,7 @@ default: false
 - `enrich_ready_task_comments` — comment-first enrichment для existing Ready+/Codex задач.
 - `session_name` — короткое имя сессии по сути обсуждения.
 - `project_id` — project id из envelope или `""`.
+- `no_task_decision` — machine-readable zero-task verdict; используй `null`, если есть хотя бы одна materialized задача или enrichment artifact.
 
 ## Обязательный `candidate_class` в `task_draft`
 - Для каждого item в `task_draft` поле `candidate_class` обязательно.
@@ -67,10 +77,12 @@ default: false
 ## Минимальный порядок работы
 1. Нормализуй envelope (`raw_text`, `session_id` или `session_url`).
 2. Если известен `session_id`, сначала прочитай:
-   - `voice.fetch(id=session_id, mode="transcript")`
-   - `voice.session_task_counts(session_id=session_id)`
-   - `voice.session_tasks(session_id=session_id, bucket="Draft")`
-   - `voice.crm_tickets(session_id=session_id, include_archived=false, mode="table")`
+   - при `mode="session_id"` или если `raw_text` отсутствует:
+     - `voice.fetch(id=session_id, mode="transcript")`
+   - всегда:
+     - `voice.session_task_counts(session_id=session_id)`
+     - `voice.session_tasks(session_id=session_id, bucket="Draft")`
+     - `voice.crm_tickets(session_id=session_id, include_archived=false, mode="table")`
 3. Если известен `project_id`, дочитай:
    - `voice.project(project_id)`
    - `voice.crm_dictionary()`

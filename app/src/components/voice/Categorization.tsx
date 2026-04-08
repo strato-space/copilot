@@ -62,6 +62,7 @@ export default function Categorization() {
         });
         return list.filter((group) => {
             const hasTextRows = Array.isArray(group.rows) && group.rows.some((row) => {
+                if ((row as unknown as { is_deleted?: boolean })?.is_deleted === true) return false;
                 const text = typeof row.text === 'string' ? row.text.trim() : '';
                 return text.length > 0;
             });

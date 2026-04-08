@@ -70,9 +70,12 @@ import {
 import {
   buildActorFromPerformer,
   buildCanonicalReadyTextTranscription,
+  buildVoiceMessageDeletionFields,
   buildCategorizationCleanupPayload,
   ensureMessageCanonicalTranscription,
   getOptionalTrimmedString,
+  isMarkedDeleted,
+  markVoiceSegmentDeleted,
   normalizeMessageAttachmentTranscriptionContract,
   resolveCategorizationRowSegmentLocator,
   resetCategorizationForMessage,
@@ -80,6 +83,7 @@ import {
   runtimeSessionQuery,
   buildWebSource,
   normalizeSegmentsText,
+  VOICE_DELETION_REASONS,
 } from './messageHelpers.js';
 import { findObjectLocatorByOid, upsertObjectLocator } from '../../../services/voicebotObjectLocator.js';
 import { getVoicebotSessionRoom } from '../../socket/voicebot.js';
@@ -1325,6 +1329,9 @@ const categorizationCleanup = {
             if (Array.isArray(processorRowsUppercase)) {
                 aggregatePayload['processors_data.CATEGORIZATION'] = [];
             }
+            aggregatePayload.is_deleted = true;
+            aggregatePayload.deletion_reason = VOICE_DELETION_REASONS.CASCADE_EMPTY_MESSAGE;
+            aggregatePayload.deletion_note = null;
 
             const cleanupStats = this.buildStats(message, aggregatePayload);
             const updatedMessage = { ...message };
@@ -1450,13 +1457,6 @@ const findCategorizationRowLocatorMatches = ({
         });
     }
     return matches;
-};
-
-const isMarkedDeleted = (value: unknown): boolean => {
-    if (value === true) return true;
-    if (typeof value === 'number') return value === 1;
-    if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
-    return false;
 };
 
 const buildCategorizationMutationInput = (
@@ -2859,6 +2859,7 @@ const getSession = async (req: Request, res: Response) => {
                             $set: {
                                 ...entry.cleanupPayload,
                                 updated_at: new Date(),
+                                ...(entry.cleanupPayload.is_deleted === true ? { deleted_at: new Date() } : {}),
                             },
                         }
                     )
@@ -2870,9 +2871,9 @@ const getSession = async (req: Request, res: Response) => {
                 rows_removed: cleanupUpdates.reduce((sum, entry) => sum + entry.cleanupStats.removed_rows, 0),
             });
         }
-        const normalizedSessionMessages = sessionMessagesCleaned.map((entry) =>
-            normalizeMessageAttachmentTranscriptionContract(entry.message as Record<string, unknown>)
-        );
+        const normalizedSessionMessages = sessionMessagesCleaned
+            .map((entry) => normalizeMessageAttachmentTranscriptionContract(entry.message as Record<string, unknown>))
+            .filter((message) => !isMarkedDeleted(message.is_deleted));
 
         // Get participants info
         let participants: VoiceSessionParticipant[] = [];
@@ -3583,6 +3584,11 @@ router.post('/add_text', async (req: Request, res: Response) => {
                             skipped_reason: GARBAGE_CATEGORIZATION_SKIPPED_REASON,
                         },
                     },
+                    ...buildVoiceMessageDeletionFields({
+                        deletedAt: new Date(nowTs),
+                        deletionReason: VOICE_DELETION_REASONS.GARBAGE_DETECTED,
+                        deletionNote: garbageDetection.reason || garbageDetection.code || null,
+                    }),
                 }
                 : {}),
             to_transcribe: false,
@@ -3815,6 +3821,11 @@ router.post('/add_attachment', async (req: Request, res: Response) => {
                             skipped_reason: GARBAGE_CATEGORIZATION_SKIPPED_REASON,
                         },
                     },
+                    ...buildVoiceMessageDeletionFields({
+                        deletedAt: new Date(nowTs),
+                        deletionReason: VOICE_DELETION_REASONS.GARBAGE_DETECTED,
+                        deletionNote: garbageDetection.reason || garbageDetection.code || null,
+                    }),
                 }
                 : {}),
             to_transcribe: false,
@@ -8120,12 +8131,24 @@ router.post('/delete_transcript_chunk', async (req: Request, res: Response) => {
         const segments = Array.isArray(transcription?.segments) ? [...transcription.segments] : [];
         const segIdx = segments.findIndex((seg) => seg?.id === segment_oid);
         if (segIdx === -1) return res.status(404).json({ error: 'Segment not found' });
+        const deletedAt = new Date();
 
         const oldSegmentSnapshot = { ...(segments[segIdx] || {}) } as Record<string, unknown>;
-        segments[segIdx] = {
-            ...(segments[segIdx] || {}),
-            is_deleted: true,
-        };
+        segments[segIdx] = markVoiceSegmentDeleted({
+            segment: (segments[segIdx] || {}) as Record<string, unknown>,
+            deletedAt,
+            deletionReason: VOICE_DELETION_REASONS.USER_DECISION,
+            deletionNote: reason,
+        });
+
+        const shouldDeleteWholeMessage = segments.every((segment) => isMarkedDeleted(segment?.is_deleted));
+        const messageDeletionFields = shouldDeleteWholeMessage
+            ? buildVoiceMessageDeletionFields({
+                deletedAt,
+                deletionReason: VOICE_DELETION_REASONS.CASCADE_EMPTY_MESSAGE,
+                deletionNote: reason,
+            })
+            : {};
 
         const updatedTranscription = {
             ...(transcription || {}),
@@ -8177,9 +8200,10 @@ router.post('/delete_transcript_chunk', async (req: Request, res: Response) => {
                     transcription_text: updatedTranscription.text,
                     text: updatedTranscription.text,
                     transcription_chunks: updatedChunks,
-                    updated_at: new Date(),
+                    updated_at: deletedAt,
                     is_finalized: false,
                     ...categorizationCleanupPayload,
+                    ...messageDeletionFields,
                 },
             }
         );
@@ -8203,10 +8227,12 @@ router.post('/delete_transcript_chunk', async (req: Request, res: Response) => {
                 new_value: null,
             },
             source: buildWebSource(req),
-            action: { type: 'rollback', available: true, handler: 'rollback_event', args: {} },
+            action: { type: 'none', available: false, handler: null, args: {} },
             reason,
             metadata: {
                 categorization_cleanup: cleanupStats,
+                deletion_reason: VOICE_DELETION_REASONS.USER_DECISION,
+                message_deleted: shouldDeleteWholeMessage,
             },
         });
 
@@ -8518,125 +8544,135 @@ router.post('/delete_categorization_chunk', async (req: Request, res: Response) 
             sourceRows[target.index] && typeof sourceRows[target.index] === 'object'
                 ? { ...(sourceRows[target.index] as Record<string, unknown>) }
                 : null;
+        const deletedAt = new Date();
         const nextRows = sourceRows.map((entry, index) => {
             if (index !== target.index) return entry;
             if (!entry || typeof entry !== 'object') return entry;
-            const row = entry as Record<string, unknown>;
-            return {
-                ...row,
-                is_deleted: true,
-            };
+            return markVoiceSegmentDeleted({
+                segment: entry as Record<string, unknown>,
+                deletedAt,
+                deletionReason: VOICE_DELETION_REASONS.USER_DECISION,
+                deletionNote: input.reason,
+            });
         });
-        const activeRowsAfterDelete = nextRows.filter((entry) => {
-            if (!entry || typeof entry !== 'object') return false;
-            return !isMarkedDeleted((entry as Record<string, unknown>).is_deleted);
-        });
-        const shouldCascadeDeleteTranscript = activeRowsAfterDelete.length === 0;
 
-        let cascadeSegmentOid: string | null = null;
+        const linkedLocator = resolveCategorizationRowSegmentLocator(target.row);
+        const linkedSegmentOid = linkedLocator.segment_oid || linkedLocator.fallback_segment_id;
+        if (!linkedSegmentOid) {
+            return sendCategorizationMutationError(
+                res,
+                409,
+                'missing_linked_transcript_segment',
+                'Cannot delete categorization without linked transcript segment id'
+            );
+        }
+
+        let cascadeSegmentOid: string | null = linkedSegmentOid;
         let cascadeApplied = false;
         let cascadeSkipReason: string | null = null;
         let cascadePreviousSegment: Record<string, unknown> | null = null;
         let cascadeUpdatedTranscription: Record<string, unknown> | null = null;
         let cascadeUpdatedChunks: Array<Record<string, unknown>> | null = null;
         let rollbackSetPayload: Record<string, unknown> | null = null;
+        let shouldDeleteWholeMessage = false;
 
-        if (shouldCascadeDeleteTranscript) {
-            const linkedLocator = resolveCategorizationRowSegmentLocator(target.row);
-            const linkedSegmentOid = linkedLocator.segment_oid || linkedLocator.fallback_segment_id;
-            if (!linkedSegmentOid) {
-                return sendCategorizationMutationError(
-                    res,
-                    409,
-                    'missing_linked_transcript_segment',
-                    'Cannot cascade delete without linked transcript segment id'
-                );
-            }
-            cascadeSegmentOid = linkedSegmentOid;
-
-            const ensured = await ensureMessageCanonicalTranscription({
-                db,
-                message: messageDoc as Record<string, unknown> & { _id: ObjectId },
-            });
-            const ensuredMessage = ensured.message as Record<string, unknown>;
-            const transcription = ensured.transcription;
-            const segments = Array.isArray(transcription?.segments) ? [...transcription.segments] : [];
-            const segmentIndex = segments.findIndex((segment) => segment?.id === linkedSegmentOid);
-            if (segmentIndex === -1) {
-                return sendCategorizationMutationError(
-                    res,
-                    409,
-                    'linked_transcript_segment_not_found',
-                    'Linked transcript segment not found for cascade delete',
-                    { linked_segment_oid: linkedSegmentOid }
-                );
-            }
-
-            const previousSegment = segments[segmentIndex] as Record<string, unknown> | undefined;
-            cascadePreviousSegment = previousSegment ? { ...previousSegment } : null;
-            const segmentAlreadyDeleted = isMarkedDeleted(previousSegment?.is_deleted);
-            segments[segmentIndex] = {
-                ...(segments[segmentIndex] || {}),
-                is_deleted: true,
-            };
-            cascadeApplied = !segmentAlreadyDeleted;
-            if (!cascadeApplied) {
-                cascadeSkipReason = 'segment_already_deleted';
-            }
-
-            cascadeUpdatedTranscription = {
-                ...(transcription || {}),
-                segments,
-                text: normalizeSegmentsText(segments),
-            };
-
-            const ensuredChunks = Array.isArray(ensuredMessage?.transcription_chunks)
-                ? [...(ensuredMessage.transcription_chunks as Array<Record<string, unknown>>)]
-                : (Array.isArray(messageDoc.transcription_chunks) ? [...(messageDoc.transcription_chunks as Array<Record<string, unknown>>)] : []);
-            cascadeUpdatedChunks = ensuredChunks.length > 0
-                ? ensuredChunks.map((chunk) => {
-                    if (!chunk || typeof chunk !== 'object') return chunk;
-                    if (chunk.id === linkedSegmentOid) {
-                        return {
-                            ...chunk,
-                            is_deleted: true,
-                        };
-                    }
-                    return chunk;
-                })
-                : ensuredChunks;
-
-            rollbackSetPayload = {
-                [target.path]: previousRowsSnapshot,
-                transcription: ensuredMessage?.transcription ?? messageDoc.transcription ?? null,
-                transcription_text: typeof ensuredMessage?.transcription_text === 'string'
-                    ? ensuredMessage.transcription_text
-                    : (typeof messageDoc.transcription_text === 'string' ? messageDoc.transcription_text : ''),
-                text: typeof ensuredMessage?.text === 'string'
-                    ? ensuredMessage.text
-                    : (typeof messageDoc.text === 'string' ? messageDoc.text : ''),
-                transcription_chunks: Array.isArray(ensuredMessage?.transcription_chunks)
-                    ? [...(ensuredMessage.transcription_chunks as Array<Record<string, unknown>>)]
-                    : (Array.isArray(messageDoc.transcription_chunks)
-                        ? [...(messageDoc.transcription_chunks as Array<Record<string, unknown>>)]
-                        : []),
-                updated_at: messageDoc.updated_at instanceof Date ? messageDoc.updated_at : new Date(),
-                is_finalized: messageDoc.is_finalized ?? false,
-            };
+        const ensured = await ensureMessageCanonicalTranscription({
+            db,
+            message: messageDoc as Record<string, unknown> & { _id: ObjectId },
+        });
+        const ensuredMessage = ensured.message as Record<string, unknown>;
+        const transcription = ensured.transcription;
+        const segments = Array.isArray(transcription?.segments) ? [...transcription.segments] : [];
+        const segmentIndex = segments.findIndex((segment) => segment?.id === linkedSegmentOid);
+        if (segmentIndex === -1) {
+            return sendCategorizationMutationError(
+                res,
+                409,
+                'linked_transcript_segment_not_found',
+                'Linked transcript segment not found for categorization delete',
+                { linked_segment_oid: linkedSegmentOid }
+            );
         }
+
+        const previousSegment = segments[segmentIndex] as Record<string, unknown> | undefined;
+        cascadePreviousSegment = previousSegment ? { ...previousSegment } : null;
+        const segmentAlreadyDeleted = isMarkedDeleted(previousSegment?.is_deleted);
+        segments[segmentIndex] = markVoiceSegmentDeleted({
+            segment: (segments[segmentIndex] || {}) as Record<string, unknown>,
+            deletedAt,
+            deletionReason: VOICE_DELETION_REASONS.USER_DECISION,
+            deletionNote: input.reason,
+        });
+        cascadeApplied = !segmentAlreadyDeleted;
+        if (!cascadeApplied) {
+            cascadeSkipReason = 'segment_already_deleted';
+        }
+
+        shouldDeleteWholeMessage = segments.every((segment) => isMarkedDeleted(segment?.is_deleted));
+        cascadeUpdatedTranscription = {
+            ...(transcription || {}),
+            segments,
+            text: normalizeSegmentsText(segments),
+        };
+
+        const ensuredChunks = Array.isArray(ensuredMessage?.transcription_chunks)
+            ? [...(ensuredMessage.transcription_chunks as Array<Record<string, unknown>>)]
+            : (Array.isArray(messageDoc.transcription_chunks) ? [...(messageDoc.transcription_chunks as Array<Record<string, unknown>>)] : []);
+        cascadeUpdatedChunks = ensuredChunks.length > 0
+            ? ensuredChunks.map((chunk) => {
+                if (!chunk || typeof chunk !== 'object') return chunk;
+                if (chunk.id === linkedSegmentOid) {
+                    return markVoiceSegmentDeleted({
+                        segment: chunk,
+                        deletedAt,
+                        deletionReason: VOICE_DELETION_REASONS.USER_DECISION,
+                        deletionNote: input.reason,
+                    });
+                }
+                return chunk;
+            })
+            : ensuredChunks;
+
+        rollbackSetPayload = {
+            [target.path]: previousRowsSnapshot,
+            transcription: ensuredMessage?.transcription ?? messageDoc.transcription ?? null,
+            transcription_text: typeof ensuredMessage?.transcription_text === 'string'
+                ? ensuredMessage.transcription_text
+                : (typeof messageDoc.transcription_text === 'string' ? messageDoc.transcription_text : ''),
+            text: typeof ensuredMessage?.text === 'string'
+                ? ensuredMessage.text
+                : (typeof messageDoc.text === 'string' ? messageDoc.text : ''),
+            transcription_chunks: Array.isArray(ensuredMessage?.transcription_chunks)
+                ? [...(ensuredMessage.transcription_chunks as Array<Record<string, unknown>>)]
+                : (Array.isArray(messageDoc.transcription_chunks)
+                    ? [...(messageDoc.transcription_chunks as Array<Record<string, unknown>>)]
+                    : []),
+            updated_at: messageDoc.updated_at instanceof Date ? messageDoc.updated_at : new Date(),
+            is_finalized: messageDoc.is_finalized ?? false,
+        };
 
         const updateSetPayload: Record<string, unknown> = {
             [target.path]: nextRows,
-            updated_at: new Date(),
+            updated_at: deletedAt,
             is_finalized: false,
         };
-        if (shouldCascadeDeleteTranscript && cascadeUpdatedTranscription && cascadeUpdatedChunks) {
+        if (cascadeUpdatedTranscription && cascadeUpdatedChunks) {
             updateSetPayload.transcription = cascadeUpdatedTranscription;
             updateSetPayload.transcription_text =
                 typeof cascadeUpdatedTranscription.text === 'string' ? cascadeUpdatedTranscription.text : '';
             updateSetPayload.text =
                 typeof cascadeUpdatedTranscription.text === 'string' ? cascadeUpdatedTranscription.text : '';
             updateSetPayload.transcription_chunks = cascadeUpdatedChunks;
+        }
+        if (shouldDeleteWholeMessage) {
+            Object.assign(
+                updateSetPayload,
+                buildVoiceMessageDeletionFields({
+                    deletedAt,
+                    deletionReason: VOICE_DELETION_REASONS.CASCADE_EMPTY_MESSAGE,
+                    deletionNote: input.reason,
+                })
+            );
         }
 
         await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
@@ -8672,17 +8708,19 @@ router.post('/delete_categorization_chunk', async (req: Request, res: Response) 
                 metadata: {
                     categorization_row_path: target.path,
                     categorization_row_index: target.index,
-                    rollback_policy: shouldCascadeDeleteTranscript ? 'compensating_revert_on_log_failure' : 'no_rollback',
+                    rollback_policy: 'compensating_revert_on_log_failure',
                     cascade: {
-                        requested: shouldCascadeDeleteTranscript,
+                        requested: true,
                         linked_segment_oid: cascadeSegmentOid,
                         applied: cascadeApplied,
                         skip_reason: cascadeSkipReason,
                     },
+                    deletion_reason: VOICE_DELETION_REASONS.USER_DECISION,
+                    message_deleted: shouldDeleteWholeMessage,
                 },
             });
 
-            if (shouldCascadeDeleteTranscript && cascadeSegmentOid && cascadeApplied) {
+            if (cascadeSegmentOid && cascadeApplied) {
                 await insertSessionLogEvent({
                     db,
                     session_id: sessionObjectId,
@@ -8711,7 +8749,7 @@ router.post('/delete_categorization_chunk', async (req: Request, res: Response) 
                 });
             }
         } catch (logError) {
-            if (shouldCascadeDeleteTranscript && rollbackSetPayload) {
+            if (rollbackSetPayload) {
                 try {
                     await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
                         runtimeMessageQuery({ _id: messageObjectId }),
@@ -8753,11 +8791,12 @@ router.post('/delete_categorization_chunk', async (req: Request, res: Response) 
             reason: input.reason,
             event: mapEventForApi(logEvent),
             cascade: {
-                requested: shouldCascadeDeleteTranscript,
+                requested: true,
                 linked_segment_oid: cascadeSegmentOid,
                 applied: cascadeApplied,
                 skip_reason: cascadeSkipReason,
             },
+            message_deleted: shouldDeleteWholeMessage,
         });
     } catch (error) {
         logger.error('Error in delete_categorization_chunk:', error);
@@ -8800,9 +8839,7 @@ router.post('/rollback_event', async (req: Request, res: Response) => {
 
         const rollbackable = [
             'transcript_segment_edited',
-            'transcript_segment_deleted',
             'transcript_chunk_edited',
-            'transcript_chunk_deleted',
         ];
         if (!rollbackable.includes(sourceEvent.event_name)) {
             return res.status(400).json({ error: 'This event type is not rollback-able in phase 1' });

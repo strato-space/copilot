@@ -297,6 +297,8 @@ describe('VoiceBot add_text runtime parity', () => {
 
     const inserted = messagesInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(inserted.garbage_detected).toBe(true);
+    expect(inserted.is_deleted).toBe(true);
+    expect(inserted.deletion_reason).toBe('garbage_detected');
     expect(inserted.garbage_detection).toEqual(
       expect.objectContaining({
         is_garbage: true,
@@ -1531,6 +1533,8 @@ describe('VoiceBot add_text runtime parity', () => {
 
     const inserted = messagesInsertOne.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(inserted.garbage_detected).toBe(true);
+    expect(inserted.is_deleted).toBe(true);
+    expect(inserted.deletion_reason).toBe('garbage_detected');
     expect(inserted.garbage_detection).toEqual(
       expect.objectContaining({
         is_garbage: true,

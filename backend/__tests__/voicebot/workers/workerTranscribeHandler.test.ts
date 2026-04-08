@@ -621,6 +621,9 @@ describe('handleTranscribeJob', () => {
     const updatePayload = transcriptionUpdateCall?.[1] as Record<string, unknown>;
     const setPayload = (updatePayload.$set as Record<string, unknown>) || {};
     expect(setPayload.garbage_detected).toBe(true);
+    expect(setPayload.is_deleted).toBe(true);
+    expect(setPayload.deletion_reason).toBe('garbage_detected');
+    expect(setPayload.deleted_at).toEqual(expect.any(Date));
     expect(setPayload['processors_data.categorization.is_processed']).toBe(true);
     expect(setPayload['processors_data.categorization.skipped_reason']).toBe('garbage_detected');
 
@@ -630,6 +633,10 @@ describe('handleTranscribeJob', () => {
     expect(insertSessionLogEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         event_name: 'transcription_garbage_detected',
+        metadata: expect.objectContaining({
+          message_deleted: true,
+          deletion_reason: 'garbage_detected',
+        }),
       })
     );
   });

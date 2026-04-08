@@ -71,6 +71,7 @@ These decisions are part of the current platform contract and must be preserved 
   - `CREATE_TASKS` full recompute with no explicit chunk payload must use compact session raw transcript context (not session-id-only under-context fallback), and replay acceptance requires stable Draft `row_id` identity across consecutive recompute runs for unchanged semantics,
   - successful-but-empty `CREATE_TASKS` MCP composites must resolve through structured `no_task_decision` output; `create_tasks_empty_mcp_result` is an operational failure signal, not an accepted steady-state result after a successful composite,
   - raw-text `CREATE_TASKS` context builders must exclude garbage-flagged transcript rows from language sampling and replay context assembly,
+  - garbage-detected or fully deleted voice messages are treated as deleted content for operator/analyzer surfaces: transcript projections, categorization projections, and `CREATE_TASKS` raw-text assembly must exclude those rows by default,
   - `task_type_id` is optional in Possible Tasks UI,
   - possible tasks are master records in `automation_tasks` with `task_status=DRAFT_10`,
   - Draft task editing is autosave-first across both inline row edits and the right-hand detail card; the primary manual action is `Run`, not `Save`, and `Run` must not materialize a row to `READY_10` if autosave failed,
@@ -82,6 +83,7 @@ These decisions are part of the current platform contract and must be preserved 
   - stale `CREATE_TASKS` repair marker precedence is explicit: processor-level timestamps (`job_queued_timestamp`, request timestamps, finish timestamps) dominate stale-age evaluation; session `_id` timestamp is fallback-only when explicit markers are absent.
   - transition reformulation for `CREATE_TASKS` is bounded to one retry with machine-readable failures (`create_tasks_transition_retries_exhausted` / `create_tasks_runtime_rejections_malformed`); when the unresolved set is only `task_draft_class_missing`, runtime may discard those candidates and carry over persisted draft rows with explicit `runtime_transition_carry_over` evidence instead of silent zero-generation fallback.
   - the default Transcription/Categorization reading flow is operator-first: raw attachment projection/debug metadata does not belong in the normal row body; metadata signatures must render after the corresponding text block (never before it), and only actionable skip/error state may surface inline with the transcript/fallback body.
+  - transcript/categorization delete actions are destructive in phase 1: removing the last active speech-bearing row must mark the owning message as deleted, and delete events are not rollback-able through `rollback_event`.
 
 ## Critical Interfaces To Preserve [RULE]
 

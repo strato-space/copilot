@@ -244,6 +244,9 @@ export interface VoiceBotMessage {
 }
 
 export interface CategorizationChunk {
+    is_deleted?: boolean;
+    deletion_reason?: string | null;
+    deletion_note?: string | null;
     start?: number;
     end?: number;
     speaker?: string;
@@ -259,6 +262,7 @@ export interface VoiceMessageRow {
     timeEnd?: number | undefined;
     row_id?: string | undefined;
     row_index?: number | undefined;
+    is_deleted?: boolean | undefined;
     segment_oid?: string | undefined;
     source_segment_id?: string | undefined;
     source_file_name?: string | undefined;

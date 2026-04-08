@@ -42,7 +42,11 @@ jest.unstable_mockModule('../../../src/services/voicebot/persistPossibleTasks.js
   loadPersistedPossibleTaskCarryOverDrafts: loadPersistedPossibleTaskCarryOverDraftsMock,
 }));
 
-const { runCreateTasksAgent } = await import('../../../src/services/voicebot/createTasksAgent.js');
+const {
+  runCreateTasksAgent,
+  isCreateTasksMessageGarbageFlagged,
+  parseCreateTasksCompositeResult,
+} = await import('../../../src/services/voicebot/createTasksAgent.js');
 
 describe('runCreateTasksAgent quota fallback', () => {
   beforeEach(() => {
@@ -61,6 +65,30 @@ describe('runCreateTasksAgent quota fallback', () => {
         output_text: JSON.stringify(parsed.composite || {}),
       };
     });
+  });
+
+  it('treats valid_* garbage detector codes as non-garbage and excludes deleted messages', () => {
+    expect(
+      isCreateTasksMessageGarbageFlagged({
+        garbage_detected: false,
+        garbage_detection: { is_garbage: false, code: 'valid_speech_ru' },
+      })
+    ).toBe(false);
+    expect(
+      isCreateTasksMessageGarbageFlagged({
+        is_deleted: true,
+        garbage_detection: { is_garbage: false, code: 'valid_speech' },
+      })
+    ).toBe(true);
+  });
+
+  it('rejects empty-success MCP payloads instead of normalizing them to an empty composite', () => {
+    expect(() =>
+      parseCreateTasksCompositeResult({
+        content: [{ type: 'text', text: '' }],
+        isError: false,
+      })
+    ).toThrow('create_tasks_empty_mcp_result');
   });
 
   it('restarts agent runtime and retries once after quota-class failure', async () => {

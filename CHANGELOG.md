@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-04-08
+### PROBLEM SOLVED
+- **10:15** Session `69d5ef3592a1eba4f34ab278` still leaked garbage-detected chunks into transcript/operator surfaces, treated `valid_*` garbage-detector codes as actual garbage during `CREATE_TASKS` full recompute, and rebuilt raw text from legacy top-level fields only, so replay context could collapse to an empty under-context envelope.
+- **22:47** Empty-success `create_tasks` MCP replies were still being normalized into inferred no-task output, which hid a real agent/runtime failure behind `no_task_reason_missing` instead of surfacing an actionable failure signal.
+- **22:47** Manual transcript/categorization deletion could leave orphan visible message rows after the last active chunk was removed, and delete-event rollback semantics were still ambiguous.
+
+### FEATURE IMPLEMENTED
+- **22:47** Garbage-detected or fully deleted voice messages now become deleted content across backend and UI surfaces: transcript/categorization payloads, session read models, tab counters, and `CREATE_TASKS` raw-text builders all exclude those rows by default.
+- **22:47** `CREATE_TASKS` full recompute now reads canonical `transcription.text` / `transcription.segments`, preserves `valid_*` detector codes as non-garbage, and the agent contract explicitly requires a non-empty JSON object with machine-readable `no_task_decision` when there are no tasks.
+- **22:47** Empty-success MCP replies now fail fast as operational errors, and deleting the last active transcript/categorization content in a message cascades whole-message deletion with explicit metadata.
+
+### CHANGES
+- **10:15** Added the incident tracking/artifact bundle for `copilot-pptb` and its child issue fan-out:
+  - `.beads/issues.jsonl`
+  - `tmp/voice-investigation-artifacts/20260408T070238Z-69d5ef3592a1eba4f34ab278/index.{json,md}`
+  - `tmp/voice-investigation-artifacts/20260408T070238Z-69d5ef3592a1eba4f34ab278/69d5ef3592a1eba4f34ab278.{json,md}`
+  - `tmp/voice-investigation-artifacts/20260408T102848Z-69d5ef3592a1eba4f34ab278-postfix/index.{json,md}`
+  - `tmp/voice-investigation-artifacts/20260408T102848Z-69d5ef3592a1eba4f34ab278-postfix/69d5ef3592a1eba4f34ab278.{json,md}`
+- **22:47** Updated agent/runtime behavior:
+  - `agents/agent-cards/create_tasks.md`
+  - `backend/src/api/routes/voicebot/messageHelpers.ts`
+  - `backend/src/api/routes/voicebot/sessions.ts`
+  - `backend/src/services/voicebot/createTasksAgent.ts`
+  - `backend/src/voicebot_tgbot/ingressHandlers.ts`
+  - `backend/src/workers/voicebot/handlers/createTasksFromChunks.ts`
+  - `backend/src/workers/voicebot/handlers/transcribeHandler.ts`
+- **22:47** Updated frontend handling for deleted categorization rows and deleted-row typing:
+  - `app/src/components/voice/Categorization.tsx`
+  - `app/src/store/voiceBotStore.ts`
+  - `app/src/types/voice.ts`
+- **22:47** Added/updated regression coverage:
+  - `backend/__tests__/services/voicebot/createTasksAgentRecovery.test.ts`
+  - `backend/__tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.addTextParity.test.ts`
+  - `backend/__tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.categorizationChunkValidation.test.ts`
+  - `backend/__tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.deleteAndErrors.test.ts`
+  - `backend/__tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.sessionParity.test.ts`
+  - `backend/__tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts`
+  - `backend/__tests__/voicebot/workers/workerTranscribeHandler.test.ts`
+- **22:47** Updated closeout docs for the 2026-04-08 incident slice:
+  - `AGENTS.md`
+  - `README.md`
+  - `CHANGELOG.md`
+- **22:47** Verification:
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules --disable-warning=ExperimentalWarning --disable-warning=DEP0040' npx jest --runInBand __tests__/services/voicebot/createTasksAgentRecovery.test.ts __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.addTextParity.test.ts __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.categorizationChunkValidation.test.ts __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.deleteAndErrors.test.ts __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.sessionParity.test.ts __tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts __tests__/voicebot/workers/workerTranscribeHandler.test.ts`
+  - `cd app && npx jest --runInBand __tests__/voice/voiceSessionTabs.test.ts __tests__/voice/categorizationMetadataSignatureContract.test.ts __tests__/voice/categorizationColumnsContract.test.ts`
+  - `cd backend && npm run build`
+  - `cd app && npm run build`
+  - `git diff --check`
+  - lint status: blocked by pre-existing unrelated issues `copilot-x30z` and `copilot-jr1b`
+
 ## 2026-04-07
 ### PROBLEM SOLVED
 - **12:08** The incident wave for session `69d49daf094a4f1dd8741042` had live forensic evidence but no checked-in repo artifact linking the production symptom, affected session, and first-response issue trail.

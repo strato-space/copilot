@@ -12,6 +12,9 @@ type VoiceBotSegment = Record<string, unknown> & {
   start?: number | null;
   end?: number | null;
   is_deleted?: boolean;
+  deleted_at?: Date | string | null;
+  deletion_reason?: string | null;
+  deletion_note?: string | null;
 };
 
 type VoiceBotTranscription = Record<string, unknown> & {
@@ -35,16 +38,36 @@ type VoiceBotMessageDocument = Record<string, unknown> & {
   categorization?: unknown[];
   categorization_data?: unknown;
   processors_data?: Record<string, unknown>;
+  is_deleted?: boolean | string | number;
+  deleted_at?: Date | string | null;
+  deletion_reason?: string | null;
+  deletion_note?: string | null;
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object';
 
+export const VOICE_DELETION_REASONS = {
+  GARBAGE_DETECTED: 'garbage_detected',
+  USER_DECISION: 'user_decision',
+  CASCADE_EMPTY_MESSAGE: 'cascade_empty_message',
+} as const;
+
+export type VoiceDeletionReason =
+  (typeof VOICE_DELETION_REASONS)[keyof typeof VOICE_DELETION_REASONS];
+
 export const generateSegmentOid = (): string => `ch_${new ObjectId().toHexString()}`;
+
+export const isMarkedDeleted = (value: unknown): boolean => {
+  if (value === true) return true;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+  return false;
+};
 
 export const normalizeSegmentsText = (segments: VoiceBotSegment[] | undefined): string => {
   if (!Array.isArray(segments)) return '';
   return segments
-    .filter((seg) => !seg?.is_deleted)
+    .filter((seg) => !isMarkedDeleted(seg?.is_deleted))
     .map((seg) => (typeof seg?.text === 'string' ? seg.text.trim() : ''))
     .filter(Boolean)
     .join(' ');
@@ -583,6 +606,105 @@ const toNullableTrimmedString = (value: unknown): string | null => {
   return trimmed || null;
 };
 
+export const markVoiceSegmentDeleted = ({
+  segment,
+  deletedAt,
+  deletionReason,
+  deletionNote,
+}: {
+  segment: Record<string, unknown>;
+  deletedAt: Date;
+  deletionReason: VoiceDeletionReason;
+  deletionNote?: string | null;
+}): Record<string, unknown> => ({
+  ...segment,
+  is_deleted: true,
+  deleted_at: deletedAt,
+  deletion_reason: deletionReason,
+  deletion_note: toNullableTrimmedString(deletionNote),
+});
+
+export const buildVoiceMessageDeletionFields = ({
+  deletedAt,
+  deletionReason,
+  deletionNote,
+}: {
+  deletedAt: Date;
+  deletionReason: VoiceDeletionReason;
+  deletionNote?: string | null;
+}): Record<string, unknown> => ({
+  is_deleted: true,
+  deleted_at: deletedAt,
+  deletion_reason: deletionReason,
+  deletion_note: toNullableTrimmedString(deletionNote),
+});
+
+export const extractActiveMessageText = (message: Record<string, unknown> | null | undefined): string => {
+  if (!message || isMarkedDeleted(message.is_deleted)) return '';
+
+  const transcription = isObject(message.transcription)
+    ? (message.transcription as VoiceBotTranscription)
+    : null;
+  const segments = Array.isArray(transcription?.segments)
+    ? (transcription?.segments as VoiceBotSegment[])
+    : [];
+  if (segments.length > 0) {
+    return normalizeSegmentsText(segments);
+  }
+
+  const transcriptionText = toNullableTrimmedString(transcription?.text);
+  if (transcriptionText) return transcriptionText;
+
+  const topLevelTranscriptionText = toNullableTrimmedString(message.transcription_text);
+  if (topLevelTranscriptionText) return topLevelTranscriptionText;
+
+  return toNullableTrimmedString(message.text) ?? '';
+};
+
+const stripDeletedTranscriptContentForApi = (
+  inputMessage: Record<string, unknown>
+): Record<string, unknown> => {
+  if (!isObject(inputMessage)) return {};
+
+  const message = { ...inputMessage };
+  const transcription = isObject(message.transcription)
+    ? ({ ...(message.transcription as Record<string, unknown>) } as VoiceBotTranscription)
+    : null;
+  const rawSegments = Array.isArray(transcription?.segments)
+    ? [...(transcription?.segments as VoiceBotSegment[])]
+    : [];
+  const visibleSegments = rawSegments.filter((segment) => !isMarkedDeleted(segment?.is_deleted));
+  const rawChunks = Array.isArray(message.transcription_chunks)
+    ? [...(message.transcription_chunks as Array<Record<string, unknown>>)]
+    : [];
+  const visibleChunks = rawChunks.filter((chunk) => !isMarkedDeleted(chunk?.is_deleted));
+
+  if (rawSegments.length === visibleSegments.length && rawChunks.length === visibleChunks.length) {
+    return message;
+  }
+
+  const normalizedText = visibleSegments.length > 0
+    ? normalizeSegmentsText(visibleSegments)
+    : visibleChunks
+        .map((chunk) => toNullableTrimmedString(chunk.text))
+        .filter((value): value is string => Boolean(value))
+        .join(' ');
+
+  if (transcription) {
+    message.transcription = {
+      ...transcription,
+      segments: visibleSegments,
+      text: normalizedText,
+    };
+  }
+  if (Array.isArray(message.transcription_chunks)) {
+    message.transcription_chunks = visibleChunks;
+  }
+  message.transcription_text = normalizedText;
+  message.text = normalizedText;
+  return message;
+};
+
 const parseAttachmentIndex = (value: unknown, attachmentCount: number): number | null => {
   const numeric = Number(value);
   if (!Number.isInteger(numeric) || numeric < 0) return null;
@@ -755,7 +877,7 @@ const deriveSpeechBearingAssessment = ({
 export const normalizeMessageAttachmentTranscriptionContract = (
   inputMessage: Record<string, unknown>
 ): Record<string, unknown> => {
-  const message = isObject(inputMessage) ? inputMessage : {};
+  const message = stripDeletedTranscriptContentForApi(isObject(inputMessage) ? inputMessage : {});
   const rawAttachments = Array.isArray(message.attachments)
     ? message.attachments.filter((item): item is Record<string, unknown> => isObject(item))
     : [];

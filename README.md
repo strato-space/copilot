@@ -185,7 +185,9 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - OpenAI recovery-retry semantics are unified across transcribe/categorize/processing loop repair: both `insufficient_quota` and `invalid_api_key` are treated as retryable states with canonical retry metadata and operator-facing diagnostics.
 - `POST /api/voicebot/transcription/retry` is message-driven: it re-arms session messages for transcription (`to_transcribe=true`, attempts reset, retry delay cleared), clears session-level transcription error markers, and returns processing-loop mode diagnostics (`processing_mode`, `messages_marked_for_retry`).
 - Post-transcribe garbage detection now runs in worker flow (`backend/src/services/voicebot/transcriptionGarbageDetector.ts`, default `gpt-5.4-nano`): garbage chunks are marked via `garbage_detection`, categorization/`CREATE_TASKS` enqueue is skipped, and a `transcription_garbage_detected` session-log event is emitted.
+- Garbage-detected or fully deleted voice messages now become deleted content by default: worker/ingress paths stamp `is_deleted` + deletion metadata, session/API transcript projections strip deleted segments/chunks, and operator-facing transcript/categorization/count surfaces exclude those rows instead of rendering them as normal speech.
 - The garbage detector now has a local repeated-ngram shortcut for obvious silence hallucinations before it falls back to the LLM classifier; this path should remain precision-first and covered by regression tests.
+- `CREATE_TASKS` replay now rebuilds transcript context from canonical `transcription.text` / `transcription.segments`, preserves `valid_*` garbage-detector codes as non-garbage, and treats empty-success MCP replies as explicit operational failures instead of silently normalizing them into inferred no-task output.
 - Transcription fallback rows with `transcription_error` render metadata signature footer (`mm:ss - mm:ss, file.webm, HH:mm:ss`) and are replaced in place when realtime `message_update` brings transcript text.
 - Transcription metadata signatures and fallback footers normalize UTF-8-as-Latin1 mojibake filenames from message/attachment metadata before rendering file labels.
 - The default Transcription table view intentionally hides raw attachment projection/debug metadata; metadata signatures stay below the text block and only actionable skip/error state belongs inline with the operator-facing body text.
@@ -253,6 +255,7 @@ This is the smallest set of changes agents must keep in mind when touching Voice
 - Categorization rows support Copy/Edit/Delete actions via backend routes `POST /api/voicebot/edit_categorization_chunk` and `POST /api/voicebot/delete_categorization_chunk`.
 - Categorization mutation APIs emit realtime `message_update` + `session_update`, and return deterministic validation/runtime errors (`invalid_row_oid`, `message_session_mismatch`, `ambiguous_row_locator`, `row_already_deleted`, etc.).
 - Deleting the last active categorization row cascades deletion of the linked transcript segment with compensating rollback when log persistence fails.
+- Deleting the last active transcript/categorization content in a message now marks the whole message as deleted with explicit deletion metadata; phase-1 delete events are destructive and no longer exposed through `rollback_event`.
 - Image attachments in categorization are rendered only in the Materials column; image-only blocks remain visible without image-as-text rows.
 - Session-scoped taskflow parity is now canonical across backend + Voice UI + mcp@voice:
   - backend route `POST /api/voicebot/session_tasks` exposes canonical `Draft/Ready+/Codex` buckets only (no lowercase aliases/fallback), with draft reads served as `{ session_id, bucket: 'Draft' }`,
@@ -594,6 +597,13 @@ Rule for updates:
 - Keep this section synchronized with `.desloppify/state-typescript.json` triage notes whenever `desloppify` scan results are refreshed.
 
 ## Session closeout update
+- Close-session refresh (2026-04-08 22:47):
+  - Continued forensic repair wave for `copilot-pptb`; the landed code directly covers child defects `copilot-53z5`, `copilot-kso7`, and the deleted-row UI/data path behind `copilot-ryij`, while `copilot-amhu` / `copilot-mj78` remain open until post-deploy/live agent verification is complete.
+  - Hardened the deleted-garbage contract end-to-end: garbage-detected ingress/transcribe rows are now marked deleted, session/read-model normalization strips deleted transcript content, and deleting the last active transcript/categorization row cascades whole-message deletion with explicit metadata.
+  - `CREATE_TASKS` full recompute now reads canonical nested transcript payloads, preserves `valid_*` detector codes as non-garbage, and fails fast on empty-success MCP payloads instead of silently collapsing them into empty inferred results.
+  - Added/accepted forensic artifacts for session `69d5ef3592a1eba4f34ab278`: `tmp/voice-investigation-artifacts/20260408T070238Z-69d5ef3592a1eba4f34ab278/*` and `tmp/voice-investigation-artifacts/20260408T102848Z-69d5ef3592a1eba4f34ab278-postfix/*`.
+  - Validation passed: focused backend Jest (`7/7` suites, `98/98` tests), focused app Jest (`3/3` suites, `9/9` tests), `cd backend && npm run build`, `cd app && npm run build`, and `git diff --check`.
+  - Full lint remains blocked by pre-existing unrelated issues already tracked in `bd`: backend `copilot-x30z` (`taskAttachments.ts`, `notifyHandler.ts`) and app `copilot-jr1b` (`AgentsOpsPage.tsx`).
 - Close-session refresh (2026-04-07 18:58):
   - Closed the incident fix wave for `copilot-7fqt`, `copilot-bi99`, `copilot-w5sh`, `copilot-6ony`, and planning issue `copilot-yk0w`.
   - Hardened create_tasks against garbage-polluted session context: preferred-language sampling, reduced retry context, and full-recompute raw-text assembly now all share `isCreateTasksMessageGarbageFlagged(...)`, and semantically empty successful MCP responses converge to the existing inferred `no_task_decision` contract instead of `create_tasks_empty_mcp_result`.

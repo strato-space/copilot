@@ -475,11 +475,12 @@ describe('VoiceBot sessions runtime compatibility (runtime-tag agnostic)', () =>
       .send({ session_id: sessionId.toHexString() });
 
     expect(response.status).toBe(200);
-    const returnedRows = response.body.session_messages?.[0]?.categorization ?? [];
-    expect(returnedRows).toEqual([]);
+    expect(response.body.session_messages).toEqual([]);
     expect(messageUpdateOne).toHaveBeenCalledTimes(1);
     const [, updateDoc] = messageUpdateOne.mock.calls[0] as [Record<string, unknown>, { $set?: Record<string, unknown> }];
     expect(updateDoc.$set?.categorization).toEqual([]);
+    expect(updateDoc.$set?.is_deleted).toBe(true);
+    expect(updateDoc.$set?.deletion_reason).toBe('cascade_empty_message');
   });
 
 });

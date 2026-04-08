@@ -497,12 +497,13 @@ const transformVoiceBotMessagesToGroups = (voiceBotMessages: VoiceBotMessage[]):
                 patt: typeof catRecord.new_pattern_detected === 'string' ? catRecord.new_pattern_detected : '',
                 flag: typeof catRecord.quality_flag === 'string' ? catRecord.quality_flag : '',
                 keywords: typeof catRecord.topic_keywords === 'string' ? catRecord.topic_keywords : '',
+                is_deleted: catRecord.is_deleted === true,
                 source_file_name: sourceFileName || undefined,
                 message_timestamp: msg.message_timestamp,
                 message_id: primaryMessageRef || undefined,
                 message_db_id: messageDbId || undefined,
             };
-        }).filter((row) => typeof row.text === 'string' && row.text.trim().length > 0);
+        }).filter((row) => row.is_deleted !== true && typeof row.text === 'string' && row.text.trim().length > 0);
 
         let rows: VoiceMessageRow[] = categorizationRows;
         if (rows.length === 0) {

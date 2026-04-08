@@ -21,7 +21,11 @@ import { buildCanonicalSessionLink, getPublicInterfaceOrigin } from './sessionTe
 import { ensureUniqueTaskPublicId } from '../services/taskPublicId.js';
 import { buildCanonicalTaskSourceRef } from '../services/taskSourceRef.js';
 import { enqueueTranscribeJob } from '../services/voicebot/transcriptionQueue.js';
-import { buildCanonicalReadyTextTranscription } from '../api/routes/voicebot/messageHelpers.js';
+import {
+  buildCanonicalReadyTextTranscription,
+  buildVoiceMessageDeletionFields,
+  VOICE_DELETION_REASONS,
+} from '../api/routes/voicebot/messageHelpers.js';
 import {
   detectGarbageTranscription,
   type GarbageDetectionResult,
@@ -1433,6 +1437,11 @@ export const handleTextIngress = async ({
             skipped_reason: 'garbage_detected',
           },
         },
+        ...buildVoiceMessageDeletionFields({
+          deletedAt: new Date(nowTs),
+          deletionReason: VOICE_DELETION_REASONS.GARBAGE_DETECTED,
+          deletionNote: garbageDetection.reason || garbageDetection.code || null,
+        }),
       }
       : {}),
     ...(parsed.data.speaker ? { speaker: parsed.data.speaker } : {}),
@@ -1923,6 +1932,11 @@ export const handleAttachmentIngress = async ({
             skipped_reason: 'garbage_detected',
           },
         },
+        ...buildVoiceMessageDeletionFields({
+          deletedAt: new Date(nowTs),
+          deletionReason: VOICE_DELETION_REASONS.GARBAGE_DETECTED,
+          deletionNote: garbageDetection.reason || garbageDetection.code || null,
+        }),
       }
       : {}),
     primary_payload_media_kind: primaryProjection.primary_payload_media_kind,

@@ -35,6 +35,10 @@ import { buildCanonicalSessionLink } from '../../../voicebot_tgbot/sessionTelegr
 import { buildCanonicalTaskSourceRef } from '../../../services/taskSourceRef.js';
 import { insertSessionLogEvent } from '../../../services/voicebotSessionLog.js';
 import {
+  buildVoiceMessageDeletionFields,
+  VOICE_DELETION_REASONS,
+} from '../../../api/routes/voicebot/messageHelpers.js';
+import {
   normalizeErrorCode,
   resolveOpenAiRecoveryErrorCode,
 } from './shared/openAiErrors.js';
@@ -2340,6 +2344,14 @@ export const handleTranscribeJob = async (
       messageUpdateSet['processors_data.categorization.is_processed'] = true;
       messageUpdateSet['processors_data.categorization.is_finished'] = true;
       messageUpdateSet['processors_data.categorization.skipped_reason'] = 'garbage_detected';
+      Object.assign(
+        messageUpdateSet,
+        buildVoiceMessageDeletionFields({
+          deletedAt: new Date(nowTs),
+          deletionReason: VOICE_DELETION_REASONS.GARBAGE_DETECTED,
+          deletionNote: garbageDetection.reason || garbageDetection.code || null,
+        })
+      );
     }
 
     const commitResult = await db.collection(VOICEBOT_COLLECTIONS.MESSAGES).updateOne(
@@ -2445,6 +2457,8 @@ export const handleTranscribeJob = async (
           metadata: {
             detector: messageUpdateSet.garbage_detection as Record<string, unknown>,
             drop_downstream: true,
+            message_deleted: true,
+            deletion_reason: VOICE_DELETION_REASONS.GARBAGE_DETECTED,
           },
         });
       } catch (logError) {

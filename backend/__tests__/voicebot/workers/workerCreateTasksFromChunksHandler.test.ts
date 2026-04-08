@@ -186,12 +186,20 @@ describe('handleCreateTasksFromChunksJob', () => {
         toArray: async () => [
           {
             _id: new ObjectId(),
-            transcription_text: 'Keep this executor-ready transcript.',
+            transcription: {
+              text: 'Keep this executor-ready transcript.',
+            },
             garbage_detected: false,
+            garbage_detection: {
+              is_garbage: false,
+              code: 'valid_speech',
+            },
           },
           {
             _id: new ObjectId(),
-            transcription_text: 'Drop this garbage loop.',
+            transcription: {
+              text: 'Drop this garbage loop.',
+            },
             garbage_detected: true,
             garbage_detection: {
               is_garbage: true,
@@ -200,10 +208,12 @@ describe('handleCreateTasksFromChunksJob', () => {
           },
           {
             _id: new ObjectId(),
-            text: 'Legacy clean text fallback.',
+            transcription: {
+              text: 'Legacy clean text fallback.',
+            },
             garbage_detection: {
               is_garbage: false,
-              code: 'ok',
+              code: 'valid_speech_ru',
             },
           },
         ],
