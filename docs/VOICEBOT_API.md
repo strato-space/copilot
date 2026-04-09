@@ -93,6 +93,7 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
 - `create_tasks` is now the canonical composite analyzer and returns:
   - `scholastic_review_md`
   - `task_draft`
+  - `link_existing_tasks`
   - `enrich_ready_task_comments`
   - `session_name` (target title shape: 5-12 words)
   - `project_id`
@@ -104,9 +105,15 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
   - `voice.session_task_counts(...)`
   - `voice.session_tasks(..., bucket="Draft")`
   - `voice.crm_tickets(session_id=...)`
-- `voice.crm_tickets(project_id=project_id, include_archived=false, mode="table", from_date=..., to_date=...)` with a bounded project window (`VOICEBOT_PROJECT_CRM_LOOKBACK_DAYS`, default `14`, backend clamp `1..30`)
+- `voice.crm_tickets(project_id=project_id, statuses="DRAFT_10", response_mode="detail", include_archived=false, draft_horizon_days=14)` for project Draft context
+- `voice.crm_tickets(project_id=project_id, statuses="READY_10,PROGRESS_10,REVIEW_10,DONE_10", response_mode="detail", include_archived=false)` for active non-draft project context
 - If `project_id` exists, the agent must also run a read-only shell entrypoint-read pass in allowed roots (`/home/strato-space/copilot`, `/home/strato-space/mediagen`) by reading `AGENTS.md` and `README.md` before final draft materialization; root-wide `ls/find/rg` inventory is not part of the contract.
-- For session-centric agents like `create_tasks`, project-wide `voice.crm_tickets(project_id=...)` must stay bounded by `from_date` / `to_date`; lookback is controlled by `VOICEBOT_PROJECT_CRM_LOOKBACK_DAYS` (default `14`, backend clamp `1..30`). Unbounded project CRM is not part of the active contract.
+- Depth split for `create_tasks` is now explicit:
+  - project Draft context stays bounded to the current `14d` window (`draft_horizon_days=14`)
+  - active non-draft project context reads full depth, including `DONE_10`
+- `voice.session_tasks(..., bucket="Draft")` remains the canonical session Draft baseline.
+- `voice.crm_tickets(session_id=...)` remains the accepted/session-linked reporting surface and must not be used as a Draft baseline substitute.
+- MCP mutation helpers such as `create_session_tasks`, `create_session_codex_tasks`, and `delete_session_possible_task` are not part of the create_tasks prompt contract in this version.
 - Draft markdown contract is plural-heading canonical: `## description`, `## object_locators`, `## expected_results`, `## acceptance_criteria`, `## evidence_links`, `## executor_routing_hints`, `## open_questions`.
 - Only `name/priority/project/task_type/performer` stay as separate UI fields; all other draft semantics live in one markdown surface `task.description`.
 - Under `## open_questions`, each unresolved item must use explicit chunks `Question:` + `Answer:` (`TBD` is valid until confirmed).
@@ -115,10 +122,12 @@ Scope: `/api/voicebot/*` endpoints used by `/voice`, WebRTC FAB, and migration p
   - session stores only `review_md_text` from `scholastic_review_md` as analyzer markdown output (no standalone `generate_session_title` card path),
   - `session_name` is consumed as the title-generation signal in the same composite flow (no standalone title analyzer card),
   - `task_draft` remains persisted only as canonical Draft rows in `automation_tasks`.
-- Ready+/Codex comment enrichment is comment-first and immediate:
+- Ready+/accepted enrichment is split and immediate:
+  - `link_existing_tasks` is a relation-operation output and must resolve through a deterministic linkage-apply helper; it is not comment text and not a Draft rewrite,
   - `enrich_ready_task_comments` output is written right after draft persistence,
   - inserts are deterministically deduped against in-batch duplicates and existing `automation_comments`,
-  - boundary remains strict: no automatic rewrite of existing Ready+ `name` / `description`.
+  - boundary remains strict: no automatic rewrite of existing Ready+ `name` / `description`,
+  - Codex-note mutation is out of scope for this version of the create_tasks prompt contract.
 - For voice-derived draft reads, callers may optionally pass:
   - `draft_horizon_days`
 - If omitted, canonical `DRAFT_10` draft baseline remains unbounded.

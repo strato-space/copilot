@@ -11,6 +11,7 @@ const getDbMock = jest.fn();
 const getVoicebotQueuesMock = jest.fn();
 const runCreateTasksAgentMock = jest.fn();
 const persistPossibleTasksForSessionMock = jest.fn();
+const applyCreateTasksCompositeLinkSideEffectsMock = jest.fn();
 const applyCreateTasksCompositeCommentSideEffectsMock = jest.fn();
 const CREATE_TASKS_COMPOSITE_META_KEY = '__create_tasks_composite_meta';
 const {
@@ -43,6 +44,10 @@ jest.unstable_mockModule('../../../src/services/voicebot/createTasksCompositeCom
   applyCreateTasksCompositeCommentSideEffects: applyCreateTasksCompositeCommentSideEffectsMock,
 }));
 
+jest.unstable_mockModule('../../../src/services/voicebot/createTasksCompositeLinkSideEffects.js', () => ({
+  applyCreateTasksCompositeLinkSideEffects: applyCreateTasksCompositeLinkSideEffectsMock,
+}));
+
 const { handleCreateTasksFromChunksJob } = await import(
   '../../../src/workers/voicebot/handlers/createTasksFromChunks.js'
 );
@@ -53,7 +58,14 @@ describe('handleCreateTasksFromChunksJob', () => {
     getVoicebotQueuesMock.mockReset();
     runCreateTasksAgentMock.mockReset();
     persistPossibleTasksForSessionMock.mockReset();
+    applyCreateTasksCompositeLinkSideEffectsMock.mockReset();
     applyCreateTasksCompositeCommentSideEffectsMock.mockReset();
+    applyCreateTasksCompositeLinkSideEffectsMock.mockResolvedValue({
+      insertedLinkages: 0,
+      dedupedLinkages: 0,
+      unresolvedLinkLookupIds: [],
+      rejectedMalformedLinkLookupIds: [],
+    });
     applyCreateTasksCompositeCommentSideEffectsMock.mockResolvedValue({
       insertedEnrichmentComments: 0,
       dedupedEnrichmentComments: 0,
@@ -103,6 +115,7 @@ describe('handleCreateTasksFromChunksJob', () => {
     (generatedTasks as unknown as Record<string, unknown>)[CREATE_TASKS_COMPOSITE_META_KEY] = {
       summary_md_text: 'Summary body',
       scholastic_review_md: 'Review body',
+      link_existing_tasks: [],
       session_name: 'Demo session with generated title',
       project_id: generatedProjectId,
     };
@@ -135,6 +148,7 @@ describe('handleCreateTasksFromChunksJob', () => {
         sessionName: 'Demo session with generated title',
         defaultProjectId: generatedProjectId,
         refreshMode: 'full_recompute',
+        allowProjectSemanticReuse: false,
       })
     );
     expect(sessionsUpdateOne).toHaveBeenNthCalledWith(
@@ -164,10 +178,121 @@ describe('handleCreateTasksFromChunksJob', () => {
         }),
       })
     );
+    expect(applyCreateTasksCompositeLinkSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: sessionId.toString(),
+        session: expect.objectContaining({
+          session_name: 'Demo session with generated title',
+          project_id: generatedProjectId,
+        }),
+        drafts: [],
+      })
+    );
     expect(applyCreateTasksCompositeCommentSideEffectsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: sessionId.toString(),
+        session: expect.objectContaining({
+          session_name: 'Demo session with generated title',
+          project_id: generatedProjectId,
+        }),
         drafts: undefined,
+      })
+    );
+  });
+
+  it('does not emit no_task_decision when link/comment side effects exist without draft rows', async () => {
+    const sessionId = new ObjectId();
+    const generatedProjectId = new ObjectId().toString();
+    const sessionsFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      session_name: 'Original worker session',
+      project_id: 'proj-1',
+      user_id: 'user-1',
+    }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const eventsAdd = jest.fn(async () => ({ id: 'event-job' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.EVENTS]: { add: eventsAdd },
+    });
+
+    const generatedTasks: Array<Record<string, unknown>> = [];
+    (generatedTasks as unknown as Record<string, unknown>)[CREATE_TASKS_COMPOSITE_META_KEY] = {
+      summary_md_text: 'Summary body',
+      scholastic_review_md: 'Review body',
+      task_draft: [],
+      link_existing_tasks: [{ lookup_id: 'ready-task-1', dialogue_reference: 'voice/session/x#1' }],
+      enrich_ready_task_comments: [{ lookup_id: 'ready-task-1', comment: 'Need follow-up', dialogue_reference: 'voice/session/x#1' }],
+      session_name: 'Link-only worker session',
+      project_id: generatedProjectId,
+      no_task_decision: {
+        code: 'explicit_zero',
+        reason: 'should be suppressed by side effects',
+        evidence: ['agent'],
+        inferred: false,
+        source: 'agent_explicit',
+      },
+    };
+    runCreateTasksAgentMock.mockResolvedValue(generatedTasks);
+    persistPossibleTasksForSessionMock.mockResolvedValue({
+      items: [],
+      rows: [],
+      removedRowIds: [],
+    });
+
+    const result = await handleCreateTasksFromChunksJob({
+      session_id: sessionId.toString(),
+      chunks_to_process: [],
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      session_id: sessionId.toString(),
+      tasks_count: 0,
+      skipped: true,
+      reason: 'no_tasks',
+    });
+    expect(result.no_task_decision).toBeUndefined();
+    expect(applyCreateTasksCompositeLinkSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session: expect.objectContaining({
+          session_name: 'Link-only worker session',
+          project_id: generatedProjectId,
+        }),
+        drafts: [{ lookup_id: 'ready-task-1', dialogue_reference: 'voice/session/x#1' }],
+      })
+    );
+    expect(applyCreateTasksCompositeCommentSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session: expect.objectContaining({
+          session_name: 'Link-only worker session',
+          project_id: generatedProjectId,
+        }),
+        drafts: [{ lookup_id: 'ready-task-1', comment: 'Need follow-up', dialogue_reference: 'voice/session/x#1' }],
+      })
+    );
+    expect(sessionsUpdateOne).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ _id: sessionId }),
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          'processors_data.CREATE_TASKS.is_processing': false,
+          'processors_data.CREATE_TASKS.is_processed': true,
+        }),
+        $unset: expect.objectContaining({
+          'processors_data.CREATE_TASKS.no_task_decision': 1,
+        }),
       })
     );
   });

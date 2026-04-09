@@ -788,11 +788,13 @@ const listPossibleTaskSaveMatchDocs = async ({
   sessionId,
   projectId,
   rowIds,
+  allowProjectSemanticReuse = true,
 }: {
   db: Db;
   sessionId: string;
   projectId: string;
   rowIds: string[];
+  allowProjectSemanticReuse?: boolean;
 }): Promise<{
   sessionDocs: Array<Record<string, unknown>>;
   matchDocs: Array<Record<string, unknown>>;
@@ -816,17 +818,21 @@ const listPossibleTaskSaveMatchDocs = async ({
       )
     : [];
 
-  const projectSemanticCursor = toSortedTaskCursor(
-    db.collection(COLLECTIONS.TASKS),
-    buildProjectScopedPossibleTaskSemanticRuntimeQuery({ projectId }),
-    { projection: POSSIBLE_TASK_MASTER_PROJECTION }
-  );
-  const projectSemanticDocs = projectSemanticCursor
-    ? await filterValidPossibleTaskMasterDocs(
-        await projectSemanticCursor.toArray(),
-        `persistPossibleTasksForSession(projectSemanticDocs:${projectId})`,
-        'candidate-pool-loose'
-      )
+  const projectSemanticDocs = allowProjectSemanticReuse
+    ? await (async (): Promise<Array<Record<string, unknown>>> => {
+        const projectSemanticCursor = toSortedTaskCursor(
+          db.collection(COLLECTIONS.TASKS),
+          buildProjectScopedPossibleTaskSemanticRuntimeQuery({ projectId }),
+          { projection: POSSIBLE_TASK_MASTER_PROJECTION }
+        );
+        return projectSemanticCursor
+          ? await filterValidPossibleTaskMasterDocs(
+              await projectSemanticCursor.toArray(),
+              `persistPossibleTasksForSession(projectSemanticDocs:${projectId})`,
+              'candidate-pool-loose'
+            )
+          : [];
+      })()
     : [];
 
   const mergedByKey = new Map<string, Record<string, unknown>>();
@@ -1353,6 +1359,7 @@ export const persistPossibleTasksForSession = async ({
   createdById,
   createdByName,
   refreshMode = 'full_recompute',
+  allowProjectSemanticReuse = true,
 }: {
   db: Db;
   sessionId: string;
@@ -1362,6 +1369,7 @@ export const persistPossibleTasksForSession = async ({
   createdById?: string;
   createdByName?: string;
   refreshMode?: PossibleTasksRefreshMode;
+  allowProjectSemanticReuse?: boolean;
 }): Promise<{
   items: Array<Record<string, unknown>>;
   removedRowIds: string[];
@@ -1378,6 +1386,7 @@ export const persistPossibleTasksForSession = async ({
     sessionId,
     projectId: defaultProjectId || '',
     rowIds: incomingRowIds,
+    allowProjectSemanticReuse,
   });
 
   const newDocs: Array<Record<string, unknown>> = [];
@@ -1424,7 +1433,7 @@ export const persistPossibleTasksForSession = async ({
         break;
       }
     }
-    if (!existingDoc && defaultProjectId) {
+    if (!existingDoc && defaultProjectId && allowProjectSemanticReuse) {
       existingDoc = selectProjectScopedSemanticReuseDoc({
         incomingTask: rawTask,
         projectId: defaultProjectId,

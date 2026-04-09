@@ -319,6 +319,99 @@ describe('persistPossibleTasksForSession', () => {
     );
   });
 
+  it('skips project-scoped semantic reuse when explicitly disabled for prompt-authoritative persistence', async () => {
+    const existingDocId = new ObjectId();
+    const previousSessionId = new ObjectId().toHexString();
+    const tasksCollection = buildTasksCollection([
+      {
+        _id: existingDocId,
+        row_id: 'draft-canonical-openclaw',
+        id: 'draft-canonical-openclaw',
+        name: 'Развернуть OpenClaw или выбранный оркестратор на Mac mini для тестов',
+        description: 'Поднять окружение на mac mini для smoke и perf проверки',
+        project_id: 'proj-1',
+        task_status: TASK_STATUSES.DRAFT_10,
+        source_kind: 'voice_possible_task',
+        external_ref: `https://copilot.stratospace.fun/voice/session/${previousSessionId}`,
+        source_data: {
+          session_id: previousSessionId,
+          row_id: 'draft-canonical-openclaw',
+          voice_sessions: [
+            {
+              session_id: previousSessionId,
+              session_name: 'Prev session',
+              project_id: 'proj-1',
+              created_at: '2026-03-20T10:00:00.000Z',
+              role: 'primary',
+            },
+          ],
+        },
+        discussion_sessions: [
+          {
+            session_id: previousSessionId,
+            session_name: 'Prev session',
+            project_id: 'proj-1',
+            created_at: '2026-03-20T10:00:00.000Z',
+            role: 'primary',
+          },
+        ],
+        created_at: new Date('2026-03-20T10:00:00.000Z'),
+        updated_at: new Date('2026-03-20T10:00:00.000Z'),
+      },
+    ]);
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) return tasksCollection;
+        throw new Error(`Unexpected collection: ${name}`);
+      },
+    } as unknown as Parameters<typeof persistPossibleTasksForSession>[0]['db'];
+
+    const result = await persistPossibleTasksForSession({
+      db: dbStub,
+      sessionId,
+      sessionName: 'Current session',
+      defaultProjectId: 'proj-1',
+      taskItems: [
+        {
+          row_id: 'incoming-paraphrased-row',
+          id: 'incoming-paraphrased-row',
+          name: 'Развернуть OpenClaw на Mac mini для тестов оркестратора',
+          description: 'Нужен тестовый разворот OpenClaw/оркестратора на mac mini',
+          project_id: 'proj-1',
+        },
+      ],
+      refreshMode: 'full_recompute',
+      allowProjectSemanticReuse: false,
+    });
+
+    expect(result.removedRowIds).toEqual([]);
+    expect(result.items).toHaveLength(1);
+    const persistedRowId = expectCanonicalTaskIdentity(result.items[0]);
+    expect(persistedRowId).not.toBe(existingDocId.toHexString());
+
+    const persistedDocs = tasksCollection.snapshot();
+    expect(persistedDocs).toHaveLength(2);
+    expect(persistedDocs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: existingDocId,
+          row_id: 'draft-canonical-openclaw',
+          id: 'draft-canonical-openclaw',
+        }),
+        expect.objectContaining({
+          row_id: persistedRowId,
+          id: persistedRowId,
+          name: 'Развернуть OpenClaw на Mac mini для тестов оркестратора',
+          project_id: 'proj-1',
+          source_data: expect.objectContaining({
+            session_id: sessionId,
+          }),
+        }),
+      ])
+    );
+  });
+
   it('does not reuse semantic match across different projects', async () => {
     const existingDocId = new ObjectId();
     const previousSessionId = new ObjectId().toHexString();

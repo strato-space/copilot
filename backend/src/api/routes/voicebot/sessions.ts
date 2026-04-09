@@ -126,6 +126,7 @@ import {
     resolveCreateTasksCompositeSessionContext,
 } from '../../../services/voicebot/createTasksCompositeSessionState.js';
 import { applyCreateTasksCompositeCommentSideEffects } from '../../../services/voicebot/createTasksCompositeCommentSideEffects.js';
+import { applyCreateTasksCompositeLinkSideEffects } from '../../../services/voicebot/createTasksCompositeLinkSideEffects.js';
 import {
     filterVoiceDerivedDraftsByRecency,
     parseDraftHorizonDays,
@@ -6124,6 +6125,7 @@ router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
             createdById: performer?._id?.toHexString?.() ?? '',
             createdByName: String(performer?.real_name || performer?.name || '').trim(),
             refreshMode: 'full_recompute',
+            allowProjectSemanticReuse: false,
         });
 
         let summarySaved = false;
@@ -6135,24 +6137,44 @@ router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
         let insertedCodexEnrichmentNotes = 0;
         let dedupedCodexEnrichmentNotes = 0;
         let unresolvedEnrichmentLookupIds: string[] = [];
+        let insertedLinkages = 0;
+        let dedupedLinkages = 0;
+        let unresolvedLinkLookupIds: string[] = [];
+        let rejectedMalformedLinkLookupIds: string[] = [];
 
         if (createTasksCompositeMeta) {
             summarySaved = Boolean(resolvedContext.summaryMdText);
             reviewSaved = Boolean(resolvedContext.reviewMdText);
             titleUpdated = resolvedContext.titleUpdated;
             projectUpdated = resolvedContext.projectUpdated;
+            const compositeEffectiveSession = {
+                ...sessionRecord,
+                ...(resolvedContext.effectiveSessionName ? { session_name: resolvedContext.effectiveSessionName } : {}),
+                ...(resolvedContext.effectiveProjectId ? { project_id: resolvedContext.effectiveProjectId } : {}),
+            };
             await applyCreateTasksCompositeSessionPatch({
                 db,
                 sessionFilter: { _id: new ObjectId(sessionId) },
                 resolvedContext,
             });
 
+            const linkSideEffects = await applyCreateTasksCompositeLinkSideEffects({
+                db,
+                sessionId,
+                session: compositeEffectiveSession,
+                drafts: createTasksCompositeMeta.link_existing_tasks,
+            });
+            insertedLinkages = linkSideEffects.insertedLinkages;
+            dedupedLinkages = linkSideEffects.dedupedLinkages;
+            unresolvedLinkLookupIds = linkSideEffects.unresolvedLinkLookupIds;
+            rejectedMalformedLinkLookupIds = linkSideEffects.rejectedMalformedLinkLookupIds;
+
             const actorId = String(vreq.user?.userId || '').trim() || toIdString(performer?._id) || '';
             const actorName = String(vreq.user?.name || performer?.real_name || performer?.name || '').trim();
             const commentSideEffects = await applyCreateTasksCompositeCommentSideEffects({
                 db,
                 sessionId,
-                session: sessionRecord,
+                session: compositeEffectiveSession,
                 drafts: createTasksCompositeMeta.enrich_ready_task_comments,
                 ...(actorId ? { actorId } : {}),
                 ...(actorName ? { actorName } : {}),
@@ -6163,10 +6185,18 @@ router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
             dedupedCodexEnrichmentNotes = commentSideEffects.dedupedCodexEnrichmentNotes;
             unresolvedEnrichmentLookupIds = commentSideEffects.unresolvedEnrichmentLookupIds;
         }
+        const extractedLinkCount = Array.isArray(createTasksCompositeMeta?.link_existing_tasks)
+            ? createTasksCompositeMeta.link_existing_tasks.length
+            : 0;
+        const extractedCommentCount = Array.isArray(createTasksCompositeMeta?.enrich_ready_task_comments)
+            ? createTasksCompositeMeta.enrich_ready_task_comments.length
+            : 0;
         const noTaskDecision = resolveCreateTasksNoTaskDecisionOutcome({
             decision: createTasksCompositeMeta?.no_task_decision,
             extractedTaskCount: generatedTasks.length,
             persistedTaskCount: persisted.items.length,
+            extractedLinkCount,
+            extractedCommentCount,
             hasSummary: summarySaved,
             hasReview: reviewSaved,
         });
@@ -6179,6 +6209,10 @@ router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
             review_saved: reviewSaved,
             title_updated: titleUpdated,
             project_updated: projectUpdated,
+            inserted_linkages: insertedLinkages,
+            deduped_linkages: dedupedLinkages,
+            unresolved_link_lookup_ids: unresolvedLinkLookupIds,
+            rejected_malformed_link_lookup_ids: rejectedMalformedLinkLookupIds,
             inserted_enrichment_comments: insertedEnrichmentComments,
             deduped_enrichment_comments: dedupedEnrichmentComments,
             inserted_codex_enrichment_notes: insertedCodexEnrichmentNotes,

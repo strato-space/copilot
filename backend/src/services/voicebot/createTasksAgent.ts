@@ -37,10 +37,18 @@ export type CreateTasksCompositeEnrichmentDraft = {
   dialogue_reference?: string;
 };
 
+export type CreateTasksCompositeLinkDraft = {
+  lookup_id: string;
+  task_db_id?: string;
+  task_public_id?: string;
+  dialogue_reference?: string;
+};
+
 export type CreateTasksCompositeResult = {
   summary_md_text: string;
   scholastic_review_md: string;
   task_draft: Array<Record<string, unknown>>;
+  link_existing_tasks: CreateTasksCompositeLinkDraft[];
   enrich_ready_task_comments: CreateTasksCompositeEnrichmentDraft[];
   no_task_decision: CreateTasksNoTaskDecision | null;
   session_name: string;
@@ -111,6 +119,20 @@ const CREATE_TASKS_CODEX_FALLBACK_SCHEMA = {
         required: ['id', 'row_id', 'name', 'description', 'priority', 'candidate_class'],
       },
     },
+    link_existing_tasks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          lookup_id: { type: 'string' },
+          task_db_id: { type: 'string' },
+          task_public_id: { type: 'string' },
+          dialogue_reference: { type: 'string' },
+        },
+        required: ['lookup_id'],
+      },
+    },
     enrich_ready_task_comments: {
       type: 'array',
       items: {
@@ -150,6 +172,7 @@ const CREATE_TASKS_CODEX_FALLBACK_SCHEMA = {
     'summary_md_text',
     'scholastic_review_md',
     'task_draft',
+    'link_existing_tasks',
     'enrich_ready_task_comments',
     'no_task_decision',
     'session_name',
@@ -728,6 +751,8 @@ const discardMissingClassTaskDraftCandidates = ({
     decision: composite.no_task_decision,
     extractedTaskCount: retainedTaskDraft.length,
     persistedTaskCount: retainedTaskDraft.length,
+    extractedLinkCount: composite.link_existing_tasks.length,
+    extractedCommentCount: composite.enrich_ready_task_comments.length,
     hasSummary: Boolean(composite.summary_md_text),
     hasReview: Boolean(composite.scholastic_review_md),
   });
@@ -869,6 +894,35 @@ const parseEnrichmentDrafts = (value: unknown): CreateTasksCompositeEnrichmentDr
   return value
     .map((entry) => normalizeEnrichmentDraft(entry))
     .filter((entry): entry is CreateTasksCompositeEnrichmentDraft => entry !== null);
+};
+
+const normalizeLinkDraft = (value: unknown): CreateTasksCompositeLinkDraft | null => {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const lookupId =
+    toText(record.lookup_id) ||
+    toText(record.task_public_id) ||
+    toText(record.task_db_id) ||
+    toText(record.id);
+  if (!lookupId) return null;
+
+  const taskDbId = toText(record.task_db_id);
+  const taskPublicId = toText(record.task_public_id);
+  const dialogueReference = toText(record.dialogue_reference);
+  return {
+    lookup_id: lookupId,
+    ...(taskDbId ? { task_db_id: taskDbId } : {}),
+    ...(taskPublicId ? { task_public_id: taskPublicId } : {}),
+    ...(dialogueReference ? { dialogue_reference: dialogueReference } : {}),
+  };
+};
+
+const parseLinkDrafts = (value: unknown): CreateTasksCompositeLinkDraft[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => normalizeLinkDraft(entry))
+    .filter((entry): entry is CreateTasksCompositeLinkDraft => entry !== null);
 };
 
 const toSingleLine = (value: string): string =>
@@ -1226,6 +1280,8 @@ const finalizeCompositeTaskDraft = (
             decision: composite.no_task_decision,
             extractedTaskCount: taskDraft.length,
             persistedTaskCount: taskDraft.length,
+            extractedLinkCount: composite.link_existing_tasks.length,
+            extractedCommentCount: composite.enrich_ready_task_comments.length,
             hasSummary: Boolean(composite.summary_md_text),
             hasReview: Boolean(composite.scholastic_review_md),
           }),
@@ -1314,6 +1370,7 @@ const toEmptyCompositeResult = (defaultProjectId = ''): CreateTasksCompositeResu
   summary_md_text: '',
   scholastic_review_md: '',
   task_draft: [],
+  link_existing_tasks: [],
   enrich_ready_task_comments: [],
   no_task_decision: null,
   session_name: '',
@@ -1331,6 +1388,7 @@ const normalizeCompositeResult = (
     Object.prototype.hasOwnProperty.call(record, 'summary_md_text') ||
     Object.prototype.hasOwnProperty.call(record, 'scholastic_review_md') ||
     Object.prototype.hasOwnProperty.call(record, 'task_draft') ||
+    Object.prototype.hasOwnProperty.call(record, 'link_existing_tasks') ||
     Object.prototype.hasOwnProperty.call(record, 'enrich_ready_task_comments') ||
     Object.prototype.hasOwnProperty.call(record, 'session_name') ||
     Object.prototype.hasOwnProperty.call(record, 'project_id');
@@ -1338,6 +1396,7 @@ const normalizeCompositeResult = (
   if (!hasCompositeShape) return null;
 
   const taskDraft = parseTasksPayload(record.task_draft, defaultProjectId);
+  const linkExistingTasks = parseLinkDrafts(record.link_existing_tasks);
   const enrichComments = parseEnrichmentDrafts(record.enrich_ready_task_comments);
   const summaryMdText = normalizeSummaryMarkdown(record.summary_md_text);
   const scholasticReview = toText(record.scholastic_review_md);
@@ -1356,6 +1415,8 @@ const normalizeCompositeResult = (
     decision: normalizeCreateTasksNoTaskDecision(noTaskDecisionCandidate),
     extractedTaskCount: taskDraft.length,
     persistedTaskCount: taskDraft.length,
+    extractedLinkCount: linkExistingTasks.length,
+    extractedCommentCount: enrichComments.length,
     hasSummary: Boolean(summaryMdText),
     hasReview: Boolean(scholasticReview),
   });
@@ -1366,6 +1427,7 @@ const normalizeCompositeResult = (
     summary_md_text: summaryMdText,
     scholastic_review_md: scholasticReview,
     task_draft: taskDraft,
+    link_existing_tasks: linkExistingTasks,
     enrich_ready_task_comments: enrichComments,
     no_task_decision: noTaskDecision,
     session_name: sessionName,
@@ -1444,6 +1506,7 @@ export const parseCreateTasksCompositeResult = (
     if (
       normalizedComposite.summary_md_text ||
       normalizedComposite.task_draft.length > 0 ||
+      normalizedComposite.link_existing_tasks.length > 0 ||
       normalizedComposite.enrich_ready_task_comments.length > 0 ||
       normalizedComposite.scholastic_review_md ||
       normalizedComposite.no_task_decision
@@ -1465,6 +1528,7 @@ const attachCompositeMetaToDraft = (
   const meta = {
     summary_md_text: composite.summary_md_text,
     scholastic_review_md: composite.scholastic_review_md,
+    link_existing_tasks: composite.link_existing_tasks,
     enrich_ready_task_comments: composite.enrich_ready_task_comments,
     no_task_decision: composite.no_task_decision,
     session_name: composite.session_name,

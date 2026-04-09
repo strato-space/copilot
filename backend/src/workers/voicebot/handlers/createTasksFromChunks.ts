@@ -23,6 +23,7 @@ import {
   resolveCreateTasksCompositeSessionContext,
 } from '../../../services/voicebot/createTasksCompositeSessionState.js';
 import { applyCreateTasksCompositeCommentSideEffects } from '../../../services/voicebot/createTasksCompositeCommentSideEffects.js';
+import { applyCreateTasksCompositeLinkSideEffects } from '../../../services/voicebot/createTasksCompositeLinkSideEffects.js';
 import {
   persistPossibleTasksForSession,
   type PossibleTasksRefreshMode,
@@ -269,26 +270,46 @@ export const handleCreateTasksFromChunksJob = async (
       taskItems: tasks,
       createdById: session.user_id ? String(session.user_id) : '',
       refreshMode,
+      allowProjectSemanticReuse: false,
     });
-    const noTaskDecision = resolveCreateTasksNoTaskDecisionOutcome({
-      decision: compositeMeta?.no_task_decision,
-      extractedTaskCount: tasks.length,
-      persistedTaskCount: persisted.items.length,
-      hasSummary: Boolean(resolvedContext.summaryMdText),
-      hasReview: Boolean(resolvedContext.reviewMdText),
-    });
+    const compositeEffectiveSession = {
+      ...(session as unknown as Record<string, unknown>),
+      ...(resolvedContext.effectiveSessionName ? { session_name: resolvedContext.effectiveSessionName } : {}),
+      ...(resolvedContext.effectiveProjectId ? { project_id: resolvedContext.effectiveProjectId } : {}),
+    };
 
     await applyCreateTasksCompositeSessionPatch({
       db,
       sessionFilter,
       resolvedContext,
     });
+    await applyCreateTasksCompositeLinkSideEffects({
+      db,
+      sessionId: session_id,
+      session: compositeEffectiveSession,
+      drafts: compositeMeta?.link_existing_tasks,
+    });
     await applyCreateTasksCompositeCommentSideEffects({
       db,
       sessionId: session_id,
-      session: session as unknown as Record<string, unknown>,
+      session: compositeEffectiveSession,
       drafts: compositeMeta?.enrich_ready_task_comments,
       ...(session.user_id ? { actorId: String(session.user_id) } : {}),
+    });
+    const extractedLinkCount = Array.isArray(compositeMeta?.link_existing_tasks)
+      ? compositeMeta.link_existing_tasks.length
+      : 0;
+    const extractedCommentCount = Array.isArray(compositeMeta?.enrich_ready_task_comments)
+      ? compositeMeta.enrich_ready_task_comments.length
+      : 0;
+    const noTaskDecision = resolveCreateTasksNoTaskDecisionOutcome({
+      decision: compositeMeta?.no_task_decision,
+      extractedTaskCount: tasks.length,
+      persistedTaskCount: persisted.items.length,
+      extractedLinkCount,
+      extractedCommentCount,
+      hasSummary: Boolean(resolvedContext.summaryMdText),
+      hasReview: Boolean(resolvedContext.reviewMdText),
     });
     await markCreateTasksProcessorSuccess({
       db,

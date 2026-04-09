@@ -13,6 +13,7 @@ const generateDataFilterMock = jest.fn();
 const runCreateTasksAgentMock = jest.fn();
 const runCreateTasksCompositeAgentMock = jest.fn();
 const persistPossibleTasksForSessionMock = jest.fn();
+const applyCreateTasksCompositeLinkSideEffectsMock = jest.fn();
 const applyCreateTasksCompositeCommentSideEffectsMock = jest.fn();
 const loggerInfoMock = jest.fn();
 const loggerErrorMock = jest.fn();
@@ -51,6 +52,10 @@ jest.unstable_mockModule('../../../src/services/voicebot/persistPossibleTasks.js
 
 jest.unstable_mockModule('../../../src/services/voicebot/createTasksCompositeCommentSideEffects.js', () => ({
   applyCreateTasksCompositeCommentSideEffects: applyCreateTasksCompositeCommentSideEffectsMock,
+}));
+
+jest.unstable_mockModule('../../../src/services/voicebot/createTasksCompositeLinkSideEffects.js', () => ({
+  applyCreateTasksCompositeLinkSideEffects: applyCreateTasksCompositeLinkSideEffectsMock,
 }));
 
 jest.unstable_mockModule('../../../src/utils/logger.js', () => ({
@@ -150,6 +155,7 @@ describe('POST /voicebot/generate_possible_tasks', () => {
     runCreateTasksAgentMock.mockReset();
     runCreateTasksCompositeAgentMock.mockReset();
     persistPossibleTasksForSessionMock.mockReset();
+    applyCreateTasksCompositeLinkSideEffectsMock.mockReset();
     applyCreateTasksCompositeCommentSideEffectsMock.mockReset();
     loggerInfoMock.mockReset();
     loggerErrorMock.mockReset();
@@ -160,9 +166,16 @@ describe('POST /voicebot/generate_possible_tasks', () => {
       summary_md_text: '',
       scholastic_review_md: '',
       task_draft: [],
+      link_existing_tasks: [],
       enrich_ready_task_comments: [],
       session_name: '',
       project_id: '',
+    });
+    applyCreateTasksCompositeLinkSideEffectsMock.mockResolvedValue({
+      insertedLinkages: 0,
+      dedupedLinkages: 0,
+      unresolvedLinkLookupIds: [],
+      rejectedMalformedLinkLookupIds: [],
     });
     applyCreateTasksCompositeCommentSideEffectsMock.mockResolvedValue({
       insertedEnrichmentComments: 0,
@@ -186,6 +199,7 @@ describe('POST /voicebot/generate_possible_tasks', () => {
         summary_md_text: 'Короткое саммари по диалогу.',
         scholastic_review_md: 'Review markdown',
         task_draft: [],
+        link_existing_tasks: [],
         enrich_ready_task_comments: [],
         session_name: 'Morning Session about bounded task planning',
         project_id: fixture.projectId.toHexString(),
@@ -219,6 +233,16 @@ describe('POST /voicebot/generate_possible_tasks', () => {
       projectId: fixture.projectId.toHexString(),
       db: fixture.dbStub,
     });
+    expect(applyCreateTasksCompositeLinkSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: fixture.sessionId.toString(),
+        session: expect.objectContaining({
+          session_name: 'Morning Session about bounded task planning',
+          project_id: fixture.projectId.toHexString(),
+        }),
+        drafts: [],
+      })
+    );
 
     expect(persistPossibleTasksForSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -227,6 +251,7 @@ describe('POST /voicebot/generate_possible_tasks', () => {
         sessionName: 'Morning Session about bounded task planning',
         defaultProjectId: fixture.projectId.toHexString(),
         refreshMode: 'full_recompute',
+        allowProjectSemanticReuse: false,
       })
     );
     const sessionsCollection = fixture.dbStub.collection(VOICEBOT_COLLECTIONS.SESSIONS) as StubCollection;
@@ -246,6 +271,66 @@ describe('POST /voicebot/generate_possible_tasks', () => {
       expect.objectContaining({
         sessionId: fixture.sessionId.toString(),
         drafts: [],
+      })
+    );
+  });
+
+  it('treats link/comment-only composites as non-empty work and passes resolved session context to side effects', async () => {
+    const fixture = buildFixture();
+    const reassignedProjectId = new ObjectId().toHexString();
+    getDbMock.mockReturnValue(fixture.dbStub);
+    getRawDbMock.mockReturnValue(fixture.dbStub);
+
+    const generatedTasks: Array<Record<string, unknown>> = [];
+    Object.defineProperty(generatedTasks, '__create_tasks_composite_meta', {
+      value: {
+        summary_md_text: 'Link existing task',
+        scholastic_review_md: 'Review markdown',
+        task_draft: [],
+        link_existing_tasks: [{ lookup_id: 'ready-task-1', dialogue_reference: 'voice/session/x#1' }],
+        enrich_ready_task_comments: [{ lookup_id: 'ready-task-1', comment: 'Need follow-up', dialogue_reference: 'voice/session/x#1' }],
+        session_name: 'Link-only Session',
+        project_id: reassignedProjectId,
+        no_task_decision: {
+          code: 'explicit_zero',
+          reason: 'should be ignored when side effects exist',
+          evidence: ['agent'],
+          inferred: false,
+          source: 'agent_explicit',
+        },
+      },
+      enumerable: false,
+      configurable: true,
+    });
+    runCreateTasksAgentMock.mockResolvedValue(generatedTasks);
+    persistPossibleTasksForSessionMock.mockResolvedValue({
+      items: [],
+      removedRowIds: [],
+    });
+
+    const app = createApp(fixture.performerId);
+    const response = await request(app)
+      .post('/voicebot/generate_possible_tasks')
+      .send({ session_id: fixture.sessionId.toString() });
+
+    expect(response.status).toBe(200);
+    expect(response.body.no_task_decision).toBeUndefined();
+    expect(applyCreateTasksCompositeLinkSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session: expect.objectContaining({
+          session_name: 'Link-only Session',
+          project_id: reassignedProjectId,
+        }),
+        drafts: [{ lookup_id: 'ready-task-1', dialogue_reference: 'voice/session/x#1' }],
+      })
+    );
+    expect(applyCreateTasksCompositeCommentSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session: expect.objectContaining({
+          session_name: 'Link-only Session',
+          project_id: reassignedProjectId,
+        }),
+        drafts: [{ lookup_id: 'ready-task-1', comment: 'Need follow-up', dialogue_reference: 'voice/session/x#1' }],
       })
     );
   });
@@ -300,6 +385,7 @@ describe('POST /voicebot/generate_possible_tasks', () => {
         summary_md_text: 'Есть summary',
         scholastic_review_md: 'Есть review',
         task_draft: [],
+        link_existing_tasks: [],
         enrich_ready_task_comments: [],
         session_name: '',
         project_id: fixture.projectId.toHexString(),
@@ -354,6 +440,7 @@ describe('POST /voicebot/generate_possible_tasks', () => {
         summary_md_text: '',
         scholastic_review_md: '',
         task_draft: [],
+        link_existing_tasks: [],
         enrich_ready_task_comments: [],
         session_name: '',
         project_id: fixture.projectId.toHexString(),
@@ -420,6 +507,7 @@ describe('POST /voicebot/generate_possible_tasks', () => {
         summary_md_text: '',
         scholastic_review_md: '',
         task_draft: [],
+        link_existing_tasks: [],
         enrich_ready_task_comments: [],
         session_name: '',
         project_id: fixture.projectId.toHexString(),

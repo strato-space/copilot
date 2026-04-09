@@ -28,6 +28,7 @@ default: false
       "candidate_class": "deliverable_task"
     }
   ],
+  "link_existing_tasks": [],
   "enrich_ready_task_comments": [],
   "no_task_decision": {
     "code": "string",
@@ -47,7 +48,8 @@ default: false
 - `summary_md_text` — краткое fact-only summary в Markdown.
 - `scholastic_review_md` — короткий ontology-first review в Markdown.
 - `task_draft` — полный desired snapshot Draft-задач для текущей сессии.
-- `enrich_ready_task_comments` — comment-first enrichment для existing Ready+/Codex задач.
+- `link_existing_tasks` — relation operations для existing non-draft project tasks, которые нужно дополнительно связать с текущей session.
+- `enrich_ready_task_comments` — comment-first enrichment для existing Ready+/accepted non-draft задач.
 - `session_name` — короткое имя сессии по сути обсуждения.
 - `project_id` — project id из envelope или `""`.
 - `no_task_decision` — machine-readable zero-task verdict; используй `null`, если есть хотя бы одна materialized задача или enrichment artifact.
@@ -70,6 +72,7 @@ default: false
   - `task_draft[].description`
   - `task_draft[].priority_reason`
   - `task_draft[].dialogue_reference`
+  - `link_existing_tasks[].dialogue_reference`
   - `enrich_ready_task_comments[].comment`
 - Для `ru` запрещены английские section headings и обычный английский prose.
 - Ontology allowlist terms можно оставлять на английском только если это реальный ontology vocabulary term (`task`, `context_enrichment`, `artifact_record`, `executor_routing`, `acceptance_criterion`, `evidence_link` и т.п.).
@@ -86,10 +89,16 @@ default: false
 3. Если известен `project_id`, дочитай:
    - `voice.project(project_id)`
    - `voice.crm_dictionary()`
-   - bounded project CRM window, если caller его передал.
+   - `voice.crm_tickets(project_id=project_id, statuses="DRAFT_10", response_mode="detail", include_archived=false, draft_horizon_days=14)`
+   - `voice.crm_tickets(project_id=project_id, statuses="READY_10,PROGRESS_10,REVIEW_10,DONE_10", response_mode="detail", include_archived=false)`
+   - правило глубины:
+     - project Draft context остаётся bounded (`draft_horizon_days=14`)
+     - active non-draft project context читается на full depth, включая `DONE_10`
+   - `voice.crm_tickets(session_id=...)` остаётся reporting surface для accepted/session-linked задач и не заменяет `voice.session_tasks(..., bucket="Draft")`
+   - MCP mutation helpers (`create_session_tasks`, `create_session_codex_tasks`, `delete_session_possible_task`) не используются в create_tasks prompt этой версии.
 4. Для code/spec/project deliverables дочитай 2-3 реально релевантных локальных артефакта через `fs.read_multiple_files`; не делай unbounded inventory.
 5. Сначала собери все candidate asks, потом выполняй merge/reuse.
-6. Tail-pass обязателен: каждый concrete ask из хвоста transcript должен попасть либо в `task_draft`, либо в `enrich_ready_task_comments`, либо в `scholastic_review_md` как discard c reason.
+6. Tail-pass обязателен: каждый concrete ask из хвоста transcript должен попасть либо в `task_draft`, либо в `link_existing_tasks`, либо в `enrich_ready_task_comments`, либо в `scholastic_review_md` как discard c reason.
 
 ## Онтологическая проверка перед `task_draft`
 Сначала отнеси каждый candidate ровно к одному классу:
@@ -161,12 +170,24 @@ Candidate materialize только если одновременно есть:
   - `## acceptance_criteria`
   - `## evidence_links`
   - `## open_questions`
+- Внутри `## open_questions` каждый unresolved item должен использовать явные chunk markers `Question:` и `Answer:` (`TBD` допустим до подтверждения).
 - Не раздувай описание: только то, что реально нужно исполнителю.
 
 ## `enrich_ready_task_comments`
-- Используй только для уже существующих Ready+/Codex задач.
+- Используй только для уже существующих Ready+/accepted non-draft задач.
 - Это comment-first enrichment, не переписывание имени/описания задачи.
 - Comment должен добавлять недостающий context, evidence или acceptance detail.
+- Codex note path в этой версии out of scope; не выбирай и не обновляй Codex tasks через этот prompt contract.
+
+## `link_existing_tasks`
+- Это relation operation: `link_existing_task := link_session(existing_task, current_session)`.
+- Используй только для existing non-draft задачи, уже присутствующей в project context и нуждающейся в дополнительной привязке к текущей session.
+- Это не rewrite task content и не comment surrogate.
+- Минимальный payload:
+  - `lookup_id`
+  - по возможности `task_db_id` и/или `task_public_id`
+  - `dialogue_reference`
+- Не используй `link_existing_tasks`, если для той же задачи нужно именно содержательное уточнение для исполнителя; для этого используй `enrich_ready_task_comments`.
 
 ## Обработка `runtime_rejections`
 - Если caller передал `runtime_rejections`, сначала обработай каждый rejection, потом формируй финальный `task_draft`.

@@ -21,6 +21,7 @@ export type CreateTasksCompositeMeta = {
   scholastic_review_md?: unknown;
   session_name?: unknown;
   project_id?: unknown;
+  link_existing_tasks?: unknown;
   enrich_ready_task_comments?: unknown;
   no_task_decision?: unknown;
 };
@@ -141,19 +142,25 @@ export const resolveCreateTasksNoTaskDecisionOutcome = ({
   decision,
   extractedTaskCount,
   persistedTaskCount,
+  extractedLinkCount = 0,
+  extractedCommentCount = 0,
   hasSummary,
   hasReview,
 }: {
   decision: unknown;
   extractedTaskCount: number;
   persistedTaskCount: number;
+  extractedLinkCount?: number;
+  extractedCommentCount?: number;
   hasSummary: boolean;
   hasReview: boolean;
 }): CreateTasksNoTaskDecision | null => {
   const extractedCount = Math.max(0, Math.trunc(toFiniteNumber(extractedTaskCount) ?? 0));
   const persistedCount = Math.max(0, Math.trunc(toFiniteNumber(persistedTaskCount) ?? 0));
+  const extractedLinks = Math.max(0, Math.trunc(toFiniteNumber(extractedLinkCount) ?? 0));
+  const extractedComments = Math.max(0, Math.trunc(toFiniteNumber(extractedCommentCount) ?? 0));
 
-  if (persistedCount > 0) return null;
+  if (persistedCount > 0 || extractedLinks > 0 || extractedComments > 0) return null;
 
   const normalizedDecision = normalizeCreateTasksNoTaskDecision(decision);
   if (normalizedDecision) return normalizedDecision;
@@ -162,7 +169,12 @@ export const resolveCreateTasksNoTaskDecisionOutcome = ({
     return {
       code: CREATE_TASKS_NO_PERSISTABLE_DRAFTS_CODE,
       reason: 'create_tasks produced draft rows but none were persisted as canonical possible tasks',
-      evidence: [`extracted_task_count=${extractedCount}`, `persisted_task_count=${persistedCount}`],
+      evidence: [
+        `extracted_task_count=${extractedCount}`,
+        `persisted_task_count=${persistedCount}`,
+        `extracted_link_count=${extractedLinks}`,
+        `extracted_comment_count=${extractedComments}`,
+      ],
       inferred: true,
       source: 'persistence_inferred',
     };
@@ -174,6 +186,8 @@ export const resolveCreateTasksNoTaskDecisionOutcome = ({
     evidence: [
       `extracted_task_count=${extractedCount}`,
       `persisted_task_count=${persistedCount}`,
+      `extracted_link_count=${extractedLinks}`,
+      `extracted_comment_count=${extractedComments}`,
       `has_summary_md_text=${hasSummary}`,
       `has_scholastic_review_md=${hasReview}`,
     ],
