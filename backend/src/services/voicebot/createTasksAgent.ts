@@ -15,6 +15,10 @@ import { getDb } from '../db.js';
 import { VOICEBOT_COLLECTIONS } from '../../constants.js';
 import { ObjectId, type Db } from 'mongodb';
 import { randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { loadPersistedPossibleTaskCarryOverDrafts } from './persistPossibleTasks.js';
 import { extractActiveMessageText, isMarkedDeleted } from '../../api/routes/voicebot/messageHelpers.js';
 
@@ -75,6 +79,75 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const LANGUAGE_SAMPLE_MAX_MESSAGES = 12;
 const CYRILLIC_RE = /[А-Яа-яЁё]/g;
 const LATIN_RE = /[A-Za-z]/g;
+const CREATE_TASKS_CODEX_FALLBACK_MODEL = 'gpt-5.4-mini';
+const CREATE_TASKS_CODEX_FALLBACK_WORKDIR = '/tmp';
+const CREATE_TASKS_CODEX_FALLBACK_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    summary_md_text: { type: 'string' },
+    scholastic_review_md: { type: 'string' },
+    task_draft: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string' },
+          row_id: { type: 'string' },
+          name: { type: 'string' },
+          description: { type: 'string' },
+          priority: { type: 'string' },
+          candidate_class: { type: 'string' },
+        },
+        required: ['id', 'row_id', 'name', 'description', 'priority', 'candidate_class'],
+      },
+    },
+    enrich_ready_task_comments: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          lookup_id: { type: 'string' },
+          comment: { type: 'string' },
+          task_db_id: { type: 'string' },
+          task_public_id: { type: 'string' },
+          dialogue_reference: { type: 'string' },
+        },
+        required: ['lookup_id', 'comment', 'task_db_id', 'task_public_id', 'dialogue_reference'],
+      },
+    },
+    no_task_decision: {
+      anyOf: [
+        { type: 'null' },
+        {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            code: { type: 'string' },
+            reason: { type: 'string' },
+            evidence: { type: 'array', items: { type: 'string' } },
+            inferred: { type: 'boolean' },
+            source: { type: 'string' },
+          },
+          required: ['code', 'reason', 'evidence', 'inferred', 'source'],
+        },
+      ],
+    },
+    session_name: { type: 'string' },
+    project_id: { type: 'string' },
+  },
+  required: [
+    'summary_md_text',
+    'scholastic_review_md',
+    'task_draft',
+    'enrich_ready_task_comments',
+    'no_task_decision',
+    'session_name',
+    'project_id',
+  ],
+} as const;
 
 type TaskOntologyBucket =
   | 'deliverable_task'
@@ -1405,6 +1478,143 @@ const attachCompositeMetaToDraft = (
   }
 };
 
+const buildCreateTasksCodexFallbackPrompt = (envelope: Record<string, unknown>): string =>
+  [
+    'Ты fallback analyzer для voice taskflow.',
+    'Верни только JSON, который соответствует переданной схеме.',
+    'Не возвращай пустой ответ.',
+    'Если есть хотя бы один bounded deliverable, верни его в task_draft с candidate_class="deliverable_task".',
+    'Если deliverable-задач нет, верни пустой task_draft и explicit no_task_decision.',
+    'Все human-facing поля пиши на preferred_output_language.',
+    'Не используй внешние инструменты, если это не строго необходимо.',
+    'Envelope JSON:',
+    JSON.stringify(envelope, null, 2),
+  ].join('\n\n');
+
+const shrinkCreateTasksCodexFallbackEnvelope = (
+  envelope: Record<string, unknown>
+): Record<string, unknown> => {
+  const rawText = toText(envelope.raw_text);
+  if (!rawText || rawText.length <= 4000) {
+    return {
+      mode: toText(envelope.mode) || 'raw_text',
+      raw_text: rawText,
+      session_id: toText(envelope.session_id),
+      session_url: toText(envelope.session_url),
+      project_id: toText(envelope.project_id),
+      preferred_output_language: toText(envelope.preferred_output_language) || 'ru',
+      ...(asRecord(envelope.project_crm_window) ? { project_crm_window: envelope.project_crm_window } : {}),
+    };
+  }
+
+  const paragraphs = rawText
+    .split(/\n{2,}/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const head = paragraphs.slice(0, 2).map((value) => clipText(value, 1200)).join('\n\n').trim();
+  const tail = paragraphs.slice(-2).map((value) => clipText(value, 1200)).join('\n\n').trim();
+  return {
+    mode: 'raw_text_reduced',
+    raw_text: `${head}\n\n[... trimmed middle context ...]\n\n${tail}`.trim(),
+    session_id: toText(envelope.session_id),
+    session_url: toText(envelope.session_url),
+    project_id: toText(envelope.project_id),
+    preferred_output_language: toText(envelope.preferred_output_language) || 'ru',
+    ...(asRecord(envelope.project_crm_window) ? { project_crm_window: envelope.project_crm_window } : {}),
+    reduced_context: true,
+  };
+};
+
+const extractLastJsonLine = (value: string): string => {
+  const lines = value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index];
+    if (line?.startsWith('{') && line.endsWith('}')) {
+      return line;
+    }
+  }
+  return '';
+};
+
+const runCreateTasksCodexCliFallback = ({
+  envelope,
+  profileRunId,
+}: {
+  envelope: Record<string, unknown>;
+  profileRunId: string;
+}): CreateTasksCompositeResult => {
+  const tmpDir = mkdtempSync(join(tmpdir(), 'create-tasks-codex-fallback-'));
+  const schemaPath = join(tmpDir, 'schema.json');
+  const outputPath = join(tmpDir, 'output.json');
+
+  try {
+    const reducedEnvelope = shrinkCreateTasksCodexFallbackEnvelope(envelope);
+    writeFileSync(schemaPath, JSON.stringify(CREATE_TASKS_CODEX_FALLBACK_SCHEMA, null, 2), 'utf8');
+    const result = spawnSync(
+      'timeout',
+      [
+        '60s',
+        'codex',
+        'exec',
+        '-c',
+        'codex_hooks=false',
+        '-c',
+        'model_reasoning_effort="low"',
+        '-C',
+        CREATE_TASKS_CODEX_FALLBACK_WORKDIR,
+        '--skip-git-repo-check',
+        '--model',
+        CREATE_TASKS_CODEX_FALLBACK_MODEL,
+        '--output-schema',
+        schemaPath,
+        '-o',
+        outputPath,
+        buildCreateTasksCodexFallbackPrompt(reducedEnvelope),
+      ],
+      {
+        cwd: CREATE_TASKS_CODEX_FALLBACK_WORKDIR,
+        encoding: 'utf8',
+        input: '',
+        timeout: 65 * 1000,
+        maxBuffer: 4 * 1024 * 1024,
+      }
+    );
+
+    const stdoutText = toText(result.stdout);
+    const stderrText = toText(result.stderr);
+    const outputText = (() => {
+      try {
+        return readFileSync(outputPath, 'utf8');
+      } catch {
+        return extractLastJsonLine(stdoutText) || extractLastJsonLine(stderrText);
+      }
+    })();
+
+    if (!outputText) {
+      throw new Error(
+        `create_tasks_codex_cli_failed(status=${result.status ?? 'unknown'}): ${stderrText || stdoutText || 'unknown'}`
+      );
+    }
+    const parsed = parseCreateTasksCompositeJson(outputText, toText(envelope.project_id));
+    logger.warn('[voicebot-worker] create_tasks codex CLI fallback succeeded', {
+      profile_run_id: profileRunId,
+      model: CREATE_TASKS_CODEX_FALLBACK_MODEL,
+      status: result.status ?? 0,
+      reduced_context: reducedEnvelope.reduced_context === true,
+      task_count: parsed.task_draft.length,
+      has_summary_md_text: Boolean(parsed.summary_md_text),
+      has_scholastic_review_md: Boolean(parsed.scholastic_review_md),
+      no_task_reason_code: parsed.no_task_decision?.code || null,
+    });
+    return parsed;
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+};
+
 export const runCreateTasksCompositeAgent = async ({
   sessionId,
   projectId,
@@ -1612,6 +1822,25 @@ export const runCreateTasksCompositeAgent = async ({
     });
     return composite;
   } catch (error) {
+    if (error instanceof Error && error.message === 'create_tasks_empty_mcp_result') {
+      const fallbackEnvelope = buildEnvelope(rawText);
+      const fallbackComposite = finalizeCompositeTaskDraft(
+        runCreateTasksCodexCliFallback({
+          envelope: fallbackEnvelope,
+          profileRunId,
+        })
+      );
+      logger.warn('[voicebot-worker] create_tasks agent fell back to codex CLI after empty MCP success', {
+        profile_run_id: profileRunId,
+        session_id: sessionId,
+        mcp_server: mcpServerUrl,
+        mode: rawText && rawText.trim().length > 0 ? 'raw_text' : 'session_id',
+        fallback_model: CREATE_TASKS_CODEX_FALLBACK_MODEL,
+        task_count: fallbackComposite.task_draft.length,
+        no_task_reason_code: fallbackComposite.no_task_decision?.code || null,
+      });
+      return fallbackComposite;
+    }
     if (!isAgentsQuotaFailure(error)) {
       if (
         shouldRetryCreateTasksWithReducedContext({ error, rawText }) &&

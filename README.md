@@ -28,6 +28,8 @@ Use this as a fast guardrail before implementing anything:
   - full recompute with no chunk payload must use compact session raw transcript context, and replay acceptance requires stable Draft `row_id` identity across consecutive recompute runs for unchanged semantics,
   - successful-but-empty `CREATE_TASKS` MCP composites must resolve to structured `no_task_decision` output instead of surfacing `create_tasks_empty_mcp_result`,
   - raw-text `CREATE_TASKS` context builders must exclude garbage-flagged transcript rows from language sampling and replay context assembly,
+  - if the MCP `create_tasks` tool still returns an empty success payload, backend now falls back to a repo-local Codex CLI structured-output pass instead of silently preserving a zero-task session,
+  - task-count read surfaces are status-first: Draft rows count toward both `tasks_count` and `status_counts`,
   - `task_type_id` stays optional,
   - master store is `automation_tasks` with draft status `DRAFT_10`,
   - draft editing is autosave-first across both inline table edits and the right-hand detail editor,
@@ -41,6 +43,11 @@ Use this as a fast guardrail before implementing anything:
   - user-owned draft fields follow a `user wins` collision policy against concurrent `CREATE_TASKS` recompute writes; the machine-actionable contract lives in `plan/2026-03-21-voice-task-surface-normalization-spec-2.md`,
   - accepted session-task reads are served through `POST /api/voicebot/session_tasks` with `{ session_id, bucket: 'Ready+' }`; this bucket is accepted-only and `DRAFT_10` rows there are a bug (`copilot-f6z4`), not an allowed fallback.
 - Default transcription/categorization rendering stays operator-first: metadata signatures are rendered after the corresponding text block (never before it), while fallback error signatures remain visible when the transcript body is missing.
+- Transcript/categorization deletion uses one exclusion contract:
+  - whole-garbage messages are deleted at the message level,
+  - mixed messages may delete only the affected segments,
+  - user-driven deletes from Transcription/Categorization share the same `deletion_reason` semantics,
+  - deleted transcript content is excluded from normal API/MCP/UI surfaces and is recoverable only through direct DB access.
 
 ## Minimal Delta To Remember (2026-02-26 / 2026-02-27)
 

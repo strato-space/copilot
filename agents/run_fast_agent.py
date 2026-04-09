@@ -56,6 +56,34 @@ def _extract_text_payload(content: Any) -> tuple[int, int, int]:
     return len(merged), len(merged.encode("utf-8")), len(blocks)
 
 
+def _extract_final_response_text(final_response: Any) -> str:
+    if final_response is None:
+        return ""
+
+    direct_text = getattr(final_response, "output_text", None)
+    if isinstance(direct_text, str) and direct_text.strip():
+        return direct_text.strip()
+
+    output_items = list(getattr(final_response, "output", []) or [])
+    text_parts: list[str] = []
+
+    def _push_text(value: Any) -> None:
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed:
+                text_parts.append(trimmed)
+
+    for item in output_items:
+        item_type = getattr(item, "type", None)
+        if item_type in {"message", "output_text", "text"}:
+            _push_text(getattr(item, "text", None))
+            for part in list(getattr(item, "content", []) or []):
+                _push_text(getattr(part, "text", None))
+                _push_text(getattr(part, "output_text", None))
+
+    return "\n".join(text_parts).strip()
+
+
 def _estimate_tokens(*, json_bytes: int, text_chars: int) -> int | None:
     basis = max(json_bytes / 4.0, text_chars / 4.0)
     if basis <= 0:
@@ -92,11 +120,20 @@ def register_copilot_runtime_models() -> None:
 
 
 def install_profiling_hooks() -> None:
+    from fast_agent.agents.llm_decorator import LlmDecorator
+    from fast_agent.llm.fastagent_llm import FastAgentLLM
     from fast_agent.llm.provider.openai import openresponses_streaming, responses_streaming, streaming_utils
+    from fast_agent.llm.provider.openai.openresponses_streaming import OpenResponsesStreamingMixin
+    from fast_agent.llm.provider.openai.responses_streaming import ResponsesStreamingMixin
+    from fast_agent.llm.stream_types import StreamChunk
     from fast_agent.mcp import mcp_aggregator
 
     original_finalize = streaming_utils.finalize_stream_response
     original_call_tool = mcp_aggregator.MCPAggregator.call_tool
+    original_notify_stream_listeners = FastAgentLLM._notify_stream_listeners
+    original_openresponses_process_stream = OpenResponsesStreamingMixin._process_stream
+    original_responses_process_stream = ResponsesStreamingMixin._process_stream
+    original_generate_with_summary = LlmDecorator._generate_with_summary
 
     def profiled_finalize_stream_response(*, final_response: Any, model: str, agent_name: str | None, chat_turn, logger, notified_tool_indices, emit_tool_fallback) -> None:
         original_finalize(
@@ -178,10 +215,77 @@ def install_profiling_hooks() -> None:
             )
             raise
 
+    def profiled_notify_stream_listeners(self, chunk):  # type: ignore[no-untyped-def]
+        if getattr(chunk, "text", None) and not getattr(chunk, "is_reasoning", False):
+            setattr(self, "_copilot_stream_had_text", True)
+            chunks = list(getattr(self, "_copilot_stream_text_chunks", []) or [])
+            chunks.append(chunk.text)
+            setattr(self, "_copilot_stream_text_chunks", chunks)
+        return original_notify_stream_listeners(self, chunk)
+
+    async def _inject_fallback_text_if_needed(self, final_response):  # type: ignore[no-untyped-def]
+        if getattr(self, "_copilot_stream_had_text", False):
+            return
+        fallback_text = _extract_final_response_text(final_response)
+        if not fallback_text:
+            return
+        chunks = list(getattr(self, "_copilot_stream_text_chunks", []) or [])
+        chunks.append(fallback_text)
+        setattr(self, "_copilot_stream_text_chunks", chunks)
+        original_notify_stream_listeners(self, StreamChunk(text=fallback_text, is_reasoning=False))
+        setattr(self, "_copilot_stream_had_text", True)
+        profiling_logger.info(
+            "Injected fallback stream text from final_response",
+            data={
+                "agent_name": getattr(self, "name", None),
+                "model": getattr(final_response, "model", None),
+                "fallback_text_chars": len(fallback_text),
+                "fallback_text_bytes": len(fallback_text.encode("utf-8")),
+            },
+        )
+
+    async def profiled_openresponses_process_stream(self, stream, model, capture_filename):  # type: ignore[no-untyped-def]
+        setattr(self, "_copilot_stream_had_text", False)
+        setattr(self, "_copilot_stream_text_chunks", [])
+        final_response, reasoning_segments = await original_openresponses_process_stream(self, stream, model, capture_filename)
+        await _inject_fallback_text_if_needed(self, final_response)
+        return final_response, reasoning_segments
+
+    async def profiled_responses_process_stream(self, stream, model, capture_filename):  # type: ignore[no-untyped-def]
+        setattr(self, "_copilot_stream_had_text", False)
+        setattr(self, "_copilot_stream_text_chunks", [])
+        final_response, reasoning_segments = await original_responses_process_stream(self, stream, model, capture_filename)
+        await _inject_fallback_text_if_needed(self, final_response)
+        return final_response, reasoning_segments
+
+    async def profiled_generate_with_summary(self, messages, request_params=None, tools=None):  # type: ignore[no-untyped-def]
+        response, summary = await original_generate_with_summary(self, messages, request_params, tools)
+        llm = getattr(self, "_llm", None)
+        buffered_chunks = list(getattr(llm, "_copilot_stream_text_chunks", []) or [])
+        if hasattr(response, "last_text") and callable(response.last_text):
+            last_text = response.last_text() or ""
+            if not last_text and buffered_chunks and hasattr(response, "add_text") and callable(response.add_text):
+                fallback_text = "".join(chunk for chunk in buffered_chunks if isinstance(chunk, str)).strip()
+                if fallback_text:
+                    response.add_text(fallback_text)
+                    profiling_logger.info(
+                        "Injected fallback assistant message text into PromptMessageExtended",
+                        data={
+                            "agent_name": getattr(self, "_name", None),
+                            "fallback_text_chars": len(fallback_text),
+                            "fallback_text_bytes": len(fallback_text.encode("utf-8")),
+                        },
+                    )
+        return response, summary
+
     streaming_utils.finalize_stream_response = profiled_finalize_stream_response
     responses_streaming.finalize_stream_response = profiled_finalize_stream_response
     openresponses_streaming.finalize_stream_response = profiled_finalize_stream_response
     mcp_aggregator.MCPAggregator.call_tool = profiled_call_tool
+    FastAgentLLM._notify_stream_listeners = profiled_notify_stream_listeners
+    OpenResponsesStreamingMixin._process_stream = profiled_openresponses_process_stream
+    ResponsesStreamingMixin._process_stream = profiled_responses_process_stream
+    LlmDecorator._generate_with_summary = profiled_generate_with_summary
 
 
 if __name__ == "__main__":

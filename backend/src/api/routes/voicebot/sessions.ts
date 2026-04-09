@@ -6904,6 +6904,9 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
             acc.set(statusKey, (acc.get(statusKey) ?? 0) + 1);
             return acc;
         }, new Map<TargetTaskStatusKey | typeof VOICE_SESSION_UNKNOWN_STATUS_KEY, number>());
+        if (draft_count > 0) {
+            groupedStatusCounts.set('DRAFT_10', draft_count);
+        }
 
         const status_counts = Array.from(groupedStatusCounts.entries())
             .map(([statusKey, count]) => ({

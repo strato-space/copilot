@@ -165,10 +165,11 @@ describe('Voicebot session_tab_counts route', () => {
     expect(response.body).toEqual({
       success: true,
       session_id: sessionId.toHexString(),
-      tasks_count: 4,
+      tasks_count: 6,
       draft_count: 2,
       codex_count: 3,
       status_counts: [
+        { status: 'DRAFT_10', status_key: 'DRAFT_10', label: 'Draft', count: 2 },
         { status: 'REVIEW_10', status_key: 'REVIEW_10', label: 'Review', count: 3 },
         { status: 'UNKNOWN', status_key: 'UNKNOWN', label: 'Unknown', count: 1 },
       ],
@@ -346,7 +347,7 @@ describe('Voicebot session_tab_counts route', () => {
 
       expect(boundedCountsResponse.status).toBe(200);
       expect(boundedDraftResponse.status).toBe(200);
-      expect(boundedCountsResponse.body.tasks_count).toBe(1);
+      expect(boundedCountsResponse.body.tasks_count).toBe(2);
       expect(boundedCountsResponse.body.draft_count).toBe(1);
       expect(boundedDraftResponse.body.count).toBe(1);
       expect(boundedCountsResponse.body.draft_count).toBe(boundedDraftResponse.body.count);
@@ -356,6 +357,7 @@ describe('Voicebot session_tab_counts route', () => {
         .send({ session_id: scopedSessionId.toHexString() });
 
       expect(unboundedCountsResponse.status).toBe(200);
+      expect(unboundedCountsResponse.body.tasks_count).toBe(3);
       expect(unboundedCountsResponse.body.draft_count).toBe(2);
     } finally {
       jest.useRealTimers();

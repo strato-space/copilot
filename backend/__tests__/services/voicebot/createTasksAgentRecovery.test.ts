@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ObjectId } from 'mongodb';
+import { writeFileSync } from 'node:fs';
 import { VOICEBOT_COLLECTIONS } from '../../../src/constants.js';
 
 const initializeSessionMock = jest.fn();
@@ -8,6 +9,8 @@ const closeSessionMock = jest.fn();
 const quotaRecoveryMock = jest.fn();
 const openAiResponsesCreateMock = jest.fn();
 const loadPersistedPossibleTaskCarryOverDraftsMock = jest.fn();
+const spawnSyncMock = jest.fn();
+const CREATE_TASKS_COMPOSITE_META_KEY = '__create_tasks_composite_meta';
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -42,6 +45,10 @@ jest.unstable_mockModule('../../../src/services/voicebot/persistPossibleTasks.js
   loadPersistedPossibleTaskCarryOverDrafts: loadPersistedPossibleTaskCarryOverDraftsMock,
 }));
 
+jest.unstable_mockModule('node:child_process', () => ({
+  spawnSync: spawnSyncMock,
+}));
+
 const {
   runCreateTasksAgent,
   isCreateTasksMessageGarbageFlagged,
@@ -56,6 +63,7 @@ describe('runCreateTasksAgent quota fallback', () => {
     quotaRecoveryMock.mockReset();
     openAiResponsesCreateMock.mockReset();
     loadPersistedPossibleTaskCarryOverDraftsMock.mockReset();
+    spawnSyncMock.mockReset();
     loadPersistedPossibleTaskCarryOverDraftsMock.mockResolvedValue([]);
     process.env.OPENAI_API_KEY = 'test-openai-key';
     openAiResponsesCreateMock.mockImplementation(async (request?: { input?: string }) => {
@@ -89,6 +97,113 @@ describe('runCreateTasksAgent quota fallback', () => {
         isError: false,
       })
     ).toThrow('create_tasks_empty_mcp_result');
+  });
+
+  it('falls back to codex CLI when MCP returns an empty success payload', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'mcp-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        content: [{ type: 'text', text: '' }],
+        isError: false,
+      },
+    });
+    spawnSyncMock.mockImplementation((_command: string, args: string[]) => {
+      const outputIndex = args.indexOf('-o');
+      const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : '';
+      writeFileSync(
+        outputPath,
+        JSON.stringify({
+          summary_md_text: 'Краткое summary',
+          scholastic_review_md: 'Короткое review',
+          task_draft: [
+            {
+              id: 'TASK-CLI-1',
+              row_id: 'TASK-CLI-1',
+              name: 'Проверить пайплайн create_tasks',
+              description: 'Найти источник empty-success и зафиксировать его.',
+              priority: 'P2',
+              candidate_class: 'deliverable_task',
+            },
+          ],
+          enrich_ready_task_comments: [],
+          no_task_decision: null,
+          session_name: 'Проверка empty-success',
+          project_id: 'proj-1',
+        }),
+        'utf8'
+      );
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-1',
+      projectId: 'proj-1',
+      rawText: 'Нужно проверить create_tasks и найти пустой success.',
+    });
+
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toEqual([
+      expect.objectContaining({
+        id: 'TASK-CLI-1',
+        row_id: 'TASK-CLI-1',
+        name: 'Проверить пайплайн create_tasks',
+      }),
+    ]);
+  });
+
+  it('preserves session context in codex CLI fallback when running in session_id mode', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'mcp-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        content: [{ type: 'text', text: '' }],
+        isError: false,
+      },
+    });
+    spawnSyncMock.mockImplementation((_command: string, args: string[]) => {
+      const prompt = args[args.length - 1] || '';
+      expect(prompt).toContain('"session_id": "session-ctx"');
+      expect(prompt).toContain('"session_url": "https://copilot.stratospace.fun/voice/session/session-ctx"');
+      const outputIndex = args.indexOf('-o');
+      const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : '';
+      writeFileSync(
+        outputPath,
+        JSON.stringify({
+          summary_md_text: '',
+          scholastic_review_md: '',
+          task_draft: [],
+          enrich_ready_task_comments: [],
+          no_task_decision: {
+            code: 'no_deliverables',
+            reason: 'No bounded deliverables',
+            evidence: ['session-backed fallback'],
+            inferred: false,
+            source: 'agent',
+          },
+          session_name: 'Сессионный fallback',
+          project_id: 'proj-1',
+        }),
+        'utf8'
+      );
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-ctx',
+      projectId: 'proj-1',
+    });
+
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+    expect(tasks).toEqual([]);
+    const meta = (tasks as unknown as Record<string, unknown>)[CREATE_TASKS_COMPOSITE_META_KEY] as Record<string, unknown>;
+    expect(meta?.no_task_decision).toEqual(
+      expect.objectContaining({
+        code: 'no_deliverables',
+      })
+    );
   });
 
   it('restarts agent runtime and retries once after quota-class failure', async () => {
