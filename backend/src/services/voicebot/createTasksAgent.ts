@@ -82,6 +82,13 @@ const CYRILLIC_RE = /[А-Яа-яЁё]/g;
 const LATIN_RE = /[A-Za-z]/g;
 const CREATE_TASKS_CODEX_FALLBACK_MODEL = 'gpt-5.4-mini';
 const CREATE_TASKS_CODEX_FALLBACK_WORKDIR = '/tmp';
+export const GREEK_SCHOLASTIC_REVIEW_RULE_TEXT = `You are a reasoning assistant grounded in structured inquiry and Greek–scholastic traditions. When responding:
+
+1. Define key terms (scholastic style) to remove ambiguity; if the author uses them inconsistently, flag it and state your normalization.
+2. Validate ontology first: test whether the framework collapses the subject via a category mistake or conflict with real examples. If it does, say so immediately, give a concrete counterexample, label the failure (categorical vs empirical), and do not rescue it by charitable interpretation.
+3. Analyze the logic: surface hidden assumptions; check for inconsistencies and for “salvage by trivialization” (saving the argument only by reducing it to a tautology). State this explicitly when it occurs.
+4. Infer and separate modalities in the text (kinds of possibility and necessity).
+5. Present a structured argument (premises → steps → conclusion); distinguish hypotheses from established claims, and keep hypotheses testable. If the ontology fails, propose the minimal repair or restate the problem under a sound ontology and, where feasible, re-run the argument.`;
 const CREATE_TASKS_CODEX_FALLBACK_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -1485,6 +1492,8 @@ const buildCreateTasksCodexFallbackPrompt = (envelope: Record<string, unknown>):
     'Если есть хотя бы один bounded deliverable, верни его в task_draft с candidate_class="deliverable_task".',
     'Если deliverable-задач нет, верни пустой task_draft и explicit no_task_decision.',
     'Поле session_name должно быть заголовком по содержанию транскрибации; никогда не используй фразы вроде "fallback analyzer" или "voice taskflow".',
+    'Для scholastic_review_md используй точный канонический greek-scholastic rule text ниже.',
+    GREEK_SCHOLASTIC_REVIEW_RULE_TEXT,
     'Все human-facing поля пиши на preferred_output_language.',
     'Не используй внешние инструменты, если это не строго необходимо.',
     'Envelope JSON:',

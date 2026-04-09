@@ -90,7 +90,8 @@ describe('create_tasks agent card language contract', () => {
     const source = readFileSync(cardPath, 'utf8');
 
     expect(source).toContain('Формат review держи коротким и строгим');
-    expect(source).not.toContain('You are a reasoning assistant');
-    expect(source).not.toContain('Define key terms');
+    expect(source).toContain('You are a reasoning assistant grounded in structured inquiry and Greek–scholastic traditions. When responding:');
+    expect(source).toContain('Define key terms');
+    expect(source).toContain('review bounded Markdown');
   });
 });

@@ -53,6 +53,7 @@ const {
   runCreateTasksAgent,
   isCreateTasksMessageGarbageFlagged,
   parseCreateTasksCompositeResult,
+  GREEK_SCHOLASTIC_REVIEW_RULE_TEXT,
 } = await import('../../../src/services/voicebot/createTasksAgent.js');
 
 describe('runCreateTasksAgent quota fallback', () => {
@@ -167,6 +168,7 @@ describe('runCreateTasksAgent quota fallback', () => {
       const prompt = args[args.length - 1] || '';
       expect(prompt).toContain('"session_id": "session-ctx"');
       expect(prompt).toContain('"session_url": "https://copilot.stratospace.fun/voice/session/session-ctx"');
+      expect(prompt).toContain(GREEK_SCHOLASTIC_REVIEW_RULE_TEXT);
       const outputIndex = args.indexOf('-o');
       const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : '';
       writeFileSync(
