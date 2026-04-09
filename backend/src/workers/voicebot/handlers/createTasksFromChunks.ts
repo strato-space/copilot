@@ -283,13 +283,13 @@ export const handleCreateTasksFromChunksJob = async (
       sessionFilter,
       resolvedContext,
     });
-    await applyCreateTasksCompositeLinkSideEffects({
+    const linkSideEffects = await applyCreateTasksCompositeLinkSideEffects({
       db,
       sessionId: session_id,
       session: compositeEffectiveSession,
       drafts: compositeMeta?.link_existing_tasks,
     });
-    await applyCreateTasksCompositeCommentSideEffects({
+    const commentSideEffects = await applyCreateTasksCompositeCommentSideEffects({
       db,
       sessionId: session_id,
       session: compositeEffectiveSession,
@@ -308,6 +308,12 @@ export const handleCreateTasksFromChunksJob = async (
       persistedTaskCount: persisted.items.length,
       extractedLinkCount,
       extractedCommentCount,
+      appliedLinkCount: linkSideEffects.insertedLinkages + linkSideEffects.dedupedLinkages,
+      appliedCommentCount:
+        commentSideEffects.insertedEnrichmentComments +
+        commentSideEffects.dedupedEnrichmentComments +
+        commentSideEffects.insertedCodexEnrichmentNotes +
+        commentSideEffects.dedupedCodexEnrichmentNotes,
       hasSummary: Boolean(resolvedContext.summaryMdText),
       hasReview: Boolean(resolvedContext.reviewMdText),
     });
@@ -317,6 +323,12 @@ export const handleCreateTasksFromChunksJob = async (
       processorKey: 'CREATE_TASKS',
       tasksCount: persisted.items.length,
       noTaskDecision,
+      appliedLinkCount: linkSideEffects.insertedLinkages + linkSideEffects.dedupedLinkages,
+      appliedCommentCount:
+        commentSideEffects.insertedEnrichmentComments +
+        commentSideEffects.dedupedEnrichmentComments +
+        commentSideEffects.insertedCodexEnrichmentNotes +
+        commentSideEffects.dedupedCodexEnrichmentNotes,
     });
 
     await enqueuePossibleTasksRefresh({ session_id });

@@ -280,6 +280,19 @@ describe('POST /voicebot/generate_possible_tasks', () => {
     const reassignedProjectId = new ObjectId().toHexString();
     getDbMock.mockReturnValue(fixture.dbStub);
     getRawDbMock.mockReturnValue(fixture.dbStub);
+    applyCreateTasksCompositeLinkSideEffectsMock.mockResolvedValue({
+      insertedLinkages: 1,
+      dedupedLinkages: 0,
+      unresolvedLinkLookupIds: [],
+      rejectedMalformedLinkLookupIds: [],
+    });
+    applyCreateTasksCompositeCommentSideEffectsMock.mockResolvedValue({
+      insertedEnrichmentComments: 1,
+      dedupedEnrichmentComments: 0,
+      insertedCodexEnrichmentNotes: 0,
+      dedupedCodexEnrichmentNotes: 0,
+      unresolvedEnrichmentLookupIds: [],
+    });
 
     const generatedTasks: Array<Record<string, unknown>> = [];
     Object.defineProperty(generatedTasks, '__create_tasks_composite_meta', {
@@ -423,6 +436,59 @@ describe('POST /voicebot/generate_possible_tasks', () => {
           'processors_data.CREATE_TASKS.last_tasks_count': 0,
           'processors_data.CREATE_TASKS.no_task_reason_code': 'no_task_reason_missing',
         }),
+      })
+    );
+  });
+
+  it('keeps no_task_decision when link/comment artifacts are extracted but no side effects apply', async () => {
+    const fixture = buildFixture();
+    const reassignedProjectId = new ObjectId().toHexString();
+    getDbMock.mockReturnValue(fixture.dbStub);
+    getRawDbMock.mockReturnValue(fixture.dbStub);
+
+    const generatedTasks: Array<Record<string, unknown>> = [];
+    Object.defineProperty(generatedTasks, '__create_tasks_composite_meta', {
+      value: {
+        summary_md_text: 'Link existing task',
+        scholastic_review_md: 'Review markdown',
+        task_draft: [],
+        link_existing_tasks: [{ lookup_id: 'missing-task', dialogue_reference: 'voice/session/x#1' }],
+        enrich_ready_task_comments: [{ lookup_id: 'missing-task', comment: 'Need follow-up', dialogue_reference: 'voice/session/x#1' }],
+        session_name: 'Unapplied link-only Session',
+        project_id: reassignedProjectId,
+      },
+      enumerable: false,
+      configurable: true,
+    });
+    runCreateTasksAgentMock.mockResolvedValue(generatedTasks);
+    persistPossibleTasksForSessionMock.mockResolvedValue({
+      items: [],
+      removedRowIds: [],
+    });
+    applyCreateTasksCompositeLinkSideEffectsMock.mockResolvedValue({
+      insertedLinkages: 0,
+      dedupedLinkages: 0,
+      unresolvedLinkLookupIds: ['missing-task'],
+      rejectedMalformedLinkLookupIds: [],
+    });
+    applyCreateTasksCompositeCommentSideEffectsMock.mockResolvedValue({
+      insertedEnrichmentComments: 0,
+      dedupedEnrichmentComments: 0,
+      insertedCodexEnrichmentNotes: 0,
+      dedupedCodexEnrichmentNotes: 0,
+      unresolvedEnrichmentLookupIds: ['missing-task'],
+    });
+
+    const app = createApp(fixture.performerId);
+    const response = await request(app)
+      .post('/voicebot/generate_possible_tasks')
+      .send({ session_id: fixture.sessionId.toString() });
+
+    expect(response.status).toBe(200);
+    expect(response.body.no_task_decision).toEqual(
+      expect.objectContaining({
+        code: 'no_task_reason_missing',
+        inferred: true,
       })
     );
   });

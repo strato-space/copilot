@@ -117,6 +117,7 @@ import {
 import {
     applyCreateTasksCompositeSessionPatch,
     buildCreateTasksCategorizationNotQueuedDecision,
+    extractCreateTasksLastAppliedSideEffectCountsFromSession,
     extractCreateTasksLastTasksCountFromSession,
     extractCreateTasksNoTaskDecisionFromSession,
     extractCreateTasksCompositeMeta,
@@ -2170,6 +2171,8 @@ const requestSessionPossibleTasksRefresh = async ({
                 'processors_data.CREATE_TASKS.no_task_inferred': 1,
                 'processors_data.CREATE_TASKS.no_task_source': 1,
                 'processors_data.CREATE_TASKS.last_tasks_count': 1,
+                'processors_data.CREATE_TASKS.last_applied_link_count': 1,
+                'processors_data.CREATE_TASKS.last_applied_comment_count': 1,
             },
         }
     );
@@ -6197,6 +6200,12 @@ router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
             persistedTaskCount: persisted.items.length,
             extractedLinkCount,
             extractedCommentCount,
+            appliedLinkCount: insertedLinkages + dedupedLinkages,
+            appliedCommentCount:
+                insertedEnrichmentComments +
+                dedupedEnrichmentComments +
+                insertedCodexEnrichmentNotes +
+                dedupedCodexEnrichmentNotes,
             hasSummary: summarySaved,
             hasReview: reviewSaved,
         });
@@ -6235,6 +6244,12 @@ router.post('/generate_possible_tasks', async (req: Request, res: Response) => {
             processorKey: 'CREATE_TASKS',
             tasksCount: persisted.items.length,
             noTaskDecision,
+            appliedLinkCount: insertedLinkages + dedupedLinkages,
+            appliedCommentCount:
+                insertedEnrichmentComments +
+                dedupedEnrichmentComments +
+                insertedCodexEnrichmentNotes +
+                dedupedCodexEnrichmentNotes,
         });
 
         const refreshHintArgs: Parameters<typeof emitSessionTaskflowRefreshHint>[0] = {
@@ -6970,11 +6985,14 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
         if (tasks_count === 0) {
             const storedNoTaskDecision = extractCreateTasksNoTaskDecisionFromSession(sessionRecord);
             const processorTaskCount = extractCreateTasksLastTasksCountFromSession(sessionRecord);
+            const appliedSideEffects = extractCreateTasksLastAppliedSideEffectCountsFromSession(sessionRecord);
             if (storedNoTaskDecision || processorTaskCount !== null) {
                 noTaskDecision = resolveCreateTasksNoTaskDecisionOutcome({
                     decision: storedNoTaskDecision,
                     extractedTaskCount: processorTaskCount ?? 0,
                     persistedTaskCount: draft_count,
+                    appliedLinkCount: appliedSideEffects?.linkCount ?? 0,
+                    appliedCommentCount: appliedSideEffects?.commentCount ?? 0,
                     hasSummary: Boolean(sessionRecord.summary_md_text),
                     hasReview: Boolean(sessionRecord.review_md_text),
                 });
@@ -7050,12 +7068,17 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
             const processorTaskCount = extractCreateTasksLastTasksCountFromSession(
                 session as Record<string, unknown>
             );
+            const appliedSideEffects = extractCreateTasksLastAppliedSideEffectCountsFromSession(
+                session as Record<string, unknown>
+            );
             const noTaskDecision =
                 storedNoTaskDecision || processorTaskCount !== null
                     ? resolveCreateTasksNoTaskDecisionOutcome({
                           decision: storedNoTaskDecision,
                           extractedTaskCount: processorTaskCount ?? 0,
                           persistedTaskCount: items.length,
+                          appliedLinkCount: appliedSideEffects?.linkCount ?? 0,
+                          appliedCommentCount: appliedSideEffects?.commentCount ?? 0,
                           hasSummary: Boolean((session as Record<string, unknown>).summary_md_text),
                           hasReview: Boolean((session as Record<string, unknown>).review_md_text),
                       })

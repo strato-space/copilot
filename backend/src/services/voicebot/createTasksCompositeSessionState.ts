@@ -144,6 +144,8 @@ export const resolveCreateTasksNoTaskDecisionOutcome = ({
   persistedTaskCount,
   extractedLinkCount = 0,
   extractedCommentCount = 0,
+  appliedLinkCount = null,
+  appliedCommentCount = null,
   hasSummary,
   hasReview,
 }: {
@@ -152,6 +154,8 @@ export const resolveCreateTasksNoTaskDecisionOutcome = ({
   persistedTaskCount: number;
   extractedLinkCount?: number;
   extractedCommentCount?: number;
+  appliedLinkCount?: number | null;
+  appliedCommentCount?: number | null;
   hasSummary: boolean;
   hasReview: boolean;
 }): CreateTasksNoTaskDecision | null => {
@@ -159,8 +163,18 @@ export const resolveCreateTasksNoTaskDecisionOutcome = ({
   const persistedCount = Math.max(0, Math.trunc(toFiniteNumber(persistedTaskCount) ?? 0));
   const extractedLinks = Math.max(0, Math.trunc(toFiniteNumber(extractedLinkCount) ?? 0));
   const extractedComments = Math.max(0, Math.trunc(toFiniteNumber(extractedCommentCount) ?? 0));
+  const appliedLinksRaw = toFiniteNumber(appliedLinkCount);
+  const appliedCommentsRaw = toFiniteNumber(appliedCommentCount);
+  const appliedLinks = Math.max(
+    0,
+    Math.trunc(appliedLinksRaw ?? extractedLinks)
+  );
+  const appliedComments = Math.max(
+    0,
+    Math.trunc(appliedCommentsRaw ?? extractedComments)
+  );
 
-  if (persistedCount > 0 || extractedLinks > 0 || extractedComments > 0) return null;
+  if (persistedCount > 0 || appliedLinks > 0 || appliedComments > 0) return null;
 
   const normalizedDecision = normalizeCreateTasksNoTaskDecision(decision);
   if (normalizedDecision) return normalizedDecision;
@@ -174,6 +188,8 @@ export const resolveCreateTasksNoTaskDecisionOutcome = ({
         `persisted_task_count=${persistedCount}`,
         `extracted_link_count=${extractedLinks}`,
         `extracted_comment_count=${extractedComments}`,
+        `applied_link_count=${appliedLinks}`,
+        `applied_comment_count=${appliedComments}`,
       ],
       inferred: true,
       source: 'persistence_inferred',
@@ -188,6 +204,8 @@ export const resolveCreateTasksNoTaskDecisionOutcome = ({
       `persisted_task_count=${persistedCount}`,
       `extracted_link_count=${extractedLinks}`,
       `extracted_comment_count=${extractedComments}`,
+      `applied_link_count=${appliedLinks}`,
+      `applied_comment_count=${appliedComments}`,
       `has_summary_md_text=${hasSummary}`,
       `has_scholastic_review_md=${hasReview}`,
     ],
@@ -230,6 +248,21 @@ export const extractCreateTasksLastTasksCountFromSession = (
   const count = toFiniteNumber(createTasksProcessor.last_tasks_count);
   if (count === null) return null;
   return Math.max(0, Math.trunc(count));
+};
+
+export const extractCreateTasksLastAppliedSideEffectCountsFromSession = (
+  session: Record<string, unknown> | null | undefined
+): { linkCount: number; commentCount: number } | null => {
+  const processorsData = asRecord(session?.processors_data);
+  const createTasksProcessor = asRecord(processorsData?.CREATE_TASKS);
+  if (!createTasksProcessor) return null;
+  const linkCount = toFiniteNumber(createTasksProcessor.last_applied_link_count);
+  const commentCount = toFiniteNumber(createTasksProcessor.last_applied_comment_count);
+  if (linkCount === null && commentCount === null) return null;
+  return {
+    linkCount: Math.max(0, Math.trunc(linkCount ?? 0)),
+    commentCount: Math.max(0, Math.trunc(commentCount ?? 0)),
+  };
 };
 
 const toProjectId = (value: ObjectId | string | null | undefined): string => {
@@ -320,12 +353,16 @@ export const markCreateTasksProcessorSuccess = async ({
   processorKey = 'CREATE_TASKS',
   noTaskDecision,
   tasksCount,
+  appliedLinkCount,
+  appliedCommentCount,
 }: {
   db: Db;
   sessionFilter: Record<string, unknown>;
   processorKey?: string;
   noTaskDecision?: CreateTasksNoTaskDecision | null;
   tasksCount?: number | null;
+  appliedLinkCount?: number | null;
+  appliedCommentCount?: number | null;
 }): Promise<void> => {
   const setPayload: Record<string, unknown> = {
     [`processors_data.${processorKey}.job_finished_timestamp`]: Date.now(),
@@ -346,6 +383,26 @@ export const markCreateTasksProcessorSuccess = async ({
       0,
       Math.trunc(normalizedTasksCount)
     );
+  }
+
+  const normalizedAppliedLinkCount = toFiniteNumber(appliedLinkCount);
+  if (normalizedAppliedLinkCount !== null) {
+    setPayload[`processors_data.${processorKey}.last_applied_link_count`] = Math.max(
+      0,
+      Math.trunc(normalizedAppliedLinkCount)
+    );
+  } else {
+    unsetPayload[`processors_data.${processorKey}.last_applied_link_count`] = 1;
+  }
+
+  const normalizedAppliedCommentCount = toFiniteNumber(appliedCommentCount);
+  if (normalizedAppliedCommentCount !== null) {
+    setPayload[`processors_data.${processorKey}.last_applied_comment_count`] = Math.max(
+      0,
+      Math.trunc(normalizedAppliedCommentCount)
+    );
+  } else {
+    unsetPayload[`processors_data.${processorKey}.last_applied_comment_count`] = 1;
   }
 
   if (noTaskDecision === null) {
@@ -379,14 +436,20 @@ export const persistCreateTasksNoTaskDecision = async ({
   processorKey = 'CREATE_TASKS',
   noTaskDecision,
   tasksCount = 0,
+  appliedLinkCount = 0,
+  appliedCommentCount = 0,
 }: {
   db: Db;
   sessionFilter: Record<string, unknown>;
   processorKey?: string;
   noTaskDecision: CreateTasksNoTaskDecision;
   tasksCount?: number | null;
+  appliedLinkCount?: number | null;
+  appliedCommentCount?: number | null;
 }): Promise<void> => {
   const normalizedTasksCount = toFiniteNumber(tasksCount);
+  const normalizedAppliedLinkCount = toFiniteNumber(appliedLinkCount);
+  const normalizedAppliedCommentCount = toFiniteNumber(appliedCommentCount);
   const setPayload: Record<string, unknown> = {
     [`processors_data.${processorKey}.no_task_decision`]: noTaskDecision,
     [`processors_data.${processorKey}.no_task_reason_code`]: noTaskDecision.code,
@@ -400,6 +463,18 @@ export const persistCreateTasksNoTaskDecision = async ({
     setPayload[`processors_data.${processorKey}.last_tasks_count`] = Math.max(
       0,
       Math.trunc(normalizedTasksCount)
+    );
+  }
+  if (normalizedAppliedLinkCount !== null) {
+    setPayload[`processors_data.${processorKey}.last_applied_link_count`] = Math.max(
+      0,
+      Math.trunc(normalizedAppliedLinkCount)
+    );
+  }
+  if (normalizedAppliedCommentCount !== null) {
+    setPayload[`processors_data.${processorKey}.last_applied_comment_count`] = Math.max(
+      0,
+      Math.trunc(normalizedAppliedCommentCount)
     );
   }
   await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(sessionFilter, {

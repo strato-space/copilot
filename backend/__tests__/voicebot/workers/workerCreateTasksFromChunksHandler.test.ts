@@ -226,6 +226,19 @@ describe('handleCreateTasksFromChunksJob', () => {
     getVoicebotQueuesMock.mockReturnValue({
       [VOICEBOT_QUEUES.EVENTS]: { add: eventsAdd },
     });
+    applyCreateTasksCompositeLinkSideEffectsMock.mockResolvedValue({
+      insertedLinkages: 1,
+      dedupedLinkages: 0,
+      unresolvedLinkLookupIds: [],
+      rejectedMalformedLinkLookupIds: [],
+    });
+    applyCreateTasksCompositeCommentSideEffectsMock.mockResolvedValue({
+      insertedEnrichmentComments: 1,
+      dedupedEnrichmentComments: 0,
+      insertedCodexEnrichmentNotes: 0,
+      dedupedCodexEnrichmentNotes: 0,
+      unresolvedEnrichmentLookupIds: [],
+    });
 
     const generatedTasks: Array<Record<string, unknown>> = [];
     (generatedTasks as unknown as Record<string, unknown>)[CREATE_TASKS_COMPOSITE_META_KEY] = {
@@ -295,6 +308,81 @@ describe('handleCreateTasksFromChunksJob', () => {
         }),
       })
     );
+  });
+
+  it('emits no_task_decision when extracted link/comment artifacts do not apply', async () => {
+    const sessionId = new ObjectId();
+    const generatedProjectId = new ObjectId().toString();
+    const sessionsFindOne = jest.fn(async () => ({
+      _id: sessionId,
+      session_name: 'Original worker session',
+      project_id: 'proj-1',
+      user_id: 'user-1',
+    }));
+    const sessionsUpdateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const eventsAdd = jest.fn(async () => ({ id: 'event-job' }));
+
+    getDbMock.mockReturnValue({
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: sessionsFindOne,
+            updateOne: sessionsUpdateOne,
+          };
+        }
+        return {};
+      },
+    });
+    getVoicebotQueuesMock.mockReturnValue({
+      [VOICEBOT_QUEUES.EVENTS]: { add: eventsAdd },
+    });
+
+    const generatedTasks: Array<Record<string, unknown>> = [];
+    (generatedTasks as unknown as Record<string, unknown>)[CREATE_TASKS_COMPOSITE_META_KEY] = {
+      summary_md_text: 'Summary body',
+      scholastic_review_md: 'Review body',
+      task_draft: [],
+      link_existing_tasks: [{ lookup_id: 'missing-task', dialogue_reference: 'voice/session/x#1' }],
+      enrich_ready_task_comments: [{ lookup_id: 'missing-task', comment: 'Need follow-up', dialogue_reference: 'voice/session/x#1' }],
+      session_name: 'Unapplied worker session',
+      project_id: generatedProjectId,
+    };
+    runCreateTasksAgentMock.mockResolvedValue(generatedTasks);
+    persistPossibleTasksForSessionMock.mockResolvedValue({
+      items: [],
+      rows: [],
+      removedRowIds: [],
+    });
+    applyCreateTasksCompositeLinkSideEffectsMock.mockResolvedValue({
+      insertedLinkages: 0,
+      dedupedLinkages: 0,
+      unresolvedLinkLookupIds: ['missing-task'],
+      rejectedMalformedLinkLookupIds: [],
+    });
+    applyCreateTasksCompositeCommentSideEffectsMock.mockResolvedValue({
+      insertedEnrichmentComments: 0,
+      dedupedEnrichmentComments: 0,
+      insertedCodexEnrichmentNotes: 0,
+      dedupedCodexEnrichmentNotes: 0,
+      unresolvedEnrichmentLookupIds: ['missing-task'],
+    });
+
+    const result = await handleCreateTasksFromChunksJob({
+      session_id: sessionId.toString(),
+      chunks_to_process: [],
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      session_id: sessionId.toString(),
+      tasks_count: 0,
+      skipped: true,
+      reason: 'no_tasks',
+      no_task_decision: expect.objectContaining({
+        code: 'no_task_reason_missing',
+        inferred: true,
+      }),
+    });
   });
 
   it('filters garbage-flagged rows out of full-recompute raw_text context', async () => {

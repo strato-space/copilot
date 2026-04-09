@@ -261,6 +261,61 @@ describe('Voicebot session_tab_counts route', () => {
     );
   });
 
+  it('suppresses no_task_decision in session_tab_counts when applied side effects were recorded', async () => {
+    const zeroTasksSessionId = new ObjectId('507f1f77bcf86cd799439023');
+    const tasksFind = jest.fn(() => ({
+      sort: () => ({ toArray: async () => [] }),
+      toArray: async () => [],
+    }));
+    const countDocuments = jest.fn(async () => 0);
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            countDocuments,
+            aggregate: tasksAggregateMock,
+            find: tasksFind,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: zeroTasksSessionId,
+              chat_id: 123456,
+              user_id: performerId,
+              is_active: true,
+              summary_md_text: '',
+              review_md_text: '',
+              processors_data: {
+                CREATE_TASKS: {
+                  is_processed: true,
+                  last_tasks_count: 0,
+                  last_applied_link_count: 1,
+                  last_applied_comment_count: 0,
+                },
+              },
+            })),
+          };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(dbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session_tab_counts')
+      .send({ session_id: zeroTasksSessionId.toHexString() });
+
+    expect(response.status).toBe(200);
+    expect(response.body.tasks_count).toBe(0);
+    expect(response.body.no_task_decision).toBeUndefined();
+  });
+
   it('excludes stale draft rows from visible draft counts when fresh rows exist', async () => {
     const freshSessionId = new ObjectId('507f1f77bcf86cd799439014');
     const freshSessionRef = `https://copilot.stratospace.fun/voice/session/${freshSessionId.toHexString()}`;
@@ -644,5 +699,61 @@ describe('Voicebot session_tab_counts route', () => {
     expect(countsResponse.body.draft_count).toBe(1);
     expect(draftResponse.body.count).toBe(1);
     expect(draftResponse.body.items[0]?.row_id).toBe('draft-mixed');
+  });
+
+  it('suppresses no_task_decision in session_tasks(Draft) when applied side effects were recorded', async () => {
+    const zeroTasksSessionId = new ObjectId('507f1f77bcf86cd799439024');
+    const tasksFind = jest.fn(() => ({
+      sort: () => ({ toArray: async () => [] }),
+      toArray: async () => [],
+    }));
+    const countDocuments = jest.fn(async () => 0);
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            countDocuments,
+            aggregate: tasksAggregateMock,
+            find: tasksFind,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: zeroTasksSessionId,
+              chat_id: 123456,
+              user_id: performerId,
+              is_active: true,
+              summary_md_text: '',
+              review_md_text: '',
+              processors_data: {
+                CREATE_TASKS: {
+                  is_processed: true,
+                  last_tasks_count: 0,
+                  last_applied_link_count: 0,
+                  last_applied_comment_count: 2,
+                },
+              },
+            })),
+            find: jest.fn(() => ({ toArray: async () => [] })),
+          };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(dbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session_tasks')
+      .send({ session_id: zeroTasksSessionId.toHexString(), bucket: 'Draft' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.count).toBe(0);
+    expect(response.body.no_task_decision).toBeUndefined();
   });
 });

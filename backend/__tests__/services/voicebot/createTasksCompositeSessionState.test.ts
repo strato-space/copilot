@@ -50,4 +50,26 @@ describe('resolveCreateTasksNoTaskDecisionOutcome', () => {
       })
     );
   });
+
+  it('does not suppress no-task when extracted link/comment artifacts fail to apply', () => {
+    const result = resolveCreateTasksNoTaskDecisionOutcome({
+      decision: null,
+      extractedTaskCount: 0,
+      persistedTaskCount: 0,
+      extractedLinkCount: 1,
+      extractedCommentCount: 2,
+      appliedLinkCount: 0,
+      appliedCommentCount: 0,
+      hasSummary: true,
+      hasReview: true,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        code: 'no_task_reason_missing',
+        inferred: true,
+        source: 'agent_inferred',
+      })
+    );
+  });
 });
