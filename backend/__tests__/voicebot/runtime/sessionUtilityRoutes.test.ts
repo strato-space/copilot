@@ -44,6 +44,7 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain('runCreateTasksAgent({');
     expect(source).toContain('persistPossibleTasksForSession({');
     expect(source).toContain("refreshMode: 'full_recompute'");
+    expect(source).toContain('allowProjectSemanticReuse: false');
     expect(source).toContain("saved_count: persisted.items.length");
     expect(source).toContain("logger.info('[voicebot.sessions] generate_possible_tasks_completed'");
     expect(source).toContain('correlation_id: parsedBody.data.refresh_correlation_id || null');
@@ -95,6 +96,7 @@ describe('Voicebot utility routes parity contract', () => {
     expect(source).toContain('normalizeVoicePossibleTaskDocForApi');
     expect(source).toContain('listPossibleTaskMasterDocs({ db, sessionId })');
     expect(source).toContain("bucket === 'Draft'");
+    expect(source).toContain('Manual draft autosave keeps shared-draft rewrite semantics');
     expect(source).toContain("reason: 'save_possible_tasks'");
   });
 

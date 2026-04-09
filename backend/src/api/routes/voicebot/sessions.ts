@@ -4284,6 +4284,7 @@ router.post('/save_create_tasks', async (req: Request, res: Response) => {
             createdById: performer?._id?.toHexString?.() ?? '',
             createdByName: String(performer?.real_name || performer?.name || '').trim(),
             refreshMode: 'full_recompute',
+            allowProjectSemanticReuse: false,
         });
 
         emitSessionTaskflowRefreshHint({
@@ -6008,6 +6009,8 @@ router.post('/save_possible_tasks', async (req: Request, res: Response) => {
             }
         }
 
+        // Manual draft autosave keeps shared-draft rewrite semantics; prompt-authoritative
+        // reuse guards are only applied on explicit create_tasks execution paths.
         const persisted = await persistPossibleTasksForSession({
             db,
             sessionId,
