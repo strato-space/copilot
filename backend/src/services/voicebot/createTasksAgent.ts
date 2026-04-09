@@ -1500,6 +1500,38 @@ const buildCreateTasksCodexFallbackPrompt = (envelope: Record<string, unknown>):
     JSON.stringify(envelope, null, 2),
   ].join('\n\n');
 
+const isInformativeReducedContextParagraph = (value: string): boolean => {
+  const normalized = value.trim();
+  if (normalized.length < 80) return false;
+  return countPattern(normalized, CYRILLIC_RE) + countPattern(normalized, LATIN_RE) >= 20;
+};
+
+const selectReducedContextParagraphs = (
+  paragraphs: string[]
+): Array<{ index: number; text: string }> => {
+  const indexed = paragraphs.map((text, index) => ({ index, text }));
+  const informative = indexed.filter(({ text }) => isInformativeReducedContextParagraph(text));
+  const source = informative.length >= 5 ? informative : indexed;
+  if (source.length <= 7) return source;
+
+  const positions = [
+    0,
+    1,
+    Math.floor((source.length - 1) * 0.33),
+    Math.floor((source.length - 1) * 0.5),
+    Math.floor((source.length - 1) * 0.66),
+    Math.max(source.length - 2, 0),
+    Math.max(source.length - 1, 0),
+  ];
+
+  const selected = Array.from(new Set(positions))
+    .map((position) => source[position])
+    .filter((value): value is { index: number; text: string } => Boolean(value))
+    .sort((left, right) => left.index - right.index);
+
+  return selected;
+};
+
 const shrinkCreateTasksCodexFallbackEnvelope = (
   envelope: Record<string, unknown>
 ): Record<string, unknown> => {
@@ -1520,11 +1552,13 @@ const shrinkCreateTasksCodexFallbackEnvelope = (
     .split(/\n{2,}/)
     .map((value) => value.trim())
     .filter(Boolean);
-  const head = paragraphs.slice(0, 2).map((value) => clipText(value, 1200)).join('\n\n').trim();
-  const tail = paragraphs.slice(-2).map((value) => clipText(value, 1200)).join('\n\n').trim();
+  const selectedParagraphs = selectReducedContextParagraphs(paragraphs)
+    .map(({ index, text }) => `[excerpt ${index + 1}/${paragraphs.length}] ${clipText(text, 1000)}`)
+    .join('\n\n')
+    .trim();
   return {
     mode: 'raw_text_reduced',
-    raw_text: `${head}\n\n[... trimmed middle context ...]\n\n${tail}`.trim(),
+    raw_text: selectedParagraphs || clipText(rawText, 7000),
     session_id: toText(envelope.session_id),
     session_url: toText(envelope.session_url),
     project_id: toText(envelope.project_id),

@@ -2104,6 +2104,101 @@ describe('runCreateTasksAgent quota fallback', () => {
     expect(reducedText).toContain('Reduced create_tasks context for session');
   });
 
+  it('keeps middle transcript excerpts in reduced raw_text retry context', async () => {
+    const sessionId = new ObjectId().toHexString();
+    const paragraphs = Array.from({ length: 9 }, (_, index) =>
+      `PARA_${index} ${'Подробный контекст '.repeat(60)}`
+    );
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === 'automation_voice_bot_sessions') {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: new ObjectId(sessionId),
+              session_name: 'Mid context session',
+              project_id: 'proj-mid',
+              summary_md_text: '',
+            })),
+          };
+        }
+        if (name === 'automation_voice_bot_messages') {
+          return {
+            findOne: jest.fn(async () => ({
+              message_timestamp: Math.floor(new Date('2026-03-23T12:05:00.000Z').getTime() / 1000),
+              created_at: new Date('2026-03-23T12:05:00.000Z'),
+            })),
+            find: jest.fn(() => ({
+              sort: () => ({
+                limit: () => ({
+                  toArray: async () =>
+                    paragraphs.map((text, index) => ({
+                      message_timestamp: index + 1,
+                      transcription_text: text,
+                    })),
+                }),
+              }),
+            })),
+          };
+        }
+        return { findOne: jest.fn(async () => null), find: jest.fn() };
+      },
+    };
+
+    initializeSessionMock
+      .mockResolvedValueOnce({ sessionId: 'mid-session' })
+      .mockResolvedValueOnce({ sessionId: 'mid-retry-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: "I hit an internal error while calling the model: Invalid 'input[31].output': string_above_max_length",
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary_md_text: '',
+                scholastic_review_md: '',
+                task_draft: [],
+                no_task_decision: {
+                  code: 'discussion-only',
+                  reason: 'No bounded tasks in reduced context',
+                  evidence: ['middle_excerpt_present'],
+                },
+                enrich_ready_task_comments: [],
+                session_name: '',
+                project_id: 'proj-mid',
+              }),
+            },
+          ],
+        },
+      });
+
+    await runCreateTasksAgent({
+      sessionId,
+      projectId: 'proj-mid',
+      db: dbStub as never,
+    });
+
+    const secondEnvelope = JSON.parse(callToolMock.mock.calls[1]?.[1]?.message as string) as Record<string, unknown>;
+    const reducedText = String(secondEnvelope.raw_text || '');
+
+    expect(secondEnvelope.mode).toBe('raw_text');
+    expect(reducedText).toContain('PARA_0');
+    expect(reducedText).toContain('PARA_4');
+    expect(reducedText).toContain('PARA_8');
+  });
+
   it('does not perform more than one reduced-context retry when string_above_max_length repeats', async () => {
     const sessionId = new ObjectId().toHexString();
     const dbStub = {
