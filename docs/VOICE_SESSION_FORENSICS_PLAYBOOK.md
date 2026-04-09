@@ -76,6 +76,8 @@ BUNDLE_DIR="../tmp/voice-investigation-artifacts/${RUN_ID}-<session_id>"
 npm run voice:session:forensics -- --session <session_id> --bundle-dir "$BUNDLE_DIR"
 ```
 
+If you run the CLI from the repo root or any shell that is not already sourced with backend env vars, append `--env-file backend/.env.production` (or the relevant backend env file for your target). This keeps Mongo/Redis routing aligned with the active deployment so queue snapshots do not degrade to `queue_snapshot_unavailable`.
+
 2. Inspect the result without opening every file manually:
 
 ```bash
@@ -103,6 +105,16 @@ Examples:
 ```bash
 cd /home/strato-space/copilot/backend
 npx tsx scripts/voicebot-session-forensics.ts --session 69c13e953126bf876842c7ac --json
+```
+
+With an explicit backend env file:
+
+```bash
+cd /home/strato-space/copilot
+npx tsx backend/scripts/voicebot-session-forensics.ts \
+  --env-file backend/.env.production \
+  --session 69c13e953126bf876842c7ac \
+  --json
 ```
 
 Via npm script:

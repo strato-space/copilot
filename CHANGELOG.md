@@ -4,10 +4,12 @@
 ### PROBLEM SOLVED
 - **02:20** Recent zero-task voice sessions from the last 3 days could stay empty after the garbage/deletion repair wave because `session_tab_counts` did not count Draft rows in `tasks_count` / `status_counts`, so read surfaces could still report “0 tasks” while canonical Draft rows already existed.
 - **02:20** The backend `create_tasks` recovery path still depended on an external MCP success payload and could stall on empty-success responses unless a local structured fallback survived FastAgent/Codex text persistence quirks.
+- **07:36** Voice session forensics still degraded queue evidence to `queue_snapshot_unavailable` when operators ran the CLI outside a backend-sourced shell, because the script autoloaded the wrong `.env` chain and probed Redis/Mongo with incomplete runtime settings.
 
 ### FEATURE IMPLEMENTED
 - **02:20** `CREATE_TASKS` now falls back to a repo-local Codex CLI structured-output pass when MCP returns an empty success payload, preserving session context and producing canonical Draft/review/summary/session-name surfaces for the repaired sessions.
 - **04:13** Replayed recent zero-task voice sessions from **2026-04-06T00:00:00Z** through **2026-04-09T00:00:00Z** under the repaired pipeline: 7 of 8 sessions were materialized with Draft tasks, and the one non-materialized session now carries an explicit `no_bounded_deliverable` verdict instead of an inferred empty-task failure.
+- **07:36** The forensics CLI now loads the backend `.env` / `.env.<NODE_ENV>` chain by default and accepts repeated `--env-file` overrides, so prod reruns can capture live queue snapshots without hand-sourcing shell variables.
 
 ### CHANGES
 - **02:20** Runtime/code changes:
@@ -20,6 +22,10 @@
 - **04:13** Fresh replay/forensics artifacts:
   - `tmp/voice-investigation-artifacts/20260408T232230Z-69d5ef3592a1eba4f34ab278-final/index.{json,md}`
   - `tmp/voice-investigation-artifacts/20260408T232230Z-69d5ef3592a1eba4f34ab278-final/69d5ef3592a1eba4f34ab278.{json,md}`
+- **07:36** Forensics env-loading/tooling updates:
+  - `backend/scripts/voicebot-session-forensics.ts`
+  - `docs/VOICE_SESSION_FORENSICS_PLAYBOOK.md`
+  - `README.md`
 - **04:13** Verification:
   - `cd backend && npm run test:serialized -- --runInBand __tests__/services/voicebot/createTasksAgentRecovery.test.ts __tests__/voicebot/session/sessionTabCountsRoute.test.ts __tests__/voicebot/workers/workerCreateTasksFromChunksHandler.test.ts __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.deleteAndErrors.test.ts __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.sessionParity.test.ts __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.categorizationChunkValidation.test.ts __tests__/voicebot/runtime/sessionsRuntimeCompatibilityRoute.addTextParity.test.ts`
   - `cd app && npx jest --runInBand --runTestsByPath __tests__/voice/categorizationRowActionsContract.test.ts __tests__/voice/transcriptionRowActions.test.ts`
@@ -29,6 +35,7 @@
   - `cd backend && npx tsx /tmp/rerun_recent_zero_task_sessions.ts`
   - `mcp voice.fetch(id=69d5ef3592a1eba4f34ab278, mode=transcript)`
   - `mcp voice.session_tasks(session_id=69d5ef3592a1eba4f34ab278, bucket=\"Draft\", mode=\"table\")`
+  - `NODE_ENV=production npx tsx backend/scripts/voicebot-session-forensics.ts --env-file backend/.env.production --session 69d5ef3592a1eba4f34ab278 --json`
 
 ## 2026-04-08
 ### PROBLEM SOLVED

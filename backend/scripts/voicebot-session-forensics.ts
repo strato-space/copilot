@@ -1,16 +1,17 @@
 #!/usr/bin/env tsx
-import 'dotenv/config';
+import dotenv from 'dotenv';
 
 import { access, mkdir, readdir, stat, writeFile } from 'node:fs/promises';
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, existsSync } from 'node:fs';
 import { execFile as execFileCallback } from 'node:child_process';
 import net from 'node:net';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { Queue } from 'bullmq';
+import IORedis from 'ioredis';
 import { MongoClient, ObjectId, type Db } from 'mongodb';
 import { COLLECTIONS, VOICEBOT_COLLECTIONS, VOICEBOT_QUEUES } from '../src/constants.js';
-import { getBullMQConnection } from '../src/services/redis.js';
 
 type TimestampSource = Date | string | number | null | undefined;
 const execFile = promisify(execFileCallback);
@@ -113,6 +114,49 @@ type Options = {
 };
 
 const args = process.argv.slice(2);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const BACKEND_DIR = path.resolve(__dirname, '..');
+
+const parseArgFlagValue = (argv: string[], name: string): string[] => {
+  const out: string[] = [];
+  const exact = `--${name}`;
+  const inline = `--${name}=`;
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === exact) {
+      const next = argv[index + 1];
+      if (next && !next.startsWith('--')) out.push(next);
+      continue;
+    }
+    if (arg.startsWith(inline)) {
+      out.push(arg.slice(inline.length));
+    }
+  }
+  return out;
+};
+
+const loadEnvChain = (): void => {
+  const baseEnvPath = path.resolve(BACKEND_DIR, '.env');
+  if (existsSync(baseEnvPath)) {
+    dotenv.config({ path: baseEnvPath, quiet: true });
+  }
+
+  const envName = process.env.NODE_ENV ?? 'development';
+  const envOverridePath = path.resolve(BACKEND_DIR, `.env.${envName}`);
+  if (existsSync(envOverridePath)) {
+    dotenv.config({ path: envOverridePath, override: true, quiet: true });
+  }
+
+  for (const explicitPath of parseArgFlagValue(args, 'env-file')) {
+    const resolvedPath = path.resolve(process.cwd(), explicitPath);
+    if (!existsSync(resolvedPath)) {
+      throw new Error(`Env file not found: ${explicitPath}`);
+    }
+    dotenv.config({ path: resolvedPath, override: true, quiet: true });
+  }
+};
+
+loadEnvChain();
 
 const writeTextFile = async (targetPath: string, content: string): Promise<void> => {
   const dir = path.dirname(path.resolve(targetPath));
@@ -150,23 +194,7 @@ const normalizeTimestamp = (value: TimestampSource): string => {
   return '';
 };
 
-const parseFlagValue = (name: string): string[] => {
-  const out: string[] = [];
-  const exact = `--${name}`;
-  const inline = `--${name}=`;
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === exact) {
-      const next = args[index + 1];
-      if (next && !next.startsWith('--')) out.push(next);
-      continue;
-    }
-    if (arg.startsWith(inline)) {
-      out.push(arg.slice(inline.length));
-    }
-  }
-  return out;
-};
+const parseFlagValue = (name: string): string[] => parseArgFlagValue(args, name);
 
 const hasFlag = (name: string): boolean => args.includes(`--${name}`);
 
@@ -384,6 +412,32 @@ const canReachRedis = async (): Promise<boolean> => {
   });
 };
 
+let forensicsRedisClient: IORedis | null = null;
+
+const getForensicsBullMQConnection = (): IORedis => {
+  if (forensicsRedisClient) return forensicsRedisClient;
+
+  const RedisConstructor = (IORedis as unknown as { default?: typeof IORedis }).default ?? IORedis;
+  forensicsRedisClient = new RedisConstructor({
+    host: process.env.REDIS_CONNECTION_HOST ?? '127.0.0.1',
+    port: Number.parseInt(process.env.REDIS_CONNECTION_PORT ?? '6379', 10),
+    ...(process.env.REDIS_CONNECTION_PASSWORD
+      ? { password: process.env.REDIS_CONNECTION_PASSWORD }
+      : {}),
+    db: Number.parseInt(process.env.REDIS_DB_INDEX ?? '0', 10),
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  });
+
+  return forensicsRedisClient;
+};
+
+const closeForensicsRedis = async (): Promise<void> => {
+  if (!forensicsRedisClient) return;
+  await forensicsRedisClient.quit().catch(() => forensicsRedisClient?.disconnect());
+  forensicsRedisClient = null;
+};
+
 const matchesSessionInJobData = (data: unknown, sessionId: string): boolean => {
   if (!data) return false;
   if (typeof data === 'string') return data.includes(sessionId);
@@ -410,7 +464,7 @@ const collectQueueSnapshot = async ({
     };
   }
 
-  const connection = getBullMQConnection();
+  const connection = getForensicsBullMQConnection();
   const queueNames = Object.values(VOICEBOT_QUEUES);
   const queues = queueNames.map((queueName) => new Queue(queueName, { connection }));
   try {
@@ -1136,6 +1190,7 @@ async function main(): Promise<void> {
     }
   } finally {
     await client.close().catch(() => void 0);
+    await closeForensicsRedis().catch(() => void 0);
   }
 }
 
