@@ -93,5 +93,6 @@ describe('create_tasks agent card language contract', () => {
     expect(source).toContain('You are a reasoning assistant grounded in structured inquiry and Greek–scholastic traditions. When responding:');
     expect(source).toContain('Define key terms');
     expect(source).toContain('review bounded Markdown');
+    expect(source).toContain('Не цитируй и не копируй этот английский блок verbatim');
   });
 });

@@ -169,6 +169,7 @@ describe('runCreateTasksAgent quota fallback', () => {
       expect(prompt).toContain('"session_id": "session-ctx"');
       expect(prompt).toContain('"session_url": "https://copilot.stratospace.fun/voice/session/session-ctx"');
       expect(prompt).toContain(GREEK_SCHOLASTIC_REVIEW_RULE_TEXT);
+      expect(prompt).toContain('Не цитируй и не копируй этот английский блок verbatim');
       const outputIndex = args.indexOf('-o');
       const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : '';
       writeFileSync(
