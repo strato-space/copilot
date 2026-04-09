@@ -1503,7 +1503,7 @@ describe('Voicebot utility routes runtime behavior', () => {
     );
   });
 
-  it('session_tasks(Draft) keeps a stale row visible only when no active row with the same row_id exists', async () => {
+  it('session_tasks(Draft) hides stale draft rows when fresh rows exist for the session', async () => {
     const sessionId = new ObjectId();
     const sessionFindOne = jest.fn(async () => ({
       _id: sessionId,
@@ -1592,7 +1592,7 @@ describe('Voicebot utility routes runtime behavior', () => {
       .send({ session_id: sessionId.toHexString(), bucket: 'Draft' });
 
     expect(response.status).toBe(200);
-    expect(response.body.items).toHaveLength(2);
+    expect(response.body.items).toHaveLength(1);
     response.body.items.forEach((item: Record<string, unknown>) => {
       const legacyRowId = String(((item.source_data as Record<string, unknown> | undefined)?.row_id) || '');
       if (legacyRowId) {
@@ -1602,17 +1602,16 @@ describe('Voicebot utility routes runtime behavior', () => {
     expect(response.body.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          name: 'Stale fallback B',
-          source_data: expect.objectContaining({ row_id: 'row-b' }),
-        }),
-        expect.objectContaining({
           name: 'Active row A',
           source_data: expect.objectContaining({ row_id: 'row-a' }),
         }),
       ])
     );
     expect(response.body.items).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: 'Stale duplicate A' })])
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'Stale duplicate A' }),
+        expect.objectContaining({ name: 'Stale fallback B' }),
+      ])
     );
   });
 

@@ -21,6 +21,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { loadPersistedPossibleTaskCarryOverDrafts } from './persistPossibleTasks.js';
 import { extractActiveMessageText, isMarkedDeleted } from '../../api/routes/voicebot/messageHelpers.js';
+import { normalizeGeneratedVoiceSessionTitle } from './sessionTitleValidation.js';
 
 const logger = getLogger();
 
@@ -494,13 +495,11 @@ const normalizeDraftDescription = (name: string, description: string): string =>
 };
 
 const normalizeCompositeSessionName = (value: unknown): string => {
-  const normalized = toText(value).replace(/\s+/g, ' ').trim();
-  if (!normalized) return '';
-  const words = countWords(normalized);
-  if (words < MIN_SESSION_TITLE_WORDS || words > MAX_SESSION_TITLE_WORDS) {
-    return '';
-  }
-  return normalized;
+  return normalizeGeneratedVoiceSessionTitle({
+    value,
+    minWords: MIN_SESSION_TITLE_WORDS,
+    maxWords: MAX_SESSION_TITLE_WORDS,
+  });
 };
 
 const normalizeTaskShape = (
@@ -1480,11 +1479,12 @@ const attachCompositeMetaToDraft = (
 
 const buildCreateTasksCodexFallbackPrompt = (envelope: Record<string, unknown>): string =>
   [
-    'Ты fallback analyzer для voice taskflow.',
+    'Служебная роль: анализатор voice taskflow.',
     'Верни только JSON, который соответствует переданной схеме.',
     'Не возвращай пустой ответ.',
     'Если есть хотя бы один bounded deliverable, верни его в task_draft с candidate_class="deliverable_task".',
     'Если deliverable-задач нет, верни пустой task_draft и explicit no_task_decision.',
+    'Поле session_name должно быть заголовком по содержанию транскрибации; никогда не используй фразы вроде "fallback analyzer" или "voice taskflow".',
     'Все human-facing поля пиши на preferred_output_language.',
     'Не используй внешние инструменты, если это не строго необходимо.',
     'Envelope JSON:',

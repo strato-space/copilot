@@ -261,6 +261,84 @@ describe('Voicebot session_tab_counts route', () => {
     );
   });
 
+  it('excludes stale draft rows from visible draft counts when fresh rows exist', async () => {
+    const freshSessionId = new ObjectId('507f1f77bcf86cd799439014');
+    const freshSessionRef = `https://copilot.stratospace.fun/voice/session/${freshSessionId.toHexString()}`;
+    const staleAwareFind = jest.fn((filter?: Record<string, unknown>) => {
+      const docs =
+        filter?.task_status === TASK_STATUSES.DRAFT_10
+          ? [
+              {
+                row_id: 'fresh-row',
+                id: 'fresh-row',
+                task_status: TASK_STATUSES.DRAFT_10,
+                source_kind: 'voice_possible_task',
+                source_ref: freshSessionRef,
+                source_data: { session_id: freshSessionId.toHexString(), refresh_state: 'active' },
+                created_at: '2026-03-20T10:00:00.000Z',
+                updated_at: '2026-03-20T10:00:00.000Z',
+              },
+              {
+                row_id: 'stale-row',
+                id: 'stale-row',
+                task_status: TASK_STATUSES.DRAFT_10,
+                source_kind: 'voice_possible_task',
+                source_ref: freshSessionRef,
+                source_data: { session_id: freshSessionId.toHexString(), refresh_state: 'stale' },
+                created_at: '2026-03-20T09:00:00.000Z',
+                updated_at: '2026-03-20T09:00:00.000Z',
+              },
+            ]
+          : [];
+      return {
+        sort: () => ({ toArray: async () => docs }),
+        toArray: async () => docs,
+      };
+    });
+
+    const dbStub = {
+      collection: (name: string) => {
+        if (name === COLLECTIONS.TASKS) {
+          return {
+            countDocuments: jest.fn(async () => 0),
+            aggregate: tasksAggregateMock,
+            find: staleAwareFind,
+          };
+        }
+        if (name === VOICEBOT_COLLECTIONS.SESSIONS) {
+          return {
+            findOne: jest.fn(async () => ({
+              _id: freshSessionId,
+              chat_id: 123456,
+              user_id: performerId,
+              is_active: true,
+              access_level: 'private',
+              source_ref: freshSessionRef,
+            })),
+          };
+        }
+        return {
+          findOne: jest.fn(async () => null),
+        };
+      },
+    };
+
+    getDbMock.mockReturnValue(dbStub);
+    getRawDbMock.mockReturnValue(dbStub);
+
+    const app = buildApp();
+    const response = await request(app)
+      .post('/voicebot/session_tab_counts')
+      .send({ session_id: freshSessionId.toHexString() });
+
+    expect(response.status).toBe(200);
+    expect(response.body.draft_count).toBe(1);
+    expect(response.body.tasks_count).toBe(1);
+    expect(response.body.status_counts).toEqual([
+      { status: 'DRAFT_10', status_key: 'DRAFT_10', label: 'Draft', count: 1 },
+    ]);
+  });
+
   it('keeps draft_count deterministic with draft_horizon_days and matches session_tasks(Draft) semantics', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-03-21T00:00:00.000Z'));

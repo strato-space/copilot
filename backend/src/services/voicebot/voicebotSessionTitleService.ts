@@ -4,6 +4,11 @@ import { getDb } from '../db.js';
 import { buildCategorizationCleanupPayload, generateSegmentOid } from '../../api/routes/voicebot/messageHelpers.js';
 import { getLogger } from '../../utils/logger.js';
 import { runCreateTasksCompositeAgent } from './createTasksAgent.js';
+import {
+  hasUsableVoiceSessionTitle,
+  INVALID_SESSION_TITLE_MONGO_REGEX,
+  isInvalidVoiceSessionTitle,
+} from './sessionTitleValidation.js';
 
 const logger = getLogger();
 
@@ -165,6 +170,7 @@ const classifySkipReason = (messages: VoiceBotMessageDoc[]): string => {
 const classifyGeneratedTitleError = (title: string): string | null => {
   const normalized = title.trim();
   if (!normalized) return 'empty_title';
+  if (isInvalidVoiceSessionTitle(normalized)) return 'generic_fallback_title';
   if (/^error executing tool\b/i.test(normalized)) return 'tool_error';
   if (/invalid openai api key/i.test(normalized)) return 'invalid_openai_api_key';
   if (/provider error:/i.test(normalized)) return 'provider_error';
@@ -172,8 +178,7 @@ const classifyGeneratedTitleError = (title: string): string | null => {
   return null;
 };
 
-const hasSessionTitle = (value: unknown): boolean =>
-  typeof value === 'string' && value.trim().length > 0;
+const hasSessionTitle = (value: unknown): boolean => hasUsableVoiceSessionTitle(value);
 
 export const generateSessionTitleForSession = async ({
   sessionId,
@@ -282,7 +287,12 @@ export const generateSessionTitleForSession = async ({
       const updateResult = await db.collection(VOICEBOT_COLLECTIONS.SESSIONS).updateOne(
         {
           _id: sessionObjectId,
-          $or: [{ session_name: { $exists: false } }, { session_name: null }, { session_name: '' }],
+          $or: [
+            { session_name: { $exists: false } },
+            { session_name: null },
+            { session_name: '' },
+            { session_name: INVALID_SESSION_TITLE_MONGO_REGEX },
+          ],
         },
         {
           $set: {

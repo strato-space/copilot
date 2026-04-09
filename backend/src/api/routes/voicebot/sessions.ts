@@ -6516,6 +6516,12 @@ const collapseVisibleDraftRows = <T extends Record<string, unknown>>(items: T[])
     });
 };
 
+const selectVisibleDraftRows = <T extends Record<string, unknown>>(items: T[]): T[] => {
+    const collapsed = collapseVisibleDraftRows(items);
+    const fresh = collapsed.filter((item) => !isStaleVoicePossibleTaskRow(item));
+    return fresh.length > 0 ? fresh : collapsed;
+};
+
 const normalizeVoiceSessionTaskBucketKey = (taskStatus: unknown): TargetTaskStatusKey | typeof VOICE_SESSION_UNKNOWN_STATUS_KEY => {
     const statusKey = resolveTaskStatusKey(taskStatus);
     if (statusKey && TARGET_TASK_STATUS_KEYS.includes(statusKey as TargetTaskStatusKey)) {
@@ -6897,7 +6903,7 @@ router.post('/session_tab_counts', async (req: Request, res: Response) => {
         const visibleSessionTasks = sessionTasks.filter(
             (task) => normalizeVoiceSessionTaskBucketKey(task.task_status) !== 'DRAFT_10'
         );
-        const draft_count = collapseVisibleDraftRows(draftDocs).length;
+        const draft_count = selectVisibleDraftRows(draftDocs).length;
 
         const groupedStatusCounts = visibleSessionTasks.reduce((acc, task) => {
             const statusKey = normalizeVoiceSessionTaskBucketKey(task.task_status);
@@ -7001,7 +7007,7 @@ router.post('/session_tasks', async (req: Request, res: Response) => {
                 includeOlderDrafts: false,
                 draftHorizonDays,
             });
-            const items = collapseVisibleDraftRows(draftDocs)
+            const items = selectVisibleDraftRows(draftDocs)
                 .map((item) => normalizeVoicePossibleTaskDocForApi(item))
                 .filter((item): item is Record<string, unknown> => item !== null);
             const storedNoTaskDecision = extractCreateTasksNoTaskDecisionFromSession(
