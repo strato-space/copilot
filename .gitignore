@@ -7,10 +7,13 @@ __pycache__/
 .env.test
 backend/.env.development
 backend/.env.production
+backend/.env*.bak*
 figma/.env.development
 figma/.env.production
+figma/.env*.bak*
 miniapp/.env.development
 miniapp/.env.production
+miniapp/.env*.bak*
 .venv/
 .DS_Store
 node_modules/

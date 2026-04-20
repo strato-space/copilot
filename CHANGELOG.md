@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-04-20
+### PROBLEM SOLVED
+- **22:47** Close-session could not safely stage the current worktree because a local production env backup artifact was present in-repo as an untracked file; pushing it would have published secret-bearing operator data instead of product code.
+
+### FEATURE IMPLEMENTED
+- **22:47** Repo hygiene now treats `*.env*.bak*` files as local-only operator backups, so close-session flows can preserve emergency env snapshots without risking a secret leak into Git history.
+
+### CHANGES
+- **22:47** Updated repo hygiene/docs for local env backup handling:
+  - `.gitignore`
+  - `AGENTS.md`
+  - `README.md`
+  - `CHANGELOG.md`
+- **22:47** Tracking:
+  - `copilot-wlm8` opened/claimed for this close-session hygiene and delivery slice.
+
 ## 2026-04-09
 ### PROBLEM SOLVED
 - **02:20** Recent zero-task voice sessions from the last 3 days could stay empty after the garbage/deletion repair wave because `session_tab_counts` did not count Draft rows in `tasks_count` / `status_counts`, so read surfaces could still report “0 tasks” while canonical Draft rows already existed.

@@ -166,6 +166,7 @@ Preferred engineering principles for this repo:
 
 - Disk cleanup guardrail: do **not** delete or prune `/root/.codex/sessions` during routine free-space cleanup. Treat it as retained session history unless the user gives an explicit purge instruction for that path.
 - Local OMX state guardrail: treat repo-root `.omx/` as ephemeral agent/session state and keep it out of version control unless the user explicitly asks to persist those artifacts.
+- Environment backup guardrail: treat local `*.env*.bak*` files as secret-bearing operator artifacts; preserve them locally when needed, but keep them out of version control and never include them in close-session pushes.
 
 ## Subagent Execution Policy [RULE]
 

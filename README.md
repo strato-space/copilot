@@ -4,6 +4,8 @@ Copilot is the workspace for Finance Ops, OperOps/CRM, Voice, and Miniapp surfac
 
 Repo-root `.omx/` contains local OMX session/state artifacts and is intentionally ignored from version control.
 
+Local environment backup files such as `backend/.env*.bak*`, `figma/.env*.bak*`, and `miniapp/.env*.bak*` are treated as secret-bearing operator artifacts and are intentionally ignored from version control.
+
 ## Critical Decisions For Future Agents
 
 Use this as a fast guardrail before implementing anything:
