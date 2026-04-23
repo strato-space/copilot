@@ -80,8 +80,7 @@ const shouldSkipSummaryAuditStatusUpdate = ({
   if (existingStatus === nextStatus) return true;
 
   if (event_name === 'summary_telegram_send') {
-    if (existingStatus === 'failed' && nextStatus !== 'failed') return true;
-    if (existingStatus === 'done' && nextStatus !== 'failed') return true;
+    if (existingStatus === 'done') return true;
     if (existingStatus === 'pending' && nextStatus === 'queued') return true;
     return false;
   }

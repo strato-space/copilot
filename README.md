@@ -17,6 +17,7 @@ Use this as a fast guardrail before implementing anything:
 - Runtime isolation for Voice is deployment-scoped (separate DB/instance per environment); `runtime_tag` is transitional metadata and not an operational routing contract.
 - Realtime updates are required: uploads and workers must emit session/message events so Transcription/Categorization update without refresh.
 - Summary notify retries for `SESSION_READY_TO_SUMMARIZE` and `summary_save` must preserve stable `correlation_id` / `idempotency_key` values so audit rows dedupe instead of downgrading previous status rows.
+- `summary_telegram_send` audit status is monotonic: retries may promote `failed` / `pending` / `queued` to `done`, but once `done` it must not be downgraded by later local-hook or webhook failures.
 - Browser-based UI acceptance should restart `mcp@chrome-devtools.service` before each live verification cycle; stale MCP/CDP state is not an accepted explanation for skipped smoke checks.
 - Browser-based layout verification should include screenshot-level overlap checks when footer/status widgets or task panes change; CSS/DOM-only assertions are not sufficient for acceptance.
 - Shared selector parity is a product contract: project and operational task-type controls should reuse the same wrappers and option-source builders across Voice and OperOps so hierarchy/labels never degrade into flat lists or raw ids on one surface.
@@ -31,6 +32,7 @@ Use this as a fast guardrail before implementing anything:
   - successful-but-empty `CREATE_TASKS` MCP composites must resolve to structured `no_task_decision` output instead of surfacing `create_tasks_empty_mcp_result`,
   - raw-text `CREATE_TASKS` context builders must exclude garbage-flagged transcript rows from language sampling and replay context assembly,
   - if the MCP `create_tasks` tool still returns an empty success payload, backend now falls back to a repo-local Codex CLI structured-output pass instead of silently preserving a zero-task session,
+  - the repo-local Codex CLI fallback schema must remain OpenAI structured-output compliant; `link_existing_tasks` fields that may be absent stay required with explicit nullable unions so fallback does not die on schema validation before execution,
   - task-count read surfaces are status-first: Draft rows count toward both `tasks_count` and `status_counts`,
   - `task_type_id` stays optional,
   - master store is `automation_tasks` with draft status `DRAFT_10`,

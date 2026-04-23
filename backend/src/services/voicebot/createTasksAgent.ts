@@ -126,11 +126,11 @@ const CREATE_TASKS_CODEX_FALLBACK_SCHEMA = {
         additionalProperties: false,
         properties: {
           lookup_id: { type: 'string' },
-          task_db_id: { type: 'string' },
-          task_public_id: { type: 'string' },
-          dialogue_reference: { type: 'string' },
+          task_db_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          task_public_id: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          dialogue_reference: { anyOf: [{ type: 'string' }, { type: 'null' }] },
         },
-        required: ['lookup_id'],
+        required: ['lookup_id', 'task_db_id', 'task_public_id', 'dialogue_reference'],
       },
     },
     enrich_ready_task_comments: {

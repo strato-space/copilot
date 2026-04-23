@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-04-23
+### PROBLEM SOLVED
+- **10:52** Repo-local Codex CLI fallback for `CREATE_TASKS` could fail before model execution because `link_existing_tasks` used a strict structured-output schema with missing required coverage, leaving sessions at `Tasks 0` with `invalid_json_schema` instead of Draft tasks or an explicit no-task outcome.
+- **22:47** `summary_telegram_send` audit rows could remain stuck in `failed` after a successful retry, and a later HTTP/local failure could overwrite a true `done` delivery result.
+
+### FEATURE IMPLEMENTED
+- **10:52** `CREATE_TASKS` fallback now uses a structured-output-compliant schema for `link_existing_tasks`, so the local Codex CLI recovery path can produce Draft tasks or a real structured outcome instead of failing schema validation up front.
+- **22:47** Summary Telegram delivery audit is now monotonic: retries may promote `failed` / `pending` / `queued` to `done`, while later HTTP/local failures still remain visible in their own events without downgrading the canonical delivery result.
+
+### CHANGES
+- **10:52** Updated fallback schema and recovery regression coverage:
+  - `backend/src/services/voicebot/createTasksAgent.ts`
+  - `backend/__tests__/services/voicebot/createTasksAgentRecovery.test.ts`
+- **22:47** Updated summary audit status handling and regression coverage:
+  - `backend/src/services/voicebot/voicebotDoneNotify.ts`
+  - `backend/__tests__/voicebot/notify/doneNotifyService.test.ts`
+- **22:47** Updated closeout docs/contracts:
+  - `.beads/issues.jsonl`
+  - `AGENTS.md`
+  - `README.md`
+  - `CHANGELOG.md`
+- **22:47** Tracking:
+  - `copilot-3i78` closed after live fallback recovery verification.
+  - `copilot-y9kn` closed after the summary audit monotonicity fix and regression verification.
+- **22:47** Verification:
+  - `cd backend && npm run lint` (blocked by pre-existing unrelated errors in `src/services/taskAttachments.ts` and `src/workers/voicebot/handlers/notifyHandler.ts`; tracked by `copilot-x30z`)
+  - `cd backend && NODE_OPTIONS='--experimental-vm-modules --disable-warning=ExperimentalWarning --disable-warning=DEP0040' npx jest --runInBand __tests__/services/voicebot/createTasksAgentRecovery.test.ts __tests__/voicebot/notify/doneNotifyService.test.ts`
+  - `cd backend && npm run build`
+
 ## 2026-04-20
 ### PROBLEM SOLVED
 - **22:47** Close-session could not safely stage the current worktree because a local production env backup artifact was present in-repo as an untracked file; pushing it would have published secret-bearing operator data instead of product code.

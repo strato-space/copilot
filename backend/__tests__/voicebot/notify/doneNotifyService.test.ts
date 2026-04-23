@@ -229,7 +229,7 @@ describe('voicebotDoneNotify service', () => {
     );
   });
 
-  it('does not downgrade existing failed summary_telegram_send audit to done for the same idempotency key', async () => {
+  it('upgrades existing failed summary_telegram_send audit to done for the same idempotency key', async () => {
     const sessionId = new ObjectId();
     const existingId = new ObjectId();
     const findOne = jest.fn(async () => ({
@@ -259,7 +259,54 @@ describe('voicebotDoneNotify service', () => {
       metadata: { source: 'notify_worker', semantic_ack_reason: 'json_ack' },
     });
 
-    expect(result.status).toBe('failed');
+    expect(result.status).toBe('done');
+    expect(insertOne).not.toHaveBeenCalled();
+    expect(updateOne).toHaveBeenCalledWith(
+      { _id: existingId },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          status: 'done',
+          metadata: expect.objectContaining({
+            idempotency_key: 'idem-4',
+            source: 'notify_worker',
+            semantic_ack_reason: 'json_ack',
+          }),
+        }),
+      })
+    );
+  });
+
+  it('does not downgrade existing done summary_telegram_send audit to failed for the same idempotency key', async () => {
+    const sessionId = new ObjectId();
+    const existingId = new ObjectId();
+    const findOne = jest.fn(async () => ({
+      _id: existingId,
+      status: 'done',
+      metadata: { idempotency_key: 'idem-6', source: 'notify_worker', reason: 'notify_hook_exit_zero' },
+    }));
+    const insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
+    const updateOne = jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    const db = {
+      collection: (name: string) => {
+        if (name === VOICEBOT_COLLECTIONS.SESSION_LOG) {
+          return { findOne, insertOne, updateOne };
+        }
+        return { findOne: async () => null };
+      },
+    } as any;
+
+    const result = await writeSummaryAuditLog({
+      db,
+      session_id: sessionId,
+      session: { _id: sessionId },
+      event_name: 'summary_telegram_send',
+      status: 'failed',
+      correlation_id: 'corr-6',
+      idempotency_key: 'idem-6',
+      metadata: { source: 'notify_worker', reason: 'notify_http_failed' },
+    });
+
+    expect(result.status).toBe('done');
     expect(insertOne).not.toHaveBeenCalled();
     expect(updateOne).not.toHaveBeenCalled();
   });

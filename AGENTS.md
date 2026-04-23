@@ -58,6 +58,7 @@ These decisions are part of the current platform contract and must be preserved 
   - upload must emit `new_message` + `session_update`,
   - processing must emit `message_update` for transcription/categorization progress.
   - summary notify flows for `SESSION_READY_TO_SUMMARIZE` and `summary_save` must preserve stable `correlation_id` / `idempotency_key` values through route, worker, and audit-log writes so retries dedupe against existing status rows.
+  - `summary_telegram_send` audit status is monotonic: retries may promote `failed` / `pending` / `queued` to `done`, but once `done` it must not be downgraded by later hook or webhook failures.
 - Retryable transcription failures must remain recoverable even for waiting sessions:
   - `is_waiting` is not a valid reason to skip message-level retry scans when rows carry canonical OpenAI recovery retry markers (for example `insufficient_quota` or `invalid_api_key`),
   - after balance/key recovery, the periodic processing loop must be able to requeue those rows without manual DB repair.
@@ -70,6 +71,7 @@ These decisions are part of the current platform contract and must be preserved 
   - `CREATE_TASKS` extraction is ontology-first: only bounded deliverables may materialize into `task_draft`; coordination, inputs/accesses, references/ideas, and status/report statements must stay out of Draft materialization unless they are explicitly transformed into supporting context or comment enrichment,
   - `CREATE_TASKS` full recompute with no explicit chunk payload must use compact session raw transcript context (not session-id-only under-context fallback), and replay acceptance requires stable Draft `row_id` identity across consecutive recompute runs for unchanged semantics,
   - successful-but-empty `CREATE_TASKS` MCP composites must resolve through structured `no_task_decision` output; `create_tasks_empty_mcp_result` is an operational failure signal, not an accepted steady-state result after a successful composite,
+  - the repo-local Codex CLI `CREATE_TASKS` fallback must keep an OpenAI structured-output-compliant schema; `link_existing_tasks` fields that may be absent must remain required with explicit nullable unions instead of being omitted from `required`,
   - raw-text `CREATE_TASKS` context builders must exclude garbage-flagged transcript rows from language sampling and replay context assembly,
   - garbage-detected or fully deleted voice messages are treated as deleted content for operator/analyzer surfaces: transcript projections, categorization projections, and `CREATE_TASKS` raw-text assembly must exclude those rows by default,
   - transcript/categorization deletion is a unified exclusion contract: `deletion_reason` is mandatory, whole-garbage messages are deleted at the message level, mixed messages may delete only the affected segments, and user-driven deletes use the same exclusion semantics with `deletion_reason=user_decision`,

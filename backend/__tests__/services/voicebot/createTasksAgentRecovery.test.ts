@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ObjectId } from 'mongodb';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { VOICEBOT_COLLECTIONS } from '../../../src/constants.js';
 
 const initializeSessionMock = jest.fn();
@@ -150,6 +150,83 @@ describe('runCreateTasksAgent quota fallback', () => {
         id: 'TASK-CLI-1',
         row_id: 'TASK-CLI-1',
         name: 'Проверить пайплайн create_tasks',
+      }),
+    ]);
+  });
+
+  it('writes a structured-output-compliant fallback schema for link_existing_tasks', async () => {
+    initializeSessionMock.mockResolvedValueOnce({ sessionId: 'mcp-session' });
+    closeSessionMock.mockResolvedValue(undefined);
+    callToolMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        content: [{ type: 'text', text: '' }],
+        isError: false,
+      },
+    });
+    spawnSyncMock.mockImplementation((_command: string, args: string[]) => {
+      const schemaIndex = args.indexOf('--output-schema');
+      const schemaPath = schemaIndex >= 0 ? args[schemaIndex + 1] : '';
+      const schema = JSON.parse(readFileSync(schemaPath, 'utf8')) as Record<string, unknown>;
+      const properties = (schema.properties as Record<string, unknown>) || {};
+      const linkExistingTasks = properties.link_existing_tasks as Record<string, unknown>;
+      const items = (linkExistingTasks.items as Record<string, unknown>) || {};
+      const itemProperties = (items.properties as Record<string, unknown>) || {};
+
+      expect(items.required).toEqual([
+        'lookup_id',
+        'task_db_id',
+        'task_public_id',
+        'dialogue_reference',
+      ]);
+      expect(itemProperties.task_db_id).toEqual({
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      });
+      expect(itemProperties.task_public_id).toEqual({
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      });
+      expect(itemProperties.dialogue_reference).toEqual({
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      });
+
+      const outputIndex = args.indexOf('-o');
+      const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : '';
+      writeFileSync(
+        outputPath,
+        JSON.stringify({
+          summary_md_text: '',
+          scholastic_review_md: '',
+          task_draft: [],
+          link_existing_tasks: [
+            {
+              lookup_id: 'ready-task-1',
+              task_db_id: null,
+              task_public_id: null,
+              dialogue_reference: 'voice/session/x#1',
+            },
+          ],
+          enrich_ready_task_comments: [],
+          no_task_decision: null,
+          session_name: '',
+          project_id: 'proj-1',
+        }),
+        'utf8'
+      );
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const tasks = await runCreateTasksAgent({
+      sessionId: 'session-schema-check',
+      projectId: 'proj-1',
+      rawText: 'Нужно проверить fallback schema.',
+    });
+
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+    const meta = (tasks as unknown as Record<string, unknown>)[CREATE_TASKS_COMPOSITE_META_KEY] as Record<string, unknown>;
+    expect(meta?.link_existing_tasks).toEqual([
+      expect.objectContaining({
+        lookup_id: 'ready-task-1',
+        dialogue_reference: 'voice/session/x#1',
       }),
     ]);
   });
