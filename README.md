@@ -377,12 +377,13 @@ This is the smallest set of changes agents must keep in mind when touching Voice
   - `VOICEBOT_CATEGORIZATION_MODEL` (default `gpt-4.1`)
 - Transcription errors persist diagnostics (`openai_key_mask`, `openai_key_source`, `openai_api_key_env_file`, `server_name`) for quota/file-path incident analysis; key mask format is normalized to `sk-...LAST4`.
 - Storage and services:
-  - `OPENAI_*` keys are loaded from `backend/.env.production` for backend API, TS workers, and TS tgbot runtime.
+  - `OPENAI_*` keys are loaded from `backend/.env.production` for backend API, TS workers, TS tgbot runtime, and Fast-Agent PM2 agents.
   - `MONGO_*`, `REDIS_*`, `MAX_FILE_SIZE`, `UPLOADS_DIR` remain service-specific.
 
 ### Voice agents integration (frontend -> agents)
 - Agent cards live in `agents/agent-cards/*` and are served by Fast-Agent on `http://127.0.0.1:8722/mcp` (`/home/strato-space/copilot/agents/pm2-agents.sh`).
 - PM2 runtime launches agents through the repo-local bootstrap `uv run --directory /home/strato-space/copilot/agents python run_fast_agent.py serve ...`; the bootstrap owns repo-local runtime model registrations/profiling hooks while the default model still comes from `agents/fastagent.config.yaml`.
+- PM2 agents startup uses `agents/ecosystem.config.cjs`, points `env_file` at `backend/.env.production`, and also parses that file into explicit `env` values so OpenAI/runtime keys come from the same production env source as backend services.
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 - Backend `create_tasks` quota recovery is now self-healed server-side: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once, then retries the MCP call once.
 - Backend `create_tasks` quota recovery retry waits for local agents MCP readiness (`http://127.0.0.1:8722/mcp`) after `copilot-agent-services` restart to avoid immediate `ECONNREFUSED` races.

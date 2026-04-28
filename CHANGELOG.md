@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-04-28
+### PROBLEM SOLVED
+- **22:46** `copilot-agent-services` could still start from a non-authoritative env source while backend/Voice runtimes used `backend/.env.production`, leaving OpenAI/runtime keys vulnerable to PM2 shell drift after restarts or deploys.
+
+### FEATURE IMPLEMENTED
+- **22:46** Fast-Agent PM2 startup now follows the same production env-source contract as backend services, so `copilot-agent-services` loads `backend/.env.production` directly and receives the parsed env map at process start.
+
+### CHANGES
+- **22:46** Updated agents PM2 env loading and closeout docs:
+  - `agents/ecosystem.config.cjs`
+  - `AGENTS.md`
+  - `README.md`
+  - `RUNTIME.md`
+  - `CHANGELOG.md`
+- **22:46** Tracking:
+  - `copilot-ug1x` opened and claimed for the agents PM2 production env-source closeout.
+- **22:46** Verification:
+  - `node --check agents/ecosystem.config.cjs`
+  - `node -e "const config = require('./agents/ecosystem.config.cjs'); ..."` confirmed `copilot-agent-services` uses `/home/strato-space/copilot/backend/.env.production` and receives `OPENAI_API_KEY` plus `CODEX_AUTH_JSON_PATH` in `env`.
+  - `git diff --check`
+
 ## 2026-04-23
 ### PROBLEM SOLVED
 - **10:52** Repo-local Codex CLI fallback for `CREATE_TASKS` could fail before model execution because `link_existing_tasks` used a strict structured-output schema with missing required coverage, leaving sessions at `Tasks 0` with `invalid_json_schema` instead of Draft tasks or an explicit no-task outcome.

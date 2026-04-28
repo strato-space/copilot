@@ -112,6 +112,7 @@ These constraints are derived from origin/main + CHANGELOG.md. They describe cur
 - `VITE_AGENTS_API_URL` must use plain HTTP for `:8722` (fast-agent runs without TLS); using `https://` can fail with `ERR_SSL_PACKET_LENGTH_TOO_LONG`.
 - Preferred target is loopback `http://127.0.0.1:8722` (bind `copilot-agent-services` to localhost only; do not expose `:8722` publicly).
 - Agents PM2 runtime is canonical via the repo-local bootstrap `uv run --directory /home/strato-space/copilot/agents python run_fast_agent.py serve ...`; model selection remains config-driven through `agents/fastagent.config.yaml`, `create_tasks` card must not hardcode model override, and the bootstrap is where repo-local runtime model registrations/profiling hooks live.
+- `agents/ecosystem.config.cjs` must source production agents env from `backend/.env.production` through both `env_file` and explicit parsed `env` values, so OpenAI/runtime keys do not drift from backend production services or inherited PM2 shell state.
 - PM2 agents runtime may pin a repo-local Codex OAuth file via `CODEX_AUTH_JSON_PATH`; local/prod runtime can use `agents/.codex/auth.json` instead of depending on the host-global Codex auth file.
 - Backend quota self-heal for `create_tasks` is canonical: on quota-class MCP failure the backend compares `/root/.codex/auth.json` with `agents/.codex/auth.json`, copies only when contents differ, restarts `copilot-agent-services` once via `agents/pm2-agents.sh`, then retries the MCP call once.
 - Backend quota self-heal retry must wait for local agents MCP readiness (`http://127.0.0.1:8722/mcp`) after `copilot-agent-services` restart; immediate retries before readiness are a known `ECONNREFUSED` race.
@@ -137,6 +138,7 @@ These constraints are derived from origin/main + CHANGELOG.md. They describe cur
 - PM2 runs the backend API and miniapp backend; frontend builds are served statically via Nginx.
 - PM2 startup uses [scripts/pm2-backend.ecosystem.config.js](scripts/pm2-backend.ecosystem.config.js) with per-mode `env_file`.
 - Production backend API runtimes (`copilot-backend-prod`, `copilot-miniapp-backend-prod`) parse `backend/.env.production` into explicit PM2 `env` values so sensitive keys such as `OPENAI_API_KEY` are authoritative to the env file rather than inherited ambient shell/daemon variables.
+- Production agents runtime (`copilot-agent-services`) mirrors the same env-source rule through [agents/ecosystem.config.cjs](agents/ecosystem.config.cjs), with `backend/.env.production` as the env file and explicit parsed env map.
 
 ### PM2 services (prod) -> repo paths
 - `copilot-backend-prod` — Finance Ops backend API (`npm run start` with `backend/.env.production`).

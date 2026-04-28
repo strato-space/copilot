@@ -54,6 +54,7 @@ These decisions are part of the current platform contract and must be preserved 
   - use deployment/database separation (dedicated DB/instance per environment),
   - `runtime_tag` is deprecated as an isolation mechanism and must not be treated as source-of-truth routing input,
   - legacy rows may still contain `runtime_tag` during transition, but runtime behavior must remain fail-fast and tag-agnostic.
+- Production OpenAI-backed runtimes must use `backend/.env.production` as the authoritative env source for backend API, Voice workers/tgbot, and Fast-Agent PM2 agents; PM2 startup must not depend on inherited shell secrets for those services.
 - Realtime UX is mandatory for voice:
   - upload must emit `new_message` + `session_update`,
   - processing must emit `message_update` for transcription/categorization progress.
