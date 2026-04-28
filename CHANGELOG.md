@@ -15,11 +15,19 @@
   - `RUNTIME.md`
   - `CHANGELOG.md`
 - **22:46** Tracking:
-  - `copilot-ug1x` opened and claimed for the agents PM2 production env-source closeout.
+  - `copilot-ug1x` opened, claimed, and closed for the agents PM2 production env-source closeout.
 - **22:46** Verification:
   - `node --check agents/ecosystem.config.cjs`
   - `node -e "const config = require('./agents/ecosystem.config.cjs'); ..."` confirmed `copilot-agent-services` uses `/home/strato-space/copilot/backend/.env.production` and receives `OPENAI_API_KEY` plus `CODEX_AUTH_JSON_PATH` in `env`.
   - `git diff --check`
+- **22:54** Production deploy/smoke:
+  - `./scripts/pm2-backend.sh prod` built app/miniapp/backend, restarted `copilot-backend-prod`, `copilot-miniapp-backend-prod`, `copilot-agent-services`, `copilot-voicebot-workers-prod`, and `copilot-voicebot-tgbot-prod`, and returned readiness `ok=true`.
+  - `./scripts/pm2-runtime-readiness.sh prod` returned 5/5 required services online.
+  - `curl -fsS http://127.0.0.1:3002/api/health` returned `{"status":"ok","service":"copilot-backend"}`.
+  - `curl -I -fsS https://copilot.stratospace.fun/agents` returned HTTP 200.
+  - `pm2 jlist` masked probe confirmed deployed `copilot-agent-services` is online with `OPENAI_API_KEY` and `CODEX_AUTH_JSON_PATH` present in PM2 env.
+  - `./scripts/voice-notify-healthcheck.sh --env-file backend/.env.production` initially found upstream `call-actions` at HTTP 502 because `actions@call.service` was inactive; `systemctl start actions@call` and `systemctl enable actions@call` restored the notify upstream, and the rerun returned HTTP 200 with `{"ok":true,"event":"health_probe","targets":[]}`.
+  - Fresh `copilot-agent-services` logs showed graceful restart and continuing `fs-mcp` / `voice-mcp` HTTP 200 checks; backend error log tail showed only the known Node deprecation warnings.
 
 ## 2026-04-23
 ### PROBLEM SOLVED
